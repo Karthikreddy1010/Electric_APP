@@ -1,250 +1,130 @@
 """
-Bill Impact Model: XGBoost + SHAP explainability + DoWhy causal inference.
+Bill Impact Model: Component Contribution and Sensitivity Analysis.
+This module enforces the core analytical objective:
+'If an individual electricity bill component increases or decreases, 
+how much does the total bill change?'
 
-Purpose: Decompose electricity bill changes into component contributions
-and identify causal drivers (weather, market prices, regulatory changes).
+Components:
+- Customer Charge (fixed)
+- Distribution Charge (kWh-based)
+- Transition Charges
+- Societal Benefits Charge (SBC)
+- Transmission Charge
+- Rider Charges
+- Weather Normalization
 """
-import numpy as np
 import pandas as pd
-import xgboost as xgb
-import shap
-import joblib
-import logging
-from pathlib import Path
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-from typing import Optional
-
-logger = logging.getLogger(__name__)
-
+import numpy as np
+from typing import Dict, List, Any
 
 class BillImpactModel:
     """
-    XGBoost model for bill impact analysis with SHAP explanations.
-    
-    Features used:
-    - Bill component rates (BGS, transmission, distribution, SBC, NUG)
-    - Usage (kWh) and lagged usage
-    - Weather (monthly HDD, CDD, avg temp)
-    - Market (LMP average, volatility, capacity price)
-    - Temporal (month cyclical, year trend)
+    Core logic for quantifying component contributions and simulating impacts.
+    Focuses on deterministic sensitivity rather than black-box models.
     """
     
-    def __init__(self, n_estimators=500, max_depth=6, learning_rate=0.05):
-        self.params = {
-            "n_estimators": n_estimators,
-            "max_depth": max_depth,
-            "learning_rate": learning_rate,
-            "subsample": 0.8,
-            "colsample_bytree": 0.8,
-            "reg_alpha": 0.1,
-            "reg_lambda": 1.0,
-            "random_state": 42,
-            "objective": "reg:squarederror",
+    def __init__(self):
+        # Component configuration: key in data -> (Label, Category, Driver)
+        self.components_config = {
+            "customer_charge": ("Customer Charge", "fixed", "fixed"),
+            "distribution_cost": ("Distribution Charge", "usage-based", "infrastructure"),
+            "market_transition_cost": ("Transition Charges", "usage-based", "policy-driven"),
+            "sbc_cost": ("Societal Benefits Charge", "usage-based", "policy-driven"),
+            "transmission_cost": ("Transmission Charge", "usage-based", "market-driven"),
+            "rider_cost": ("Rider Charges", "usage-based", "policy-driven"),
+            "weather_adjustment": ("Weather Normalization", "external-driven", "weather-driven"),
+            "bgs_cost": ("BGS Supply", "usage-based", "market-driven"), # Included for completeness
+            "sales_tax": ("Sales Tax", "external-driven", "policy-driven")
         }
-        self.model = None
-        self.explainer = None
-        self.feature_names = None
-        self.metrics = {}
-    
-    def train(self, X: pd.DataFrame, y: pd.Series, 
-              eval_split: float = 0.2) -> dict:
+
+    def get_analysis(self, row: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Train XGBoost with time-series aware validation.
-        Returns training metrics.
+        Main entry point to get contribution, sensitivity, and insights.
+        Returns the specific JSON format requested.
         """
-        self.feature_names = list(X.columns)
+        total_bill = float(row.get("total_bill", 0))
+        if total_bill == 0:
+            return {}
+
+        # 1. Contribution Calculation
+        contributions = {}
+        for key, (label, cat, driver) in self.components_config.items():
+            val = float(row.get(key, 0))
+            if val != 0:
+                # Key used in JSON is the short key (e.g., 'distribution')
+                json_key = key.replace("_cost", "").replace("_charge", "").replace("_adjustment", "")
+                contributions[json_key] = {
+                    "value": round(val, 2),
+                    "percent": round((val / total_bill) * 100, 2)
+                }
+
+        # 2. Sensitivity Analysis (+/- 10%)
+        sensitivity = {}
+        tax_rate = 0.06625  # NJ Sales Tax
         
-        # Time-series split (no shuffling - preserves temporal order)
-        split_idx = int(len(X) * (1 - eval_split))
-        X_train, X_val = X.iloc[:split_idx], X.iloc[split_idx:]
-        y_train, y_val = y.iloc[:split_idx], y.iloc[split_idx:]
-        
-        self.model = xgb.XGBRegressor(**self.params)
-        self.model.fit(
-            X_train, y_train,
-            eval_set=[(X_val, y_val)],
-            verbose=False,
-        )
-        
-        # Evaluate
-        y_pred = self.model.predict(X_val)
-        self.metrics = {
-            "rmse": float(np.sqrt(mean_squared_error(y_val, y_pred))),
-            "mae": float(mean_absolute_error(y_val, y_pred)),
-            "r2": float(r2_score(y_val, y_pred)),
-            "mape": float(np.mean(np.abs((y_val - y_pred) / y_val)) * 100),
-            "n_train": len(X_train),
-            "n_val": len(X_val),
-            "n_features": len(self.feature_names),
-        }
-        
-        logger.info(f"Impact model trained: RMSE=${self.metrics['rmse']:.2f}, "
-                    f"R²={self.metrics['r2']:.4f}, MAPE={self.metrics['mape']:.1f}%")
-        
-        # Build SHAP explainer
-        self.explainer = shap.TreeExplainer(self.model)
-        
-        return self.metrics
-    
-    def cross_validate(self, X: pd.DataFrame, y: pd.Series, 
-                       n_splits: int = 5) -> dict:
-        """Time-series cross-validation."""
-        tscv = TimeSeriesSplit(n_splits=n_splits)
-        scores = {"rmse": [], "mae": [], "r2": []}
-        
-        for train_idx, val_idx in tscv.split(X):
-            X_tr, X_va = X.iloc[train_idx], X.iloc[val_idx]
-            y_tr, y_va = y.iloc[train_idx], y.iloc[val_idx]
+        for key, (label, cat, driver) in self.components_config.items():
+            if key == "sales_tax": continue
             
-            model = xgb.XGBRegressor(**self.params)
-            model.fit(X_tr, y_tr, verbose=False)
-            y_pred = model.predict(X_va)
+            base_val = float(row.get(key, 0))
+            if base_val == 0: continue
             
-            scores["rmse"].append(np.sqrt(mean_squared_error(y_va, y_pred)))
-            scores["mae"].append(mean_absolute_error(y_va, y_pred))
-            scores["r2"].append(r2_score(y_va, y_pred))
-        
-        return {k: {"mean": np.mean(v), "std": np.std(v)} for k, v in scores.items()}
-    
-    def explain(self, X: pd.DataFrame) -> dict:
-        """
-        Compute SHAP values for bill impact decomposition.
-        Returns dict with feature importances and per-sample explanations.
-        """
-        if self.explainer is None:
-            raise RuntimeError("Model not trained. Call train() first.")
-        
-        shap_values = self.explainer.shap_values(X)
-        
-        # Global feature importance (mean absolute SHAP)
-        importance = pd.DataFrame({
-            "feature": self.feature_names,
-            "mean_abs_shap": np.abs(shap_values).mean(axis=0),
-            "mean_shap": shap_values.mean(axis=0),
-        }).sort_values("mean_abs_shap", ascending=False)
-        
-        # Per-sample breakdown (last row = most recent)
-        latest_shap = shap_values[-1]
-        breakdown = pd.DataFrame({
-            "feature": self.feature_names,
-            "shap_value": latest_shap,
-            "feature_value": X.iloc[-1].values,
-        }).sort_values("shap_value", key=abs, ascending=False)
-        
-        base_value = float(self.explainer.expected_value)
-        
+            json_key = key.replace("_cost", "").replace("_charge", "").replace("_adjustment", "")
+            
+            impacts = {}
+            for pct in [10, -10]:
+                delta = base_val * (pct / 100.0)
+                # Total change includes the component change plus the proportional tax change
+                total_delta = delta * (1 + tax_rate)
+                impacts[f"{'+' if pct > 0 else ''}{pct}%"] = round(total_delta, 2)
+            
+            sensitivity[json_key] = impacts
+
+        # 3. Insight Generation
+        insights = self._generate_insights(contributions, sensitivity)
+
         return {
-            "global_importance": importance.to_dict(orient="records"),
-            "latest_breakdown": breakdown.head(15).to_dict(orient="records"),
-            "base_value": base_value,
-            "predicted_value": float(base_value + latest_shap.sum()),
-            "shap_values": shap_values,
+            "total_bill": round(total_bill, 2),
+            "contributions": contributions,
+            "sensitivity": sensitivity,
+            "insights": insights
         }
-    
-    def get_component_impact(self, X: pd.DataFrame) -> dict:
-        """
-        Group SHAP values by bill component category.
-        Returns impact by: usage, weather, market, rates, temporal.
-        """
-        shap_values = self.explainer.shap_values(X)
-        mean_shap = np.abs(shap_values).mean(axis=0)
-        
-        categories = {
-            "usage": ["usage_kwh", "usage_kwh_lag", "hdd_per_kwh", "cdd_per_kwh"],
-            "weather": ["monthly_hdd", "monthly_cdd", "avg_temp", "temp_std", "humidity"],
-            "market": ["avg_lmp", "max_lmp", "lmp_volatility", "avg_capacity_price", "congestion"],
-            "rates": ["bgs_rate", "transmission_rate", "distribution_rate", "sbc_rate", "nug_rate"],
-            "temporal": ["month_sin", "month_cos", "year", "is_summer", "is_winter"],
-        }
-        
-        impacts = {}
-        for cat, keywords in categories.items():
-            cat_indices = [i for i, f in enumerate(self.feature_names) 
-                          if any(k in f.lower() for k in keywords)]
-            if cat_indices:
-                impacts[cat] = float(mean_shap[cat_indices].sum())
-        
-        total = sum(impacts.values()) or 1
-        impacts = {k: {"absolute": v, "pct": round(v/total*100, 1)} 
-                   for k, v in impacts.items()}
-        
-        return impacts
-    
-    def save(self, path: str):
-        """Save model and explainer."""
-        p = Path(path)
-        p.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self.model, p / "xgb_impact_model.joblib")
-        joblib.dump(self.feature_names, p / "feature_names.joblib")
-        joblib.dump(self.metrics, p / "metrics.joblib")
-        logger.info(f"Model saved to {p}")
-    
-    def load(self, path: str):
-        """Load model and rebuild explainer."""
-        p = Path(path)
-        self.model = joblib.load(p / "xgb_impact_model.joblib")
-        self.feature_names = joblib.load(p / "feature_names.joblib")
-        self.metrics = joblib.load(p / "metrics.joblib")
-        self.explainer = shap.TreeExplainer(self.model)
-        logger.info(f"Model loaded from {p}")
 
+    def _generate_insights(self, contributions: Dict, sensitivity: Dict) -> List[str]:
+        """Generate human-readable explanations based on data drivers."""
+        insights = []
+        
+        # Identify top driver
+        sorted_contribs = sorted(contributions.items(), key=lambda x: x[1]['value'], reverse=True)
+        if sorted_contribs:
+            top_key, top_data = sorted_contribs[0]
+            label = self.components_config.get(f"{top_key}_cost", 
+                    self.components_config.get(f"{top_key}_charge", 
+                    self.components_config.get(f"{top_key}_adjustment", (top_key.capitalize(), "", ""))))[0]
+            insights.append(f"{label} is the primary driver, accounting for {top_data['percent']}% of the total bill.")
 
-def run_causal_analysis(df: pd.DataFrame, treatment: str, outcome: str,
-                        common_causes: list[str]) -> dict:
-    """
-    Run DoWhy causal inference to estimate causal effect of treatment on outcome.
-    
-    Example: Does a rate increase *cause* higher bills, controlling for usage/weather?
-    
-    Args:
-        df: Feature matrix
-        treatment: column name of treatment variable (e.g., 'bgs_rate')
-        outcome: column name of outcome (e.g., 'total_bill')
-        common_causes: confounders to control for
-    
-    Returns:
-        dict with causal estimate, confidence interval, refutation results
-    """
-    try:
-        import dowhy
-        from dowhy import CausalModel
-    except ImportError:
-        logger.warning("DoWhy not installed. Returning correlation-based estimate.")
-        corr = df[[treatment, outcome]].corr().iloc[0, 1]
-        return {"method": "correlation_fallback", "estimate": float(corr),
-                "note": "Install dowhy for causal inference"}
-    
-    model = CausalModel(
-        data=df,
-        treatment=treatment,
-        outcome=outcome,
-        common_causes=common_causes,
-    )
-    
-    identified = model.identify_effect(proceed_when_unidentifiable=True)
-    estimate = model.estimate_effect(
-        identified,
-        method_name="backdoor.linear_regression",
-    )
-    
-    # Refutation: placebo treatment
-    refutation = model.refute_estimate(
-        identified, estimate,
-        method_name="placebo_treatment_refuter",
-        placebo_type="permute",
-        num_simulations=100,
-    )
-    
-    return {
-        "method": "backdoor.linear_regression",
-        "treatment": treatment,
-        "outcome": outcome,
-        "causal_estimate": float(estimate.value),
-        "p_value": float(getattr(estimate, 'test_stat_significance', {}).get('p_value', -1)),
-        "refutation_result": str(refutation),
-        "interpretation": (
-            f"A unit increase in {treatment} causally changes {outcome} "
-            f"by ${estimate.value:.2f}, controlling for {common_causes}"
-        ),
-    }
+        # Sensitivity insight
+        if "distribution" in sensitivity:
+            dist_impact = sensitivity["distribution"]["+10%"]
+            insights.append(f"Distribution charges have a high impact (${dist_impact:+.2f} per 10% change) due to usage dependency.")
+
+        if "customer" in sensitivity:
+            insights.append("Customer charge impact is fixed and does not scale with usage changes.")
+
+        if "transmission" in sensitivity:
+            insights.append("Transmission cost changes are market-driven and reflect regional grid congestion.")
+
+        if "weather" in contributions:
+            insights.append("Weather-related components show seasonal sensitivity and adjust based on abnormal temperatures.")
+
+        # General policy insight
+        policy_drivers = [k for k, v in self.components_config.items() if v[2] == "policy-driven"]
+        policy_total = sum(contributions.get(k.replace("_cost","").replace("_charge",""), {}).get("percent", 0) for k in policy_drivers)
+        if policy_total > 0:
+            insights.append(f"Policy-driven components (SBC, Riders, etc.) represent {policy_total:.1f}% of the total cost structure.")
+
+        return insights
+
+def get_bill_impact(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Helper function for API integration."""
+    model = BillImpactModel()
+    return model.get_analysis(row)
