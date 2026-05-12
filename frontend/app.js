@@ -254,8 +254,8 @@ async function runImpact() {
 }
 
 function renderImpactCharts(result) {
-    // SHAP waterfall
-    const drivers = result.top_drivers.reverse();
+    // SHAP waterfall – reverse a copy so top_drivers is not mutated before table render
+    const drivers = [...result.top_drivers].reverse();
     const shapTrace = {
         y: drivers.map(d => d.feature.replace(/_/g, ' ')),
         x: drivers.map(d => d.shap_value),

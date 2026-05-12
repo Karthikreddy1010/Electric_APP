@@ -30,7 +30,7 @@ class PlanSimulator:
         Simulate future monthly usage using historical patterns.
         Returns: (n_simulations, horizon_months) array.
         """
-        np.random.seed(self.seed)
+        rng = np.random.default_rng(self.seed)
         
         # Fit monthly means and stds from historical data
         monthly_stats = {}
@@ -48,24 +48,26 @@ class PlanSimulator:
         for m in range(self.horizon_months):
             month = (m % 12) + 1
             stats = monthly_stats[month]
-            simulated[:, m] = np.random.normal(stats["mean"], stats["std"], 
-                                                self.n_simulations)
+            simulated[:, m] = rng.normal(stats["mean"], stats["std"],
+                                         self.n_simulations)
         
         return np.clip(simulated, 200, 3000)
     
     def simulate_variable_rate(self, base_rate: float, volatility: float,
-                                trend: float = 0.002) -> np.ndarray:
+                                trend: float = 0.002,
+                                seed_offset: int = 0) -> np.ndarray:
         """
         Simulate variable rate paths using geometric Brownian motion.
+        seed_offset should differ per plan so each plan gets a unique simulation.
         Returns: (n_simulations, horizon_months) array.
         """
-        np.random.seed(self.seed + 1)
+        rng = np.random.default_rng(self.seed + 1 + seed_offset)
         dt = 1/12  # monthly steps
         rates = np.zeros((self.n_simulations, self.horizon_months))
         rates[:, 0] = base_rate
-        
+
         for t in range(1, self.horizon_months):
-            z = np.random.standard_normal(self.n_simulations)
+            z = rng.standard_normal(self.n_simulations)
             rates[:, t] = rates[:, t-1] * np.exp(
                 (trend - 0.5 * volatility**2) * dt + volatility * np.sqrt(dt) * z
             )
@@ -73,7 +75,8 @@ class PlanSimulator:
         return np.clip(rates, 0.03, 0.30)
     
     def compute_plan_costs(self, plan: dict, usage: np.ndarray,
-                            variable_rates: np.ndarray = None) -> dict:
+                            variable_rates: np.ndarray = None,
+                            seed_offset: int = 0) -> dict:
         """
         Compute total cost distribution for a plan.
         
@@ -82,6 +85,7 @@ class PlanSimulator:
                   etf, green_pct, volatility
             usage: (n_simulations, horizon_months) usage array
             variable_rates: pre-simulated variable rate paths (if variable plan)
+            seed_offset: unique offset per plan for independent RNG streams
         
         Returns:
             dict with cost statistics and distribution
@@ -93,7 +97,8 @@ class PlanSimulator:
             # Variable rate: use simulated rate paths
             if variable_rates is None:
                 variable_rates = self.simulate_variable_rate(
-                    plan["rate"], plan.get("volatility", 0.015)
+                    plan["rate"], plan.get("volatility", 0.015),
+                    seed_offset=seed_offset,
                 )
             supply_cost = usage * variable_rates[:, :self.horizon_months]
         
@@ -137,8 +142,8 @@ class PlanSimulator:
         usage = self.simulate_usage(historical_usage)
         
         results = []
-        for plan in plans:
-            result = self.compute_plan_costs(plan, usage)
+        for idx, plan in enumerate(plans):
+            result = self.compute_plan_costs(plan, usage, seed_offset=idx)
             results.append(result)
             logger.info(f"  {plan['provider']}: ${result['expected_annual_cost']:.0f}/yr "
                        f"(±${result['std_annual_cost']:.0f})")

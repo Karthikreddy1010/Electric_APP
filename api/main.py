@@ -116,10 +116,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve frontend static files
-from fastapi.staticfiles import StaticFiles
+# Serve frontend static files (import deferred so missing aiofiles won't break the API)
 frontend_dir = PROJECT_ROOT / "frontend"
 if frontend_dir.exists():
+    from fastapi.staticfiles import StaticFiles
     app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
 
@@ -302,10 +302,15 @@ async def bill_breakdown(months: int = Query(12, ge=1, le=84)):
     billing = app_state["billing_df"]
     if billing is None:
         raise HTTPException(500, "Data not loaded")
-    
-    recent = billing.tail(months).copy()
+
+    # Compute year-over-year change on the full history, then slice to requested window
+    full = billing.copy()
+    full["yoy_change_pct"] = full["total_bill"].pct_change(12) * 100
+    recent = full.tail(months)
+
     results = []
     for _, row in recent.iterrows():
+        yoy = round(float(row["yoy_change_pct"]), 2) if pd.notna(row["yoy_change_pct"]) else None
         results.append(BillBreakdownResponse(
             date=str(row["date"].date()) if hasattr(row["date"], 'date') else str(row["date"]),
             total_bill=round(float(row["total_bill"]), 2),
@@ -327,11 +332,12 @@ async def bill_breakdown(months: int = Query(12, ge=1, le=84)):
             },
             usage_kwh=round(float(row["usage_kwh"]), 1),
             effective_rate=round(float(row["total_bill"]) / float(row["usage_kwh"]), 5),
+            yoy_change_pct=yoy,
         ))
     return results
 
 
-@app.get("/trends")
+@app.get("/trends", response_model=TrendResponse)
 async def get_trends(months: int = Query(36, ge=6, le=84)):
     """Get historical trend data."""
     billing = app_state["billing_df"]
@@ -351,7 +357,104 @@ async def get_trends(months: int = Query(36, ge=6, le=84)):
     }
 
 
+# ===== Shared Analytics Endpoints =====
+# These delegate to shared.bill_analytics — the single source of truth.
+
+from shared.bill_analytics import (
+    compute_contributions, contributions_to_df,
+    run_sensitivity, sensitivity_summary,
+    simulate_bill, generate_insights, classify_components,
+)
+from shared.geo_analytics import (
+    zip_to_county, estimate_county_bill, get_all_county_estimates,
+)
+
+
+@app.get("/contribution")
+async def get_contribution(month_index: int = Query(-1, ge=-84, le=-1)):
+    """Component contribution analysis for a specific month."""
+    billing = app_state["billing_df"]
+    if billing is None:
+        raise HTTPException(500, "Data not loaded")
+    row = billing.iloc[month_index]
+    contribs = compute_contributions(row)
+    return {
+        "date": str(row["date"].date()) if hasattr(row["date"], "date") else str(row["date"]),
+        "total_bill": round(float(row["total_bill"]), 2),
+        "contributions": [
+            {"component": c.component, "label": c.label, "category": c.category,
+             "driver": c.driver, "value": c.value,
+             "pct_of_total": c.pct_of_total, "pct_of_subtotal": c.pct_of_subtotal}
+            for c in contribs
+        ],
+        "classification": classify_components(),
+    }
+
+
+@app.get("/sensitivity")
+async def get_sensitivity(
+    month_index: int = Query(-1, ge=-84, le=-1),
+    pct: float = Query(10.0, ge=1, le=50),
+):
+    """Sensitivity analysis: impact of +/- pct% change per component."""
+    billing = app_state["billing_df"]
+    if billing is None:
+        raise HTTPException(500, "Data not loaded")
+    row = billing.iloc[month_index]
+    results = run_sensitivity(row, pct_changes=[-pct, pct])
+    contribs = compute_contributions(row)
+    insights = generate_insights(contribs, results, row)
+    return {
+        "date": str(row["date"].date()) if hasattr(row["date"], "date") else str(row["date"]),
+        "base_total": round(float(row["total_bill"]), 2),
+        "pct_tested": pct,
+        "results": [
+            {"component": r.component, "label": r.label, "category": r.category,
+             "pct_change": r.pct_change, "base_value": r.base_value,
+             "delta": r.delta, "new_total": r.new_total,
+             "total_delta": r.total_delta, "total_pct_change": r.total_pct_change,
+             "elasticity": r.elasticity}
+            for r in results
+        ],
+        "insights": insights,
+    }
+
+
+@app.post("/simulate-bill")
+async def post_simulate_bill(overrides: dict):
+    """Simulate a bill with user-specified component overrides."""
+    billing = app_state["billing_df"]
+    if billing is None:
+        raise HTTPException(500, "Data not loaded")
+    row = billing.iloc[-1]
+    usage = overrides.pop("usage_kwh", None)
+    result = simulate_bill(row, overrides=overrides, usage_kwh=usage)
+    return result
+
+
+@app.get("/geo-lookup")
+async def geo_lookup(zip_code: str = Query(..., min_length=5, max_length=5)):
+    """Map ZIP code to NJ county and estimate local bill."""
+    county = zip_to_county(zip_code)
+    if county is None:
+        raise HTTPException(404, f"ZIP {zip_code} not found in NJ")
+    billing = app_state["billing_df"]
+    base_bill = float(billing.iloc[-1]["total_bill"]) if billing is not None else 150.0
+    estimate = estimate_county_bill(base_bill, county)
+    return estimate
+
+
+@app.get("/geo-all-counties")
+async def geo_all_counties():
+    """Get bill estimates for all 21 NJ counties."""
+    billing = app_state["billing_df"]
+    base_bill = float(billing.iloc[-1]["total_bill"]) if billing is not None else 150.0
+    df = get_all_county_estimates(base_bill)
+    return df.to_dict(orient="records")
+
+
 if __name__ == "__main__":
     import uvicorn
     logging.basicConfig(level=logging.INFO)
     uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+
