@@ -13,4 +13,5 @@ app_state: dict = {
     "forecast_model": None,
     "feature_matrix": None,
     "feature_cols": None,
+    "geo_monthly_df": None,
 }

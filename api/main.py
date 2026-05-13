@@ -99,7 +99,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Forecast model training failed: {e}")
 
-    logger.info("Initialization complete — all systems ready")
+    # ── Step 6: Build monthly geo data from benchmarks ────────────────────────
+    try:
+        from api.services.geo_insights_service import build_monthly_state_data
+        app_state["geo_monthly_df"] = build_monthly_state_data(app_state["benchmark_df"])
+        logger.info(f"Geo monthly data built: {len(app_state['geo_monthly_df'])} records")
+    except Exception as e:
+        logger.warning(f"Geo data build failed: {e}")
+
+    logger.info("Initialization complete -- all systems ready")
     yield
     logger.info("Shutting down...")
 
@@ -133,6 +141,7 @@ from api.routes.plans import router as plans_router
 from api.routes.benchmark import router as benchmark_router
 from api.routes.geo import router as geo_router
 from api.routes.bill_impact import router as bill_impact_router
+from api.routes.geo_insights import router as geo_insights_router
 
 app.include_router(health_router)
 app.include_router(billing_router)
@@ -142,6 +151,7 @@ app.include_router(plans_router)
 app.include_router(benchmark_router)
 app.include_router(geo_router)
 app.include_router(bill_impact_router)
+app.include_router(geo_insights_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────
