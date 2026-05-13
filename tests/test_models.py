@@ -11,56 +11,61 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 
 class TestImpactModel:
-    """Tests for the XGBoost + SHAP impact model."""
+    """Tests for the deterministic impact model."""
 
     @pytest.fixture
-    def sample_data(self):
-        np.random.seed(42)
-        n = 60
-        X = pd.DataFrame({
-            "usage_kwh": np.random.normal(750, 100, n),
-            "bgs_rate": np.random.normal(0.09, 0.01, n),
-            "monthly_hdd": np.random.normal(400, 200, n),
-            "monthly_cdd": np.random.normal(200, 150, n),
-            "avg_lmp": np.random.normal(40, 10, n),
-            "month_sin": np.sin(2 * np.pi * np.arange(n) / 12),
-            "month_cos": np.cos(2 * np.pi * np.arange(n) / 12),
-        })
-        y = (X["usage_kwh"] * X["bgs_rate"] + X["monthly_hdd"] * 0.02 +
-             np.random.normal(0, 5, n))
-        return X, pd.Series(y, name="total_bill")
+    def sample_row(self):
+        return {
+            "total_bill": 150.0,
+            "usage_kwh": 800,
+            "customer_charge": 10.0,
+            "distribution_cost": 30.0,
+            "transmission_cost": 20.0,
+            "sbc_cost": 5.0,
+            "bgs_cost": 75.0,
+            "sales_tax": 10.0
+        }
 
-    def test_train_and_metrics(self, sample_data):
+    def test_get_analysis_structure(self, sample_row):
         from models.impact_model import BillImpactModel
-        X, y = sample_data
-        model = BillImpactModel(n_estimators=50, max_depth=3)
-        metrics = model.train(X, y)
-        assert "rmse" in metrics
-        assert "r2" in metrics
-        assert metrics["r2"] > 0  # Should explain some variance
-
-    def test_explain_returns_shap(self, sample_data):
-        from models.impact_model import BillImpactModel
-        X, y = sample_data
-        model = BillImpactModel(n_estimators=50, max_depth=3)
-        model.train(X, y)
-        explanation = model.explain(X)
-        assert "global_importance" in explanation
-        assert "latest_breakdown" in explanation
-        assert "base_value" in explanation
-        assert len(explanation["global_importance"]) == X.shape[1]
-
-    def test_save_and_load(self, sample_data, tmp_path):
-        from models.impact_model import BillImpactModel
-        X, y = sample_data
-        model = BillImpactModel(n_estimators=50, max_depth=3)
-        model.train(X, y)
-        model.save(str(tmp_path))
+        model = BillImpactModel()
+        analysis = model.get_analysis(sample_row)
         
-        model2 = BillImpactModel()
-        model2.load(str(tmp_path))
-        preds = model2.model.predict(X)
-        assert len(preds) == len(X)
+        assert "total_bill" in analysis
+        assert "contributions" in analysis
+        assert "sensitivity" in analysis
+        assert "insights" in analysis
+        assert analysis["total_bill"] == 150.0
+
+    def test_contribution_calculation(self, sample_row):
+        from models.impact_model import BillImpactModel
+        model = BillImpactModel()
+        analysis = model.get_analysis(sample_row)
+        
+        contribs = analysis["contributions"]
+        # 'bgs_cost' becomes 'bgs'
+        assert "bgs" in contribs
+        assert contribs["bgs"]["value"] == 75.0
+        assert contribs["bgs"]["percent"] == 50.0  # 75/150
+
+    def test_sensitivity_calculation(self, sample_row):
+        from models.impact_model import BillImpactModel
+        model = BillImpactModel()
+        analysis = model.get_analysis(sample_row)
+        
+        sens = analysis["sensitivity"]
+        assert "distribution" in sens
+        # +10% of 30.0 is 3.0. With tax (6.625%) it's 3.0 * 1.06625 = 3.19875 -> 3.20
+        assert sens["distribution"]["+10%"] == 3.20
+
+    def test_insights_generation(self, sample_row):
+        from models.impact_model import BillImpactModel
+        model = BillImpactModel()
+        analysis = model.get_analysis(sample_row)
+        
+        insights = analysis["insights"]
+        assert len(insights) > 0
+        assert any("BGS Supply is the primary driver" in s for s in insights)
 
 
 class TestForecastModel:
