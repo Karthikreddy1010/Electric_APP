@@ -181,6 +181,68 @@
                 <h2>Impact Details</h2>
                 <div class="table-container" id="impact-table"></div>
             </div>
+
+            <!-- NEW: Deterministic Sensitivity Simulator -->
+            <div class="section-header" style="margin-top: 40px;">
+                <h1>Bill Sensitivity Simulator</h1>
+                <p class="section-subtitle">Mathematically deterministic "What-If" analysis for rate changes</p>
+            </div>
+            <div class="chart-grid-2">
+                <div class="chart-card">
+                    <h2>Component Rank & Elasticity</h2>
+                    <div class="table-container" id="rank-table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Component</th>
+                                    <th>% of Bill</th>
+                                    <th>Elasticity</th>
+                                    <th>Driver</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rank-table-body">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <h2>Live Sensitivity Test</h2>
+                    <div class="controls-bar" style="background: none; border: none; padding: 0;">
+                        <div class="control-group">
+                            <label>Component</label>
+                            <select id="sensitivity-comp" class="chart-select">
+                                <option value="bgs_rate">BGS Supply</option>
+                                <option value="distribution_rate">Distribution</option>
+                                <option value="transmission_rate">Transmission</option>
+                                <option value="sbc_rate">SBC</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label>Change (%)</label>
+                            <input type="number" id="sensitivity-pct" value="10" step="1" class="chart-select" style="width: 80px;">
+                        </div>
+                        <button class="btn-primary" onclick="runSensitivityTest()">Simulate</button>
+                    </div>
+                    <div id="sensitivity-results" class="metrics-row" style="margin-top: 20px; display: none;">
+                        <div class="metric-card">
+                            <div class="metric-label">New Total Bill</div>
+                            <div class="metric-value" id="sim-new-bill">—</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-label">Absolute Impact</div>
+                            <div class="metric-value highlight" id="sim-abs-impact">—</div>
+                        </div>
+                    </div>
+                    <div id="causal-insight-box" class="insight-card" style="margin-top: 20px; display: none; border-left: 4px solid var(--accent-blue);">
+                        <div class="insight-header">
+                            <span class="insight-icon">🧠</span>
+                            <span class="insight-title">Causal Insight (DoWhy)</span>
+                        </div>
+                        <p id="causal-text" style="font-size: 14px; margin-top: 8px;"></p>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- ===== BENCHMARK TAB ===== -->

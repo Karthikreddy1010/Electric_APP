@@ -54,6 +54,11 @@ document.querySelectorAll('.nav-link').forEach(link => {
         if (targetTab) {
             targetTab.classList.add('active');
             
+            // Special handling for Impact tab (rankings)
+            if (link.dataset.tab === 'impact') {
+                loadImpactRanking();
+            }
+
             // Special handling for Geo Insights map rendering
             if (link.dataset.tab === 'geo-insights') {
                 initGeo().then(() => {
@@ -811,5 +816,66 @@ function resetGeoView() {
     loadGeoRegionDetails();
 }
 
-// Attach tab listener
-document.getElementById('nav-geo-insights').addEventListener('click', initGeo);
+// ===== Bill Impact Engine (Deterministic + Causal) =====
+
+async function loadImpactRanking() {
+    try {
+        const data = await apiGet('/impact/rank');
+        const tbody = document.getElementById('rank-table-body');
+        if (!tbody) return;
+        
+        tbody.innerHTML = '';
+        data.rankings.forEach(item => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.label}</td>
+                <td>${item.share_pct}%</td>
+                <td>${item.elasticity}</td>
+                <td><span class="badge" style="background: var(--bg-card); border: 1px solid var(--accent-blue);">${item.type}</span></td>
+            `;
+            tbody.appendChild(row);
+        });
+    } catch (e) {
+        console.error('Failed to load rankings:', e);
+    }
+}
+
+async function runSensitivityTest() {
+    const component = document.getElementById('sensitivity-comp').value;
+    const pct = parseFloat(document.getElementById('sensitivity-pct').value);
+    
+    showLoading();
+    try {
+        // 1. Get Deterministic Impact
+        const res = await apiPost('/impact/sensitivity', {
+            component: component,
+            change_pct: pct
+        });
+        
+        document.getElementById('sensitivity-results').style.display = 'flex';
+        document.getElementById('sim-new-bill').innerText = `$${res.new_bill.toFixed(2)}`;
+        document.getElementById('sim-abs-impact').innerText = `${res.absolute_impact >= 0 ? '+' : ''}$${res.absolute_impact.toFixed(2)}`;
+        
+        // 2. Get Causal Insight (DoWhy)
+        const causal = await apiPost('/impact/causal', {
+            treatment: component
+        });
+        
+        const causalBox = document.getElementById('causal-insight-box');
+        if (causal.causal_effect_estimate) {
+            causalBox.style.display = 'block';
+            document.getElementById('causal-text').innerText = causal.interpretation;
+        } else {
+            causalBox.style.display = 'none';
+        }
+        
+    } catch (e) {
+        console.error('Sensitivity test failed:', e);
+        alert('Failed to run simulation. Please try again.');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Attach listeners if needed (already in HTML onclick)
+
