@@ -4,7 +4,7 @@ Shared Bill Analytics Engine
 Core analytical logic for electricity bill component analysis.
 This module is the SINGLE SOURCE OF TRUTH — imported by both:
   - FastAPI backend (api/main.py)
-  - Streamlit app (streamlit_app/app.py)
+  - FastAPI backend (api/routes/impact.py)
 
 Features:
   1. Component contribution analysis (% and absolute)

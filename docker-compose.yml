@@ -1,5 +1,5 @@
 # ============================================
-# Docker Compose — Full Stack Local Dev
+# Docker Compose -- Full Stack Local Dev
 # ============================================
 version: "3.9"
 
@@ -16,12 +16,8 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - API_DEBUG=true
-      - API_REDIS_URL=redis://redis:6379/0
     volumes:
       - ./data:/app/data
-      - ./mlruns:/app/mlruns
-    depends_on:
-      - redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
@@ -29,17 +25,7 @@ services:
       timeout: 5s
       retries: 3
 
-  # Redis Cache
-  redis:
-    image: redis:7-alpine
-    container_name: electric-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    restart: unless-stopped
-
-  # Frontend (static file server)
+  # Frontend (static file server — optional, API already serves /app)
   frontend:
     image: nginx:alpine
     container_name: electric-frontend
@@ -51,6 +37,3 @@ services:
     depends_on:
       - api
     restart: unless-stopped
-
-volumes:
-  redis_data:
