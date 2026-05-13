@@ -12,6 +12,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -34,6 +36,7 @@
             <button class="nav-link" data-tab="forecast" id="nav-forecast">Forecast</button>
             <button class="nav-link" data-tab="impact" id="nav-impact">Impact</button>
             <button class="nav-link" data-tab="benchmark" id="nav-benchmark">Benchmark</button>
+            <button class="nav-link" data-tab="geo-insights" id="nav-geo-insights">Geo Insights</button>
             <button class="nav-link" data-tab="plans" id="nav-plans">Plans</button>
         </div>
         <div class="nav-status">
@@ -117,7 +120,7 @@
         </section>
 
         <!-- ===== FORECAST TAB ===== -->
-        <section class="tab-content" id="tab-forecast">
+        <section class="tab-content" id="tab-forecast" >
             <div class="section-header">
                 <h1>Cost Forecast</h1>
                 <p class="section-subtitle">ML-powered predictions for your future electricity bills</p>
@@ -148,7 +151,7 @@
         </section>
 
         <!-- ===== IMPACT TAB ===== -->
-        <section class="tab-content" id="tab-impact">
+        <section class="tab-content" id="tab-impact" >
             <div class="section-header">
                 <h1>Bill Impact Analysis</h1>
                 <p class="section-subtitle">SHAP-powered decomposition of what drives your electricity costs</p>
@@ -181,7 +184,7 @@
         </section>
 
         <!-- ===== BENCHMARK TAB ===== -->
-        <section class="tab-content" id="tab-benchmark">
+        <section class="tab-content" id="tab-benchmark" >
             <div class="section-header">
                 <h1>State Benchmark</h1>
                 <p class="section-subtitle">How NJ electricity rates compare across the United States</p>
@@ -206,8 +209,80 @@
             </div>
         </section>
 
+        <!-- ===== GEO INSIGHTS TAB ===== -->
+        <section class="tab-content" id="tab-geo-insights" >
+            <div class="section-header">
+                <h1>Geo Insights & Price Heatmap</h1>
+                <p class="section-subtitle">Explore electricity costs geographically and over time.</p>
+            </div>
+
+            <div class="controls-bar glass-card">
+                <div class="control-group">
+                    <label>View Mode</label>
+                    <div class="toggle-group">
+                        <button class="toggle-btn active" id="mode-bill" onclick="setGeoMode('bill')">Avg Bill ($)</button>
+                        <button class="toggle-btn" id="mode-price" onclick="setGeoMode('price')">Avg Price ($/kWh)</button>
+                    </div>
+                </div>
+                
+                <div class="control-group slider-group">
+                    <div class="slider-header">
+                        <label>Timeline: <span id="current-month-display" class="highlight">Dec 2025</span></label>
+                        <button class="btn-play" id="play-timeline" onclick="toggleTimelinePlay()">▶ Play</button>
+                    </div>
+                    <input type="range" id="timeline-slider" min="0" max="83" value="83" oninput="onTimelineChange(this.value)">
+                </div>
+
+                <div class="control-group">
+                    <button class="btn-secondary" id="reset-geo" onclick="resetGeoView()">Reset View</button>
+                </div>
+            </div>
+
+            <div class="geo-layout">
+                <div class="map-card glass-card">
+                    <div id="map" style="height: 500px; border-radius: 12px;"></div>
+                    <div class="map-legend" id="map-legend"></div>
+                </div>
+
+                <div class="geo-side-panel">
+                    <div class="chart-card trend-panel">
+                        <h3>Regional Trend</h3>
+                        <div id="geo-trend-chart" style="height: 250px;"></div>
+                        <div class="growth-metric">
+                            <span class="metric-label">Period Growth:</span>
+                            <span class="metric-value highlight" id="geo-growth-value">+0.0%</span>
+                        </div>
+                    </div>
+
+                    <div class="chart-card detail-panel" id="geo-detail-panel">
+                        <h3>Region Detail: <span id="selected-region-name" class="highlight">New Jersey</span></h3>
+                        <div class="detail-stats">
+                            <div class="stat-box">
+                                <span class="label">Monthly Bill</span>
+                                <span class="value" id="detail-bill">$0.00</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Price per kWh</span>
+                                <span class="value" id="detail-price">$0.000</span>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">Avg Usage</span>
+                                <span class="value" id="detail-usage">0 kWh</span>
+                            </div>
+                        </div>
+                        <div class="comparison-bar">
+                            <div class="comp-label">Vs. National Avg: <span id="detail-vs-nat" class="highlight">+0%</span></div>
+                            <div class="bar-bg"><div class="bar-fill" id="detail-vs-nat-bar"></div></div>
+                        </div>
+                        <h4>Component Breakdown</h4>
+                        <div id="geo-breakdown-chart" style="height: 200px;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- ===== PLANS TAB ===== -->
-        <section class="tab-content" id="tab-plans">
+        <section class="tab-content" id="tab-plans" >
             <div class="section-header">
                 <h1>Plan Comparison Simulator</h1>
                 <p class="section-subtitle">Monte Carlo simulation to find the best electricity supply plan</p>
@@ -241,7 +316,7 @@
                     <div id="chart-plan-risk" class="chart-container"></div>
                 </div>
             </div>
-            <div class="recommendation-card" id="plan-recommendation" style="display:none;">
+            <div class="recommendation-card" id="plan-recommendation" >
                 <div class="rec-icon">🏆</div>
                 <div class="rec-content">
                     <div class="rec-title" id="rec-title">Recommended Plan</div>

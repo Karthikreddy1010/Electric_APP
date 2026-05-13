@@ -121,6 +121,17 @@ class SensitivityRequest(BaseModel):
     change_pct: float = Field(10.0, ge=-100, le=500, description="Percentage change to apply")
     kwh: Optional[float] = Field(None, ge=0, le=10000, description="Override usage (kWh)")
 
+class SensitivityResponse(BaseModel):
+    component: str
+    label: str
+    base_bill: float
+    new_bill: float
+    absolute_impact: float
+    percent_impact: float
+    elasticity: float
+    component_type: str
+    reasoning: str
+    details: dict
 
 # ===== /impact/what-if =====
 class WhatIfRequest(BaseModel):
@@ -129,3 +140,33 @@ class WhatIfRequest(BaseModel):
         description="Map of component -> change_pct, e.g. {'bgs_rate': 15, 'sbc_rate': -5}",
     )
     kwh: Optional[float] = Field(None, ge=0, le=10000, description="Override usage (kWh)")
+
+class WhatIfResponse(BaseModel):
+    base_bill: float
+    new_bill: float
+    total_impact: float
+    usage_response: float
+    contributions: dict
+
+# ===== /impact/rank =====
+class RankItem(BaseModel):
+    component: str
+    label: str
+    share_pct: float
+    elasticity: float
+    type: str
+    reasoning: str
+
+class RankResponse(BaseModel):
+    rankings: list[RankItem]
+
+# ===== /impact/causal =====
+class CausalRequest(BaseModel):
+    treatment: str = Field(..., description="Component rate to test for causal impact")
+
+class CausalResponse(BaseModel):
+    treatment: str
+    causal_effect_estimate: float
+    p_value: float
+    interpretation: str
+    caveat: str

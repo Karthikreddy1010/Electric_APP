@@ -43,11 +43,28 @@ const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
 // ===== Tab Navigation =====
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', () => {
+        // Deactivate all
         document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        
+        // Activate target
         link.classList.add('active');
         const tabId = 'tab-' + link.dataset.tab;
-        document.getElementById(tabId).classList.add('active');
+        const targetTab = document.getElementById(tabId);
+        if (targetTab) {
+            targetTab.classList.add('active');
+            
+            // Special handling for Geo Insights map rendering
+            if (link.dataset.tab === 'geo-insights') {
+                initGeo().then(() => {
+                    if (geoMap) {
+                        setTimeout(() => {
+                            geoMap.invalidateSize();
+                        }, 200);
+                    }
+                });
+            }
+        }
     });
 });
 
@@ -534,3 +551,265 @@ document.getElementById('trend-months')?.addEventListener('change', async () => 
 
 // ===== Boot =====
 document.addEventListener('DOMContentLoaded', init);
+// ===== GEO INSIGHTS TAB =====
+let geoInitialized = false;
+let geoMap = null;
+let geoGeoJSON = null;
+let geoMonths = [];
+let geoMode = 'bill'; // 'bill' or 'price'
+let geoSelectedRegion = 'NJ';
+let geoCurrentMonthIndex = 83;
+let geoPlaying = false;
+let geoPlayInterval = null;
+
+async function initGeo() {
+    if (geoInitialized) return;
+    showLoading('Loading Geo Data...');
+    try {
+        const meta = await apiGet('/geo/meta');
+        geoMonths = meta.months;
+        geoCurrentMonthIndex = geoMonths.length - 1;
+        
+        // Setup slider
+        const slider = document.getElementById('timeline-slider');
+        slider.max = geoMonths.length - 1;
+        slider.value = geoCurrentMonthIndex;
+        updateMonthDisplay();
+
+        // Load US States GeoJSON from jsDelivr CDN (more reliable than raw.githubusercontent)
+        const geoJSONUrl = 'https://cdn.jsdelivr.net/gh/PublicaMundi/MappingAPI@master/data/geojson/us-states.json';
+        const geoResp = await fetch(geoJSONUrl);
+        geoGeoJSON = await geoResp.json();
+
+        // Initialize Map if not already done
+        if (!geoMap) {
+            geoMap = L.map('map', {
+                center: [37.8, -96],
+                zoom: 4,
+                zoomControl: false,
+                attributionControl: false
+            });
+            L.control.zoom({ position: 'topright' }).addTo(geoMap);
+        }
+
+        await updateGeoView();
+        geoInitialized = true;
+    } catch (e) {
+        console.error('Geo init failed:', e);
+        // Fallback or error UI
+        document.getElementById('map').innerHTML = '<div style="padding: 20px; color: var(--accent-rose);">Failed to load map data. Please check your internet connection.</div>';
+    } finally {
+        hideLoading();
+    }
+}
+
+function updateMonthDisplay() {
+    const m = geoMonths[geoCurrentMonthIndex];
+    if (!m) return;
+    const [y, mo] = m.split('-');
+    const date = new Date(y, mo - 1);
+    document.getElementById('current-month-display').textContent = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+}
+
+async function setGeoMode(mode) {
+    geoMode = mode;
+    document.getElementById('mode-bill').classList.toggle('active', mode === 'bill');
+    document.getElementById('mode-price').classList.toggle('active', mode === 'price');
+    await updateGeoView();
+}
+
+async function onTimelineChange(index) {
+    geoCurrentMonthIndex = parseInt(index);
+    updateMonthDisplay();
+    await updateGeoView(false); // Update map only, don't re-fetch trend
+}
+
+function toggleTimelinePlay() {
+    geoPlaying = !geoPlaying;
+    const btn = document.getElementById('play-timeline');
+    btn.textContent = geoPlaying ? '⏸ Pause' : '▶ Play';
+    btn.classList.toggle('playing', geoPlaying);
+
+    if (geoPlaying) {
+        geoPlayInterval = setInterval(async () => {
+            geoCurrentMonthIndex++;
+            if (geoCurrentMonthIndex >= geoMonths.length) {
+                geoCurrentMonthIndex = 0;
+            }
+            document.getElementById('timeline-slider').value = geoCurrentMonthIndex;
+            updateMonthDisplay();
+            await updateGeoView(false);
+        }, 800);
+    } else {
+        clearInterval(geoPlayInterval);
+    }
+}
+
+async function updateGeoView(updateDetails = true) {
+    if (!geoMap || !geoGeoJSON) return;
+    const month = geoMonths[geoCurrentMonthIndex];
+    
+    try {
+        const resp = await apiGet(`/geo/data?month=${month}&type=${geoMode}`);
+        const dataMap = {};
+        resp.data.forEach(d => dataMap[d.state] = d);
+
+        // Remove old layer
+        if (window.geoLayer) geoMap.removeLayer(window.geoLayer);
+
+        window.geoLayer = L.geoJson(geoGeoJSON, {
+            style: (feature) => {
+                const stateData = dataMap[feature.id];
+                const val = stateData ? stateData.value : 0;
+                return {
+                    fillColor: getGeoColor(val, geoMode),
+                    weight: 1.5,
+                    opacity: 1,
+                    color: 'rgba(99, 102, 241, 0.4)',
+                    fillOpacity: 0.7
+                };
+            },
+            onEachFeature: (feature, layer) => {
+                const stateData = dataMap[feature.id];
+                layer.on({
+                    mouseover: (e) => {
+                        const l = e.target;
+                        l.setStyle({ fillOpacity: 0.9, weight: 2, color: '#fff' });
+                        const popup = L.popup({ closeButton: false, offset: L.point(0, -10) })
+                            .setLatLng(e.latlng)
+                            .setContent(`<b>${feature.properties.name}</b><br>${geoMode === 'bill' ? 'Avg Bill: ' + formatCurrency(stateData.avg_bill) : 'Avg Price: $' + stateData.avg_price.toFixed(4)}`)
+                            .openOn(geoMap);
+                    },
+                    mouseout: (e) => {
+                        window.geoLayer.resetStyle(e.target);
+                        geoMap.closePopup();
+                    },
+                    click: async () => {
+                        geoSelectedRegion = feature.id;
+                        document.getElementById('selected-region-name').textContent = feature.properties.name;
+                        await loadGeoRegionDetails();
+                    }
+                });
+            }
+        }).addTo(geoMap);
+
+        updateGeoLegend(geoMode);
+
+        if (updateDetails) {
+            await loadGeoRegionDetails();
+        }
+    } catch (e) {
+        console.error('Geo update failed:', e);
+    }
+}
+
+function getGeoColor(d, mode) {
+    if (mode === 'bill') {
+        return d > 200 ? '#f43f5e' :
+               d > 180 ? '#fb7185' :
+               d > 160 ? '#f59e0b' :
+               d > 140 ? '#14b8a6' :
+               d > 120 ? '#10b981' :
+                         '#059669';
+    } else {
+        return d > 0.22 ? '#f43f5e' :
+               d > 0.19 ? '#fb7185' :
+               d > 0.17 ? '#f59e0b' :
+               d > 0.15 ? '#14b8a6' :
+               d > 0.13 ? '#10b981' :
+                          '#059669';
+    }
+}
+
+function updateGeoLegend(mode) {
+    const legend = document.getElementById('map-legend');
+    const grades = mode === 'bill' ? [120, 140, 160, 180, 200] : [0.13, 0.15, 0.17, 0.19, 0.22];
+    const labels = [];
+    
+    legend.innerHTML = `<div class="legend-title">${mode === 'bill' ? 'Avg Bill ($)' : 'Price ($/kWh)'}</div>`;
+    const scale = document.createElement('div');
+    scale.className = 'legend-scale';
+
+    for (let i = 0; i < grades.length; i++) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        const color = getGeoColor(grades[i] + (mode === 'bill' ? 1 : 0.01), mode);
+        item.innerHTML = `<div class="legend-color" style="background:${color}"></div> <span>${grades[i]}${grades[i+1] ? '&ndash;' + grades[i+1] : '+'}</span>`;
+        scale.appendChild(item);
+    }
+    legend.appendChild(scale);
+}
+
+async function loadGeoRegionDetails() {
+    const month = geoMonths[geoCurrentMonthIndex];
+    try {
+        const [detail, trend] = await Promise.all([
+            apiGet(`/geo/detail?state=${geoSelectedRegion}&month=${month}`),
+            apiGet(`/geo/trend?region=${geoSelectedRegion}&type=${geoMode}`)
+        ]);
+
+        // Update Detail Panel
+        document.getElementById('detail-bill').textContent = formatCurrency(detail.avg_bill);
+        document.getElementById('detail-price').textContent = '$' + detail.avg_rate.toFixed(4);
+        document.getElementById('detail-usage').textContent = detail.usage_kwh + ' kWh';
+        
+        const vsNat = geoMode === 'bill' ? detail.vs_national_bill_pct : detail.vs_national_rate_pct;
+        const vsNatEl = document.getElementById('detail-vs-nat');
+        vsNatEl.textContent = (vsNat >= 0 ? '+' : '') + vsNat + '%';
+        vsNatEl.style.color = vsNat > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)';
+        
+        const barFill = document.getElementById('detail-vs-nat-bar');
+        barFill.style.width = Math.min(Math.abs(vsNat) * 2, 100) + '%';
+        barFill.style.background = vsNat > 0 ? 'var(--accent-rose)' : 'var(--accent-emerald)';
+
+        // Render Trend Chart
+        Plotly.newPlot('geo-trend-chart', [{
+            x: trend.months,
+            y: trend.values,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: COLORS.primary, width: 3, shape: 'spline' },
+            fill: 'tozeroy',
+            fillcolor: 'rgba(99, 102, 241, 0.1)',
+            hovertemplate: '%{x}: %{y}<extra></extra>'
+        }], {
+            ...PLOTLY_LAYOUT,
+            xaxis: { ...PLOTLY_LAYOUT.xaxis, tickformat: '%Y' },
+            yaxis: { ...PLOTLY_LAYOUT.yaxis, tickprefix: geoMode === 'bill' ? '$' : '' }
+        }, PLOTLY_CONFIG);
+
+        document.getElementById('geo-growth-value').textContent = (trend.total_growth_pct >= 0 ? '+' : '') + trend.total_growth_pct + '%';
+
+        // Render Breakdown Chart
+        const components = detail.components;
+        if (components) {
+            Plotly.newPlot('geo-breakdown-chart', [{
+                values: Object.values(components),
+                labels: Object.keys(components).map(k => k.toUpperCase()),
+                type: 'pie',
+                hole: 0.6,
+                marker: { colors: COLORS.components },
+                textinfo: 'none',
+                hovertemplate: '%{label}: $%{value}<extra></extra>'
+            }], {
+                ...PLOTLY_LAYOUT,
+                showlegend: true,
+                legend: { orientation: 'v', x: 1.1, y: 0.5 },
+                margin: { l: 0, r: 100, t: 0, b: 0 }
+            }, PLOTLY_CONFIG);
+        }
+
+    } catch (e) {
+        console.error('Region detail failed:', e);
+    }
+}
+
+function resetGeoView() {
+    if (geoMap) geoMap.setView([37.8, -96], 4);
+    geoSelectedRegion = 'NJ';
+    document.getElementById('selected-region-name').textContent = 'New Jersey';
+    loadGeoRegionDetails();
+}
+
+// Attach tab listener
+document.getElementById('nav-geo-insights').addEventListener('click', initGeo);

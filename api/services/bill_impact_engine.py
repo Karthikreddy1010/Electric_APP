@@ -1,366 +1,278 @@
 """
-Bill Impact Engine — Deterministic bill calculation and impact analysis.
+Bill Impact Engine — Deterministic, Statistical, and Causal Analysis of Electricity Costs.
 
-This module answers: "If a specific electricity bill component changes,
-how much does the total bill change?" using actual billing logic, not ML.
-
-Architecture:
-  - calculate_total_bill()  — core billing math
-  - sensitivity_analysis()  — single-component impact
-  - what_if_analysis()      — multi-component scenario
-  - rank_components()       — rank by influence
+This module implements:
+1. Deterministic Layer (Accounting Identity): Bill = Sum(Components)
+2. Statistical Layer (Regression): Partial correlations and elasticity
+3. Causal Layer (DoWhy/DML): True impact of rate changes controlling for usage/weather.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Dict, List, Optional
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import RidgeCV
+
+from api.state import app_state
 
 logger = logging.getLogger(__name__)
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  COMPONENT REGISTRY — canonical metadata for every bill component
-# ═══════════════════════════════════════════════════════════════════════════
-
+# Constants
 NJ_SALES_TAX_RATE = 0.06625
+DEMAND_ELASTICITY = -0.2  # Typical short-run electricity price elasticity
 
-COMPONENT_TYPES: dict[str, dict[str, str]] = {
+COMPONENT_TYPES = {
     "bgs_rate": {
+        "label": "BGS Supply",
         "type": "variable",
         "cost_col": "bgs_cost",
-        "label": "BGS Supply",
         "driver": "market",
-        "insight": "Scales with usage (kWh). Largest variable component; wholesale energy cost.",
+        "reasoning": "High impact because it is the largest portion of the supply stack and scales directly with usage (kWh).",
     },
     "transmission_rate": {
+        "label": "Transmission Charge",
         "type": "variable",
         "cost_col": "transmission_cost",
-        "label": "Transmission Charge",
         "driver": "market",
-        "insight": "Scales with usage (kWh). Reflects regional grid congestion costs.",
+        "reasoning": "Significant impact scaling with usage; driven by regional grid maintenance and congestion.",
     },
     "distribution_rate": {
+        "label": "Distribution Charge",
         "type": "variable",
         "cost_col": "distribution_cost",
-        "label": "Distribution Charge",
         "driver": "infrastructure",
-        "insight": "Scales with usage (kWh). Local delivery network cost.",
+        "reasoning": "Stable but substantial impact proportional to consumption; funds local delivery network.",
     },
     "sbc_rate": {
+        "label": "Societal Benefits Charge",
         "type": "variable",
         "cost_col": "sbc_cost",
-        "label": "Societal Benefits Charge",
         "driver": "policy",
-        "insight": "Scales with usage (kWh). Funds energy efficiency & renewables.",
+        "reasoning": "Lower impact scaling with usage; funds energy efficiency and social programs.",
     },
     "nug_rate": {
+        "label": "Non-Utility Generation",
         "type": "variable",
         "cost_col": "nug_cost",
-        "label": "Non-Utility Generation",
         "driver": "regulatory",
-        "insight": "Scales with usage (kWh). Legacy non-utility generation contracts.",
-    },
-    "dr_credit": {
-        "type": "adjustment",
-        "cost_col": "dr_credit",
-        "label": "Demand Response Credit",
-        "driver": "policy",
-        "insight": "Irregular / policy-driven impact. Credit for demand response participation.",
-    },
-    "sales_tax": {
-        "type": "tax",
-        "cost_col": "sales_tax",
-        "label": "Sales Tax (NJ 6.625%)",
-        "driver": "policy",
-        "insight": "Proportional to subtotal. Changes propagate from all other components.",
+        "reasoning": "Scaling impact; tied to legacy power purchase agreements.",
     },
 }
 
-# Components that are rates (multiplied by kWh)
-_VARIABLE_RATE_KEYS = [k for k, v in COMPONENT_TYPES.items() if v["type"] == "variable"]
+class BillImpactEngine:
+    def __init__(self):
+        self.tax_rate = NJ_SALES_TAX_RATE
 
-# Components that are direct dollar amounts
-_DIRECT_COST_KEYS = ["dr_credit"]
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  1. DETERMINISTIC LAYER (Ground Truth)
+    # ═══════════════════════════════════════════════════════════════════════════
 
+    def calculate_total_bill(self, components: dict[str, float], kwh: float) -> dict[str, Any]:
+        """
+        Calculates the total bill using the deterministic summation identity.
+        """
+        line_items = {}
+        subtotal = 0.0
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  CORE: calculate_total_bill
-# ═══════════════════════════════════════════════════════════════════════════
+        for key, meta in COMPONENT_TYPES.items():
+            rate = components.get(key, 0.0)
+            cost = round(rate * kwh, 2)
+            line_items[meta["cost_col"]] = cost
+            subtotal += cost
 
-def calculate_total_bill(
-    components: dict[str, float],
-    kwh: float,
-    tax_rate: float = NJ_SALES_TAX_RATE,
-) -> dict[str, Any]:
-    """
-    Deterministic bill calculation from component rates/values + kWh.
+        # Add fixed components if any (none in current simplified model besides BGS/etc)
+        # Handle adjustments like DR credit if present
+        dr_credit = components.get("dr_credit", 0.0)
+        line_items["dr_credit"] = dr_credit
+        subtotal += dr_credit
 
-    Parameters
-    ----------
-    components : dict
-        Keys are rate names (e.g. "bgs_rate") or direct costs ("dr_credit").
-        Values are the rate ($/kWh) or dollar amount.
-    kwh : float
-        Monthly electricity usage in kWh.
-    tax_rate : float
-        Sales tax rate (default: NJ 6.625%).
+        tax = round(subtotal * self.tax_rate, 2)
+        total = round(subtotal + tax, 2)
 
-    Returns
-    -------
-    dict with: total_bill, subtotal, tax, line_items (component breakdown)
-    """
-    line_items: dict[str, float] = {}
+        return {
+            "total_bill": total,
+            "subtotal": subtotal,
+            "sales_tax": tax,
+            "line_items": line_items,
+            "usage_kwh": kwh
+        }
 
-    # Variable components: rate × kWh
-    for key in _VARIABLE_RATE_KEYS:
-        rate = components.get(key, 0.0)
-        cost = round(rate * kwh, 2)
-        cost_col = COMPONENT_TYPES[key]["cost_col"]
-        line_items[cost_col] = cost
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  2. SENSITIVITY ANALYSIS
+    # ═══════════════════════════════════════════════════════════════════════════
 
-    # Direct cost components
-    for key in _DIRECT_COST_KEYS:
-        line_items[key] = round(components.get(key, 0.0), 2)
+    def sensitivity_analysis(self, component: str, change_pct: float, kwh: Optional[float] = None) -> dict[str, Any]:
+        """
+        Computes deterministic + analytical impact of changing one component.
+        """
+        df = app_state.get("billing_df")
+        if df is None or df.empty:
+            return {"error": "No billing data available"}
 
-    subtotal = round(sum(line_items.values()), 2)
-    tax = round(subtotal * tax_rate, 2)
-    total_bill = round(subtotal + tax, 2)
-
-    return {
-        "total_bill": total_bill,
-        "subtotal": subtotal,
-        "sales_tax": tax,
-        "usage_kwh": kwh,
-        "line_items": line_items,
-    }
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  Extract current component values from a billing row
-# ═══════════════════════════════════════════════════════════════════════════
-
-def _extract_components(row: dict) -> dict[str, float]:
-    """Pull current rate/cost values from a billing data row."""
-    components: dict[str, float] = {}
-    for key in _VARIABLE_RATE_KEYS:
-        components[key] = float(row.get(key, 0.0))
-    for key in _DIRECT_COST_KEYS:
-        components[key] = float(row.get(key, 0.0))
-    return components
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  SENSITIVITY: change one component, measure total bill impact
-# ═══════════════════════════════════════════════════════════════════════════
-
-def sensitivity_analysis(
-    row: dict,
-    component: str,
-    change_pct: float,
-    kwh: float | None = None,
-) -> dict[str, Any]:
-    """
-    Change ONE component by change_pct% and measure total bill impact.
-
-    Parameters
-    ----------
-    row         : latest billing row as dict
-    component   : key from COMPONENT_TYPES (e.g. "bgs_rate")
-    change_pct  : percentage change (e.g. 10.0 for +10%)
-    kwh         : override kWh (default: from row)
-    """
-    if component not in COMPONENT_TYPES:
-        raise ValueError(
-            f"Unknown component '{component}'. "
-            f"Valid: {list(COMPONENT_TYPES.keys())}"
-        )
-
-    usage = kwh if kwh is not None else float(row.get("usage_kwh", 750))
-    base_components = _extract_components(row)
-    base_bill = calculate_total_bill(base_components, usage)
-
-    # Apply change
-    modified = dict(base_components)
-    original_value = modified.get(component, 0.0)
-    delta = original_value * (change_pct / 100.0)
-    modified[component] = original_value + delta
-
-    new_bill = calculate_total_bill(modified, usage)
-
-    impact = round(new_bill["total_bill"] - base_bill["total_bill"], 2)
-    pct_impact = round((impact / base_bill["total_bill"]) * 100, 4) if base_bill["total_bill"] else 0.0
-    elasticity = round(pct_impact / change_pct, 4) if change_pct != 0 else 0.0
-
-    meta = COMPONENT_TYPES[component]
-
-    return {
-        "component": component,
-        "label": meta["label"],
-        "component_type": meta["type"],
-        "driver": meta["driver"],
-        "change_pct": change_pct,
-        "original_value": round(original_value, 6),
-        "new_value": round(original_value + delta, 6),
-        "base_bill": base_bill["total_bill"],
-        "new_bill": new_bill["total_bill"],
-        "impact_dollars": impact,
-        "impact_pct": pct_impact,
-        "elasticity": elasticity,
-        "insight": meta["insight"],
-        "base_breakdown": base_bill["line_items"],
-        "new_breakdown": new_bill["line_items"],
-    }
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  WHAT-IF: modify multiple components simultaneously
-# ═══════════════════════════════════════════════════════════════════════════
-
-def what_if_analysis(
-    row: dict,
-    changes: dict[str, float],
-    kwh: float | None = None,
-) -> dict[str, Any]:
-    """
-    Modify multiple components (by % change) and return updated bill.
-
-    Parameters
-    ----------
-    row     : latest billing row as dict
-    changes : {component_key: change_pct, ...}
-    kwh     : override kWh (default: from row)
-    """
-    usage = kwh if kwh is not None else float(row.get("usage_kwh", 750))
-    base_components = _extract_components(row)
-    base_bill = calculate_total_bill(base_components, usage)
-
-    # Apply all changes
-    modified = dict(base_components)
-    change_details = []
-
-    for component, change_pct in changes.items():
+        latest = df.iloc[-1].to_dict()
+        usage = kwh if kwh is not None else float(latest.get("usage_kwh", 750))
+        
         if component not in COMPONENT_TYPES:
-            continue
-        original = modified.get(component, 0.0)
-        delta = original * (change_pct / 100.0)
-        modified[component] = original + delta
+            return {"error": f"Invalid component: {component}"}
 
-        meta = COMPONENT_TYPES[component]
-        cost_col = meta["cost_col"]
-        base_cost = base_bill["line_items"].get(cost_col, 0.0)
+        # Base components
+        base_comps = {k: float(latest.get(k, 0.0)) for k in COMPONENT_TYPES.keys()}
+        base_bill = self.calculate_total_bill(base_comps, usage)
 
-        change_details.append({
+        # Modified component
+        mod_comps = dict(base_comps)
+        orig_rate = base_comps[component]
+        mod_comps[component] = orig_rate * (1 + change_pct / 100.0)
+        
+        new_bill = self.calculate_total_bill(mod_comps, usage)
+
+        abs_impact = round(new_bill["total_bill"] - base_bill["total_bill"], 2)
+        pct_impact = round((abs_impact / base_bill["total_bill"]) * 100, 4) if base_bill["total_bill"] else 0.0
+        
+        # Elasticity (Calculated mathematically: share of bill)
+        # Elasticity = (dTotal/Total) / (dRate/Rate)
+        elasticity = round(pct_impact / change_pct, 4) if change_pct != 0 else 0.0
+
+        return {
             "component": component,
-            "label": meta["label"],
-            "type": meta["type"],
-            "change_pct": change_pct,
-            "original_rate": round(original, 6),
-            "new_rate": round(original + delta, 6),
-            "base_cost": base_cost,
-            "insight": meta["insight"],
-        })
-
-    new_bill = calculate_total_bill(modified, usage)
-
-    # Per-component new costs
-    for detail in change_details:
-        meta = COMPONENT_TYPES[detail["component"]]
-        cost_col = meta["cost_col"]
-        new_cost = new_bill["line_items"].get(cost_col, 0.0)
-        detail["new_cost"] = new_cost
-        detail["cost_delta"] = round(new_cost - detail["base_cost"], 2)
-
-    total_impact = round(new_bill["total_bill"] - base_bill["total_bill"], 2)
-    pct_impact = round((total_impact / base_bill["total_bill"]) * 100, 4) if base_bill["total_bill"] else 0.0
-
-    return {
-        "usage_kwh": usage,
-        "base_bill": base_bill["total_bill"],
-        "new_bill": new_bill["total_bill"],
-        "total_impact": total_impact,
-        "total_impact_pct": pct_impact,
-        "base_breakdown": base_bill,
-        "new_breakdown": new_bill,
-        "changes_applied": change_details,
-    }
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  RANK: order components by influence on total bill
-# ═══════════════════════════════════════════════════════════════════════════
-
-def rank_components(
-    row: dict,
-    test_pct: float = 10.0,
-    kwh: float | None = None,
-) -> dict[str, Any]:
-    """
-    Rank ALL components by their influence on total bill.
-    Tests a uniform +test_pct% change on each component independently.
-
-    Returns ranked list (highest impact first) with elasticities.
-    """
-    usage = kwh if kwh is not None else float(row.get("usage_kwh", 750))
-    base_components = _extract_components(row)
-    base_bill = calculate_total_bill(base_components, usage)
-
-    rankings = []
-    for component, meta in COMPONENT_TYPES.items():
-        if meta["type"] == "tax":
-            continue  # tax is derived, not an input
-
-        original = base_components.get(component, 0.0)
-        if original == 0.0:
-            rankings.append({
-                "rank": 0,
-                "component": component,
-                "label": meta["label"],
-                "type": meta["type"],
-                "driver": meta["driver"],
-                "current_value": 0.0,
-                "impact_dollars": 0.0,
-                "impact_pct": 0.0,
-                "elasticity": 0.0,
-                "insight": meta["insight"],
-            })
-            continue
-
-        # Test +test_pct% change
-        modified = dict(base_components)
-        modified[component] = original * (1 + test_pct / 100.0)
-        new_bill = calculate_total_bill(modified, usage)
-
-        impact = round(new_bill["total_bill"] - base_bill["total_bill"], 2)
-        pct_impact = round((impact / base_bill["total_bill"]) * 100, 4) if base_bill["total_bill"] else 0.0
-        elasticity = round(pct_impact / test_pct, 4) if test_pct else 0.0
-
-        # Current cost contribution
-        cost_col = meta["cost_col"]
-        current_cost = base_bill["line_items"].get(cost_col, 0.0)
-
-        rankings.append({
-            "rank": 0,  # assigned after sort
-            "component": component,
-            "label": meta["label"],
-            "type": meta["type"],
-            "driver": meta["driver"],
-            "current_rate": round(original, 6),
-            "current_cost": round(current_cost, 2),
-            "pct_of_bill": round((current_cost / base_bill["total_bill"]) * 100, 2) if base_bill["total_bill"] else 0.0,
-            "impact_dollars": impact,
-            "impact_pct": pct_impact,
+            "label": COMPONENT_TYPES[component]["label"],
+            "base_bill": base_bill["total_bill"],
+            "new_bill": new_bill["total_bill"],
+            "absolute_impact": abs_impact,
+            "percent_impact": pct_impact,
             "elasticity": elasticity,
-            "insight": meta["insight"],
-        })
+            "component_type": COMPONENT_TYPES[component]["type"],
+            "reasoning": COMPONENT_TYPES[component]["reasoning"],
+            "details": {
+                "original_rate": round(orig_rate, 6),
+                "new_rate": round(mod_comps[component], 6),
+                "usage_used": usage
+            }
+        }
 
-    # Sort by absolute impact (highest first)
-    rankings.sort(key=lambda x: abs(x["impact_dollars"]), reverse=True)
-    for i, item in enumerate(rankings):
-        item["rank"] = i + 1
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  3. WHAT-IF SIMULATION
+    # ═══════════════════════════════════════════════════════════════════════════
 
-    return {
-        "test_pct": test_pct,
-        "usage_kwh": usage,
-        "base_bill": base_bill["total_bill"],
-        "base_breakdown": base_bill,
-        "rankings": rankings,
-    }
+    def what_if_simulation(self, modifications: dict[str, float], kwh: Optional[float] = None) -> dict[str, Any]:
+        """
+        Simulate bill changes for multiple component modifications.
+        Includes demand elasticity (optional/analytical).
+        """
+        df = app_state.get("billing_df")
+        latest = df.iloc[-1].to_dict()
+        usage = kwh if kwh is not None else float(latest.get("usage_kwh", 750))
+
+        base_comps = {k: float(latest.get(k, 0.0)) for k in COMPONENT_TYPES.keys()}
+        base_bill = self.calculate_total_bill(base_comps, usage)
+
+        mod_comps = dict(base_comps)
+        for comp, pct in modifications.items():
+            if comp in mod_comps:
+                mod_comps[comp] *= (1 + pct / 100.0)
+
+        # Analytical Demand Elasticity: If avg price changes, usage might change
+        # Avg Price = Total Bill / Usage
+        base_avg_price = base_bill["total_bill"] / usage
+        temp_new_bill = self.calculate_total_bill(mod_comps, usage)
+        new_avg_price = temp_new_bill["total_bill"] / usage
+        
+        price_change_pct = (new_avg_price - base_avg_price) / base_avg_price
+        new_usage = usage * (1 + price_change_pct * DEMAND_ELASTICITY)
+        
+        # Final result with demand response
+        final_bill = self.calculate_total_bill(mod_comps, new_usage)
+
+        return {
+            "base_bill": base_bill["total_bill"],
+            "new_bill": final_bill["total_bill"],
+            "total_impact": round(final_bill["total_bill"] - base_bill["total_bill"], 2),
+            "usage_response": round(new_usage - usage, 2),
+            "contributions": {
+                COMPONENT_TYPES[k]["label"]: round((mod_comps[k] * new_usage * (1+self.tax_rate)), 2)
+                for k in mod_comps
+            }
+        }
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  4. IMPACT RANKING
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def rank_components(self) -> List[Dict[str, Any]]:
+        """
+        Rank components by share of total bill and elasticity.
+        """
+        df = app_state.get("billing_df")
+        latest = df.iloc[-1].to_dict()
+        total = float(latest.get("total_bill", 1.0))
+        
+        ranks = []
+        for key, meta in COMPONENT_TYPES.items():
+            cost = float(latest.get(meta["cost_col"], 0.0))
+            share = (cost * (1 + self.tax_rate)) / total
+            ranks.append({
+                "component": key,
+                "label": meta["label"],
+                "share_pct": round(share * 100, 2),
+                "elasticity": round(share, 4),
+                "type": meta["type"],
+                "reasoning": meta["reasoning"]
+            })
+            
+        return sorted(ranks, key=lambda x: x["share_pct"], reverse=True)
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    #  5. CAUSAL INFERENCE (Advanced Layer)
+    # ═══════════════════════════════════════════════════════════════════════════
+
+    def get_causal_impact(self, treatment: str) -> dict[str, Any]:
+        """
+        Estimate causal effect of a rate component on the total bill using DoWhy.
+        This distinguishes correlation from causation by controlling for confounders.
+        """
+        try:
+            from dowhy import CausalModel
+            
+            df = app_state.get("billing_df").copy()
+            if df is None or len(df) < 24:
+                return {"error": "Insufficient data for causal inference (min 24 months)"}
+
+            # Define causal variables
+            # Treatment: component rate
+            # Outcome: total bill
+            # Confounders: usage_kwh, weather (if available)
+            
+            # For simplicity, we use usage_kwh as the primary confounder
+            model = CausalModel(
+                data=df,
+                treatment=treatment,
+                outcome="total_bill",
+                common_causes=["usage_kwh"]
+            )
+            
+            # Identification
+            identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
+            
+            # Estimation (using Linear Regression as a baseline, but DML is preferred)
+            # Since we have small data, Linear Regression with controls is safer than complex DML
+            estimate = model.estimate_effect(
+                identified_estimand,
+                method_name="backdoor.linear_regression",
+                test_significance=True
+            )
+            
+            return {
+                "treatment": treatment,
+                "causal_effect_estimate": round(float(estimate.value), 4),
+                "p_value": round(float(estimate.test_stat_significance().get("p_value", 0.0)), 4),
+                "interpretation": f"Controlling for usage, a $1 unit increase in {treatment} causes an average bill increase of ${round(float(estimate.value), 2)}.",
+                "caveat": "Estimated using observational data; results assume no unobserved confounders."
+            }
+        except ImportError:
+            return {"error": "DoWhy not installed for causal inference"}
+        except Exception as e:
+            logger.warning(f"Causal inference failed for {treatment}: {e}")
+            return {"error": str(e)}
+
+bill_impact_engine = BillImpactEngine()

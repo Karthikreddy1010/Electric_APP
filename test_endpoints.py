@@ -1,5 +1,5 @@
 """
-Full smoke test — all 15 endpoints (12 original + 3 new bill impact).
+Full smoke test — all 16 endpoints (12 original + 4 new bill impact).
 """
 import urllib.request
 import json
@@ -43,7 +43,7 @@ def check(name, fn):
 
 
 print("=" * 70)
-print("ElectricAI FastAPI -- Full Endpoint Smoke Tests (15 endpoints)")
+print("ElectricAI FastAPI -- Full Endpoint Smoke Tests (16 endpoints)")
 print("=" * 70)
 
 # ── Original 12 ──────────────────────────────────────────────────────────
@@ -61,15 +61,15 @@ check("POST /benchmark", lambda: post("/benchmark", {"year": 2025, "compare_stat
 check("POST /plan-simulation", lambda: post("/plan-simulation", {"monthly_usage_kwh": 750, "n_simulations": 1000, "horizon_months": 12}))
 check("POST /simulate-bill", lambda: post("/simulate-bill", {"bgs_cost": 100.0, "usage_kwh": 800}))
 
-# ── New Bill Impact Engine (3) ───────────────────────────────────────────
-print("\n-- New Bill Impact Endpoints (3) --")
+# ── New Bill Impact Engine (4) ───────────────────────────────────────────
+print("\n-- New Bill Impact Endpoints (4) --")
 
 # Sensitivity: +15% BGS rate
 r = check("POST /impact/sensitivity (bgs_rate +15%)", lambda: post("/impact/sensitivity", {
     "component": "bgs_rate", "change_pct": 15.0
 }))
 if r:
-    print(f"        Base: ${r['base_bill']} -> New: ${r['new_bill']}  (impact: ${r['impact_dollars']}, elasticity: {r['elasticity']})")
+    print(f"        Base: ${r['base_bill']} -> New: ${r['new_bill']}  (impact: ${r['absolute_impact']}, elasticity: {r['elasticity']})")
 
 # What-if: multiple changes
 r = check("POST /impact/what-if (multi-change)", lambda: post("/impact/what-if", {
@@ -80,15 +80,23 @@ if r:
     print(f"        Base: ${r['base_bill']} -> New: ${r['new_bill']}  (total impact: ${r['total_impact']})")
 
 # Rank: all components
-r = check("GET  /impact/rank", lambda: get("/impact/rank?test_pct=10"))
+r = check("GET  /impact/rank", lambda: get("/impact/rank"))
 if r:
     top = r["rankings"][0]
-    print(f"        #1 most impactful: {top['label']} (${top['impact_dollars']}/+10%, elasticity={top['elasticity']})")
+    print(f"        #1 most impactful: {top['label']} ({top['share_pct']}% of bill, elasticity={top['elasticity']})")
+
+# Causal: bgs_rate
+r = check("POST /impact/causal (bgs_rate)", lambda: post("/impact/causal", {
+    "treatment": "bgs_rate"
+}))
+if r:
+    print(f"        Estimate: {r['causal_effect_estimate']} (p={r['p_value']})")
+    print(f"        {r['interpretation']}")
 
 print("\n" + "=" * 70)
 print(f"Results: {passed} passed, {failed} failed out of {passed + failed} tests")
 if failed == 0:
-    print("ALL 15 ENDPOINTS WORKING!")
+    print("ALL 16 ENDPOINTS WORKING!")
 else:
     print("Some endpoints failed.")
     sys.exit(1)
