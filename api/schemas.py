@@ -145,6 +145,7 @@ class WhatIfResponse(BaseModel):
     base_bill: float
     new_bill: float
     total_impact: float
+    confidence_interval: list[float] = Field(..., description="95% CI from Monte Carlo simulation")
     usage_response: float
     contributions: dict
 

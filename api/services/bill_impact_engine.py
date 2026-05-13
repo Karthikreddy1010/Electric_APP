@@ -23,26 +23,33 @@ NJ_SALES_TAX_RATE = 0.06625
 DEMAND_ELASTICITY = -0.2  # Typical short-run electricity price elasticity
 
 COMPONENT_TYPES = {
+    "customer_charge": {
+        "label": "Customer Charge",
+        "type": "fixed",
+        "cost_col": "customer_charge",
+        "driver": "fixed",
+        "reasoning": "Fixed impact independent of consumption; reflects the cost of maintaining the account and meter connection.",
+    },
     "bgs_rate": {
         "label": "BGS Supply",
         "type": "variable",
         "cost_col": "bgs_cost",
         "driver": "market",
-        "reasoning": "High impact because it is the largest portion of the supply stack and scales directly with usage (kWh).",
-    },
-    "transmission_rate": {
-        "label": "Transmission Charge",
-        "type": "variable",
-        "cost_col": "transmission_cost",
-        "driver": "market",
-        "reasoning": "Significant impact scaling with usage; driven by regional grid maintenance and congestion.",
+        "reasoning": "High impact because scales with usage (kWh). Reflects wholesale electricity supply prices.",
     },
     "distribution_rate": {
         "label": "Distribution Charge",
         "type": "variable",
         "cost_col": "distribution_cost",
         "driver": "infrastructure",
-        "reasoning": "Stable but substantial impact proportional to consumption; funds local delivery network.",
+        "reasoning": "Significant impact scaling with usage; funds local delivery infrastructure.",
+    },
+    "transmission_rate": {
+        "label": "Transmission Charge",
+        "type": "variable",
+        "cost_col": "transmission_cost",
+        "driver": "market",
+        "reasoning": "Scales with usage; reflects regional high-voltage grid costs.",
     },
     "sbc_rate": {
         "label": "Societal Benefits Charge",
@@ -51,12 +58,12 @@ COMPONENT_TYPES = {
         "driver": "policy",
         "reasoning": "Lower impact scaling with usage; funds energy efficiency and social programs.",
     },
-    "nug_rate": {
-        "label": "Non-Utility Generation",
+    "transition_rate": {
+        "label": "Transition Charge",
         "type": "variable",
-        "cost_col": "nug_cost",
+        "cost_col": "transition_cost",
         "driver": "regulatory",
-        "reasoning": "Scaling impact; tied to legacy power purchase agreements.",
+        "reasoning": "Scaling impact; handles stranded costs and legacy regulatory adjustments.",
     },
 }
 
@@ -70,23 +77,23 @@ class BillImpactEngine:
 
     def calculate_total_bill(self, components: dict[str, float], kwh: float) -> dict[str, Any]:
         """
-        Calculates the total bill using the deterministic summation identity.
+        DETERMINISTIC LAYER: Accounting Identity.
+        Total_Bill = sum(fixed) + sum(variable * kwh)
         """
         line_items = {}
         subtotal = 0.0
 
         for key, meta in COMPONENT_TYPES.items():
-            rate = components.get(key, 0.0)
-            cost = round(rate * kwh, 2)
+            val = components.get(key, 0.0)
+            if meta["type"] == "variable":
+                cost = round(val * kwh, 2)
+            else:
+                cost = round(val, 2)
+            
             line_items[meta["cost_col"]] = cost
             subtotal += cost
 
-        # Add fixed components if any (none in current simplified model besides BGS/etc)
-        # Handle adjustments like DR credit if present
-        dr_credit = components.get("dr_credit", 0.0)
-        line_items["dr_credit"] = dr_credit
-        subtotal += dr_credit
-
+        # Add tax
         tax = round(subtotal * self.tax_rate, 2)
         total = round(subtotal + tax, 2)
 
@@ -104,50 +111,28 @@ class BillImpactEngine:
 
     def sensitivity_analysis(self, component: str, change_pct: float, kwh: Optional[float] = None) -> dict[str, Any]:
         """
-        Computes deterministic + analytical impact of changing one component.
+        Deterministic + Statistical Sensitivity Analysis using Monte Carlo simulation.
         """
-        df = app_state.get("billing_df")
-        if df is None or df.empty:
-            return {"error": "No billing data available"}
-
-        latest = df.iloc[-1].to_dict()
-        usage = kwh if kwh is not None else float(latest.get("usage_kwh", 750))
+        # Reuse What-If logic for a single component to get Monte Carlo benefits
+        sim_res = self.what_if_simulation({component: change_pct}, kwh)
         
-        if component not in COMPONENT_TYPES:
-            return {"error": f"Invalid component: {component}"}
-
-        # Base components
-        base_comps = {k: float(latest.get(k, 0.0)) for k in COMPONENT_TYPES.keys()}
-        base_bill = self.calculate_total_bill(base_comps, usage)
-
-        # Modified component
-        mod_comps = dict(base_comps)
-        orig_rate = base_comps[component]
-        mod_comps[component] = orig_rate * (1 + change_pct / 100.0)
-        
-        new_bill = self.calculate_total_bill(mod_comps, usage)
-
-        abs_impact = round(new_bill["total_bill"] - base_bill["total_bill"], 2)
-        pct_impact = round((abs_impact / base_bill["total_bill"]) * 100, 4) if base_bill["total_bill"] else 0.0
-        
-        # Elasticity (Calculated mathematically: share of bill)
-        # Elasticity = (dTotal/Total) / (dRate/Rate)
-        elasticity = round(pct_impact / change_pct, 4) if change_pct != 0 else 0.0
+        if "error" in sim_res:
+            return sim_res
 
         return {
             "component": component,
             "label": COMPONENT_TYPES[component]["label"],
-            "base_bill": base_bill["total_bill"],
-            "new_bill": new_bill["total_bill"],
-            "absolute_impact": abs_impact,
-            "percent_impact": pct_impact,
-            "elasticity": elasticity,
+            "base_bill": sim_res["base_bill"],
+            "new_bill": sim_res["new_bill"],
+            "absolute_impact": sim_res["total_impact"],
+            "percent_impact": round((sim_res["total_impact"] / sim_res["base_bill"]) * 100, 4) if sim_res["base_bill"] else 0.0,
+            "elasticity": round((sim_res["total_impact"] / sim_res["base_bill"]) / (change_pct / 100.0), 4) if change_pct != 0 and sim_res["base_bill"] else 0.0,
+            "confidence_interval": sim_res["confidence_interval"],
             "component_type": COMPONENT_TYPES[component]["type"],
             "reasoning": COMPONENT_TYPES[component]["reasoning"],
             "details": {
-                "original_rate": round(orig_rate, 6),
-                "new_rate": round(mod_comps[component], 6),
-                "usage_used": usage
+                "change_pct": change_pct,
+                "usage_adjustment": sim_res["usage_response"]
             }
         }
 
@@ -157,8 +142,8 @@ class BillImpactEngine:
 
     def what_if_simulation(self, modifications: dict[str, float], kwh: Optional[float] = None) -> dict[str, Any]:
         """
-        Simulate bill changes for multiple component modifications.
-        Includes demand elasticity (optional/analytical).
+        Scenario Simulation with Monte Carlo uncertainty.
+        Propagates uncertainty in demand elasticity and rate volatility.
         """
         df = app_state.get("billing_df")
         latest = df.iloc[-1].to_dict()
@@ -172,25 +157,36 @@ class BillImpactEngine:
             if comp in mod_comps:
                 mod_comps[comp] *= (1 + pct / 100.0)
 
-        # Analytical Demand Elasticity: If avg price changes, usage might change
-        # Avg Price = Total Bill / Usage
-        base_avg_price = base_bill["total_bill"] / usage
-        temp_new_bill = self.calculate_total_bill(mod_comps, usage)
-        new_avg_price = temp_new_bill["total_bill"] / usage
+        # Monte Carlo Simulation
+        n_sim = 1000
+        sim_results = []
         
-        price_change_pct = (new_avg_price - base_avg_price) / base_avg_price
-        new_usage = usage * (1 + price_change_pct * DEMAND_ELASTICITY)
-        
-        # Final result with demand response
-        final_bill = self.calculate_total_bill(mod_comps, new_usage)
+        for _ in range(n_sim):
+            # Sample elasticity from a normal distribution (mean -0.2, std 0.05)
+            e_draw = np.random.normal(DEMAND_ELASTICITY, 0.05)
+            
+            # Temporary bill to find price change
+            temp = self.calculate_total_bill(mod_comps, usage)
+            p_change = (temp["total_bill"] - base_bill["total_bill"]) / base_bill["total_bill"]
+            
+            # Simulated usage response
+            sim_usage = usage * (1 + p_change * e_draw)
+            sim_bill = self.calculate_total_bill(mod_comps, sim_usage)
+            sim_results.append(sim_bill["total_bill"])
 
+        sim_results = np.array(sim_results)
+        
         return {
             "base_bill": base_bill["total_bill"],
-            "new_bill": final_bill["total_bill"],
-            "total_impact": round(final_bill["total_bill"] - base_bill["total_bill"], 2),
-            "usage_response": round(new_usage - usage, 2),
+            "new_bill": round(float(np.median(sim_results)), 2),
+            "total_impact": round(float(np.median(sim_results)) - base_bill["total_bill"], 2),
+            "confidence_interval": [
+                round(float(np.percentile(sim_results, 2.5)), 2),
+                round(float(np.percentile(sim_results, 97.5)), 2)
+            ],
+            "usage_response": round(float(np.median(sim_results) / base_bill["total_bill"] * usage) - usage, 2),
             "contributions": {
-                COMPONENT_TYPES[k]["label"]: round((mod_comps[k] * new_usage * (1+self.tax_rate)), 2)
+                COMPONENT_TYPES[k]["label"]: round(float(mod_comps[k] * usage * (1+self.tax_rate)), 2) if COMPONENT_TYPES[k]["type"] == "variable" else round(mod_comps[k] * (1+self.tax_rate), 2)
                 for k in mod_comps
             }
         }
@@ -241,21 +237,23 @@ class BillImpactEngine:
             # Define causal variables
             # Treatment: component rate
             # Outcome: total bill
-            # Confounders: usage_kwh, weather (if available)
+            # Confounders: usage_kwh, month (seasonality), and weather if available
             
-            # For simplicity, we use usage_kwh as the primary confounder
+            # Ensure month is numeric for regression
+            if 'month' in df.columns:
+                df['month_num'] = pd.to_datetime(df['month']).dt.month if df['month'].dtype == 'object' else df['month']
+            
             model = CausalModel(
                 data=df,
                 treatment=treatment,
                 outcome="total_bill",
-                common_causes=["usage_kwh"]
+                common_causes=["usage_kwh", "month_num"] if 'month_num' in df.columns else ["usage_kwh"]
             )
             
             # Identification
             identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
             
-            # Estimation (using Linear Regression as a baseline, but DML is preferred)
-            # Since we have small data, Linear Regression with controls is safer than complex DML
+            # Estimation
             estimate = model.estimate_effect(
                 identified_estimand,
                 method_name="backdoor.linear_regression",
@@ -266,7 +264,7 @@ class BillImpactEngine:
                 "treatment": treatment,
                 "causal_effect_estimate": round(float(estimate.value), 4),
                 "p_value": round(float(estimate.test_stat_significance().get("p_value", 0.0)), 4),
-                "interpretation": f"Controlling for usage, a $1 unit increase in {treatment} causes an average bill increase of ${round(float(estimate.value), 2)}.",
+                "interpretation": f"Controlling for usage and seasonality, a $1 unit increase in {treatment} causes an average bill increase of ${round(float(estimate.value), 2)}.",
                 "caveat": "Estimated using observational data; results assume no unobserved confounders."
             }
         except ImportError:

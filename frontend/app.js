@@ -854,7 +854,9 @@ async function runSensitivityTest() {
         
         document.getElementById('sensitivity-results').style.display = 'flex';
         document.getElementById('sim-new-bill').innerText = `$${res.new_bill.toFixed(2)}`;
-        document.getElementById('sim-abs-impact').innerText = `${res.absolute_impact >= 0 ? '+' : ''}$${res.absolute_impact.toFixed(2)}`;
+        
+        const impactText = `${res.absolute_impact >= 0 ? '+' : ''}$${res.absolute_impact.toFixed(2)}`;
+        document.getElementById('sim-abs-impact').innerText = impactText;
         
         // 2. Get Causal Insight (DoWhy)
         const causal = await apiPost('/impact/causal', {
@@ -864,7 +866,13 @@ async function runSensitivityTest() {
         const causalBox = document.getElementById('causal-insight-box');
         if (causal.causal_effect_estimate) {
             causalBox.style.display = 'block';
-            document.getElementById('causal-text').innerText = causal.interpretation;
+            let insight = causal.interpretation;
+            
+            // Add MC uncertainty note if what-if was run (simplified here)
+            // In a real app we'd call /impact/what-if for multiple changes
+            insight += `\n\n(Note: Simulation includes a 95% confidence interval of $${res.confidence_interval?.[0].toFixed(2)} to $${res.confidence_interval?.[1].toFixed(2)} based on demand elasticity variance).`;
+            
+            document.getElementById('causal-text').innerText = insight;
         } else {
             causalBox.style.display = 'none';
         }
