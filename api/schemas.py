@@ -113,3 +113,19 @@ class HealthResponse(BaseModel):
     version: str
     models_loaded: dict[str, bool]
     data_freshness: Optional[str] = None
+
+
+# ===== /impact/sensitivity =====
+class SensitivityRequest(BaseModel):
+    component: str = Field(..., description="Component key, e.g. 'bgs_rate'")
+    change_pct: float = Field(10.0, ge=-100, le=500, description="Percentage change to apply")
+    kwh: Optional[float] = Field(None, ge=0, le=10000, description="Override usage (kWh)")
+
+
+# ===== /impact/what-if =====
+class WhatIfRequest(BaseModel):
+    changes: dict[str, float] = Field(
+        ...,
+        description="Map of component -> change_pct, e.g. {'bgs_rate': 15, 'sbc_rate': -5}",
+    )
+    kwh: Optional[float] = Field(None, ge=0, le=10000, description="Override usage (kWh)")

@@ -132,6 +132,7 @@ from api.routes.impact import router as impact_router
 from api.routes.plans import router as plans_router
 from api.routes.benchmark import router as benchmark_router
 from api.routes.geo import router as geo_router
+from api.routes.bill_impact import router as bill_impact_router
 
 app.include_router(health_router)
 app.include_router(billing_router)
@@ -140,6 +141,7 @@ app.include_router(impact_router)
 app.include_router(plans_router)
 app.include_router(benchmark_router)
 app.include_router(geo_router)
+app.include_router(bill_impact_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────
