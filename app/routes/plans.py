@@ -1,30 +1,27 @@
 """
-Plan simulation endpoint:
-  POST /plan-simulation — Monte Carlo comparison of electricity plans.
+POST /plan-simulation — Monte Carlo comparison of electricity plans.
 """
 import logging
-
 from flask import Blueprint, jsonify, request, current_app
 
-plans_bp = Blueprint("plans", __name__)
 logger = logging.getLogger(__name__)
+plans_bp = Blueprint("plans", __name__)
 
 
-@plans_bp.route("/plan-simulation", methods=["POST"])
+@plans_bp.post("/plan-simulation")
 def plan_simulation():
     """Run Monte Carlo simulation comparing electricity plans."""
-    plans_df = current_app.config.get("PLANS_DF")
-    billing_df = current_app.config.get("BILLING_DF")
-    if plans_df is None or billing_df is None:
-        return jsonify({"error": "Data not loaded"}), 500
+    svc = current_app.extensions["svc"]
+    if svc.plans_df is None or svc.billing_df is None:
+        return jsonify({"error": "Data not loaded"}), 503
 
     body = request.get_json(silent=True) or {}
 
-    # ── Manual validation ────────────────────────────────────────
+    # ── Validate ─────────────────────────────────────────────────────────────
     monthly_usage_kwh = body.get("monthly_usage_kwh", 750)
-    usage_growth_pct = body.get("usage_growth_pct", 0.0)
-    horizon_months = body.get("horizon_months", 12)
-    n_simulations = body.get("n_simulations", 10000)
+    usage_growth_pct  = body.get("usage_growth_pct", 0.0)
+    horizon_months    = body.get("horizon_months", 12)
+    n_simulations     = body.get("n_simulations", 10000)
 
     errors = []
     if not (100 <= monthly_usage_kwh <= 5000):
@@ -36,7 +33,7 @@ def plan_simulation():
     if not (1000 <= n_simulations <= 100000):
         errors.append("n_simulations must be between 1000 and 100000")
     if errors:
-        return jsonify({"error": "Validation Error", "details": errors}), 422
+        return jsonify({"error": "Validation Error", "details": errors}), 400
 
     try:
         from models.simulation_model import PlanSimulator
@@ -46,24 +43,23 @@ def plan_simulation():
             horizon_months=horizon_months,
         )
 
-        historical_usage = billing_df["usage_kwh"].values * (1 + usage_growth_pct / 100)
-        plans = plans_df.to_dict(orient="records")
-
+        historical_usage = svc.billing_df["usage_kwh"].values * (1 + usage_growth_pct / 100)
+        plans = svc.plans_df.to_dict(orient="records")
         comparison = sim.compare_plans(plans, historical_usage)
 
         results = []
         for _, row in comparison.iterrows():
             results.append({
-                "provider": row["provider"],
-                "plan_type": row["plan_type"],
-                "rate": row["rate"],
+                "provider":            row["provider"],
+                "plan_type":           row["plan_type"],
+                "rate":                row["rate"],
                 "expected_annual_cost": round(row["expected_annual_cost"], 2),
-                "median_annual_cost": round(row["median_annual_cost"], 2),
-                "std_annual_cost": round(row["std_annual_cost"], 2),
-                "p5_annual_cost": round(row["p5_annual_cost"], 2),
-                "p95_annual_cost": round(row["p95_annual_cost"], 2),
-                "risk_score": round(row["risk_score"], 1),
-                "monthly_expected": row["monthly_expected"],
+                "median_annual_cost":  round(row["median_annual_cost"], 2),
+                "std_annual_cost":     round(row["std_annual_cost"], 2),
+                "p5_annual_cost":      round(row["p5_annual_cost"], 2),
+                "p95_annual_cost":     round(row["p95_annual_cost"], 2),
+                "risk_score":          round(row["risk_score"], 1),
+                "monthly_expected":    row["monthly_expected"],
             })
 
         default_cost = comparison[comparison["provider"].str.contains("BGS|PSE&G")]
@@ -75,11 +71,11 @@ def plan_simulation():
         best = comparison.iloc[0]
 
         return jsonify({
-            "comparison": results,
-            "recommended": best["provider"],
+            "comparison":        results,
+            "recommended":       best["provider"],
             "savings_vs_default": round(default_annual - best["expected_annual_cost"], 2),
         })
 
-    except Exception as e:
+    except Exception as exc:
         logger.exception("Simulation error")
-        return jsonify({"error": f"Simulation error: {str(e)}"}), 500
+        return jsonify({"error": f"Simulation error: {exc}"}), 500

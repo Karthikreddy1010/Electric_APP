@@ -1,51 +1,48 @@
 """
-Flask entry point — generates data (if needed) and starts the Flask server.
-Usage: python run_flask.py
+run_flask.py — Entry point for the ElectricAI Flask application.
+
+Usage:
+    python run_flask.py                       # development (port 5000)
+    python run_flask.py --port 8080           # custom port
+    FLASK_ENV=production python run_flask.py  # production mode
 """
+import os
 import sys
+import argparse
 import logging
 from pathlib import Path
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-logger = logging.getLogger("electric-ai-flask")
-
+# Ensure the project root is on the path before any local imports
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s — %(message)s",
+)
+logger = logging.getLogger(__name__)
 
-def main():
-    # Step 1: Generate synthetic data if not present
-    data_dir = PROJECT_ROOT / "data" / "raw"
-    if not data_dir.exists() or not list(data_dir.glob("*.parquet")):
-        logger.info("=" * 60)
-        logger.info("STEP 1: Generating synthetic data...")
-        logger.info("=" * 60)
-        from data_pipeline.synthetic_data import generate_all
-        generate_all(str(data_dir))
-    else:
-        logger.info("Data already exists, skipping generation.")
 
-    # Step 2: Start Flask server
-    logger.info("=" * 60)
-    logger.info("STEP 2: Starting Flask API server...")
-    logger.info("=" * 60)
-    logger.info("  API base:  http://localhost:5000")
-    logger.info("  Health:    http://localhost:5000/health")
-    logger.info("  Frontend:  http://localhost:5000/app")
-    logger.info("=" * 60)
-
-    from app import create_app
-    flask_app = create_app()
-    flask_app.run(
-        host="0.0.0.0",
-        port=5000,
-        debug=True,
-        use_reloader=False,  # avoid double model training
-    )
+def parse_args():
+    parser = argparse.ArgumentParser(description="ElectricAI Flask server")
+    parser.add_argument("--host",  default="0.0.0.0",  help="Bind host (default: 0.0.0.0)")
+    parser.add_argument("--port",  type=int, default=5000, help="Bind port (default: 5000)")
+    parser.add_argument("--env",   default=os.getenv("FLASK_ENV", "development"),
+                        choices=["development", "production", "default"],
+                        help="Config environment")
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    main()
+    args = parse_args()
+
+    from app import create_app
+    flask_app = create_app(env=args.env)
+
+    logger.info(f"Starting ElectricAI on http://{args.host}:{args.port}  [env={args.env}]")
+    flask_app.run(
+        host=args.host,
+        port=args.port,
+        debug=(args.env == "development"),
+        use_reloader=False,  # avoid double model training
+    )
