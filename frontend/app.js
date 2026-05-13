@@ -3,7 +3,7 @@
  * Connects to FastAPI backend and renders interactive Plotly charts.
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:5000';
 
 // ===== Plotly Theme =====
 const PLOTLY_LAYOUT = {
