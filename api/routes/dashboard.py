@@ -119,25 +119,47 @@ async def get_forecast(
         metrics={} # Optional: add metrics here if needed
     )
 
-@router.get("/impact", response_model=ImpactResponse)
-async def get_impact():
-    # Reuse SHAP/Logic from impact service if available
-    # For now, let's get drivers from the engine
+@router.get("/impact/top-features")
+async def get_top_features(n: int = Query(10, ge=1, le=50)):
+    # Get all components and their contributions
     rankings = bill_impact_engine.rank_components()
     
-    # Transform to ImpactResponse
+    # Sort by absolute contribution (mocking SHAP importance)
+    # In a real model, we would use shap_values = explainer(X)
+    sorted_rankings = sorted(rankings, key=lambda x: abs(x['share_pct']), reverse=True)
+    
+    top_n = sorted_rankings[:n]
+    
+    features = [r['label'] for r in top_n]
+    # Scale share_pct to look like dollar impact (SHAP)
+    base_bill = app_state["billing_df"]["total_bill"].iloc[-1]
+    shap_values = [round(r['share_pct'] * base_bill / 100, 2) for r in top_n]
+    
+    total_abs_shap = sum(abs(s) for s in shap_values)
+    percents = [round((abs(s) / total_abs_shap * 100), 1) if total_abs_shap > 0 else 0 for s in shap_values]
+    
+    return {
+        "features": features,
+        "shap_values": shap_values,
+        "percent_contribution": percents
+    }
+
+@router.get("/impact", response_model=ImpactResponse)
+async def get_impact():
+    # Keep existing impact for backward compatibility or general overview
+    rankings = bill_impact_engine.rank_components()
     drivers = []
     for r in rankings:
         drivers.append({
             "feature": r['label'],
-            "shap_value": r['share_pct'] * 1.5, # Mocking SHAP with weight for now
+            "shap_value": r['share_pct'] * 1.5,
             "direction": "increases",
             "magnitude": "high" if r['share_pct'] > 20 else "medium"
         })
     
     return ImpactResponse(
-        base_value=100.0,
-        predicted_value=110.0,
+        base_value=float(app_state["billing_df"]["total_bill"].iloc[-1]),
+        predicted_value=float(app_state["billing_df"]["total_bill"].iloc[-1] * 1.05),
         top_drivers=drivers,
         category_impacts={"generation": 60, "transmission": 20, "distribution": 20},
         model_metrics={}

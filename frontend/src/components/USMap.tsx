@@ -20,10 +20,11 @@ interface USMapProps {
   data: { state: string; value: number }[];
   selectedState?: string;
   onStateClick?: (state: string) => void;
+  onStateHover?: (state: string | null) => void;
   colorRange?: string[];
 }
 
-const USMap = ({ data, selectedState, onStateClick, colorRange = ["#E2E8F0", "#2563EB"] }: USMapProps) => {
+const USMap = ({ data, selectedState, onStateClick, onStateHover, colorRange = ["#E2E8F0", "#2563EB"] }: USMapProps) => {
   const colorScale = scaleQuantile<string>()
     .domain(data.map(d => d.value))
     .range(colorRange);
@@ -43,8 +44,10 @@ const USMap = ({ data, selectedState, onStateClick, colorRange = ["#E2E8F0", "#2
                   key={geo.rsmKey}
                   geography={geo}
                   onClick={() => onStateClick?.(stateAbbr)}
+                  onMouseEnter={() => onStateHover?.(stateAbbr)}
+                  onMouseLeave={() => onStateHover?.(null)}
                   fill={cur ? colorScale(cur.value) : "#F1F5F9"}
-                  stroke={isSelected ? "#000" : "#FFF"}
+                  stroke={isSelected ? "#2563EB" : "#FFF"}
                   strokeWidth={isSelected ? 2 : 0.5}
                   style={{
                     default: { outline: "none" },
