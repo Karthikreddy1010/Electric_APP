@@ -87,6 +87,32 @@ class PlanSimResponse(BaseModel):
     savings_vs_default: float
 
 
+# ===== /simulate =====
+class SimulateRequest(BaseModel):
+    modifications: dict[str, float]  # e.g. {"bgs_rate": 10}
+    kwh: Optional[float] = None
+
+class SimulateResult(BaseModel):
+    old_bill: float
+    new_bill: float
+    delta_abs: float
+    delta_pct: float
+    formula: str
+    explanation: str
+
+# ===== /geo =====
+class GeoPoint(BaseModel):
+    state: str
+    avg_bill: float
+    avg_rate: float
+    rank: int
+
+class GeoResponse(BaseModel):
+    data: list[GeoPoint]
+    top_5_expensive: list[GeoPoint]
+    top_5_cheapest: list[GeoPoint]
+
+
 # ===== /bill-breakdown =====
 class BillBreakdownResponse(BaseModel):
     date: str
@@ -105,6 +131,25 @@ class TrendResponse(BaseModel):
     usage: list[float]
     rates: list[float]
     yoy_changes: list[Optional[float]]
+
+
+# ===== /overview =====
+class OverviewKPI(BaseModel):
+    current_bill: float
+    usage_kwh: float
+    effective_rate: float
+    forecast_next_month: float
+    bill_change_pct: float
+
+class BillComponent(BaseModel):
+    label: str
+    value: float
+    percentage: float
+
+class OverviewResponse(BaseModel):
+    kpis: OverviewKPI
+    breakdown: list[BillComponent]
+    trends: TrendResponse
 
 
 # ===== Health =====

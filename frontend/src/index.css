@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-slate-900 font-sans antialiased;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-border shadow-sm rounded-xl p-6;
+  }
+  .nav-link {
+    @apply px-4 py-2 text-slate-600 hover:text-primary transition-colors relative;
+  }
+  .nav-link.active {
+    @apply text-primary font-medium;
+  }
+  .nav-link.active::after {
+    content: '';
+    @apply absolute bottom-0 left-4 right-4 h-0.5 bg-primary rounded-full;
+  }
+}

@@ -134,28 +134,14 @@ app.add_middleware(
 
 # ── Register modular routers ────────────────────────────────────────────────
 from api.routes.health import router as health_router
-from api.routes.billing import router as billing_router
-from api.routes.forecast import router as forecast_router
-from api.routes.impact import router as impact_router
-from api.routes.plans import router as plans_router
-from api.routes.benchmark import router as benchmark_router
-from api.routes.geo import router as geo_router
-from api.routes.bill_impact import router as bill_impact_router
-from api.routes.geo_insights import router as geo_insights_router
+from api.routes.dashboard import router as dashboard_router
 
 app.include_router(health_router)
-app.include_router(billing_router)
-app.include_router(forecast_router)
-app.include_router(impact_router)
-app.include_router(plans_router)
-app.include_router(benchmark_router)
-app.include_router(geo_router)
-app.include_router(bill_impact_router)
-app.include_router(geo_insights_router)
+app.include_router(dashboard_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────
-frontend_dir = PROJECT_ROOT / "frontend"
+frontend_dir = PROJECT_ROOT / "frontend" / "dist"
 if frontend_dir.exists():
     app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
 
