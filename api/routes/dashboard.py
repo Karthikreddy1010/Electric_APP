@@ -134,11 +134,15 @@ def compute_bill_analysis():
         } for r in rankings
     ], key=lambda x: abs(x['shap_value']), reverse=True)
     
-    # Sensitivity Map (Mocked based on elasticity)
+    # Sensitivity Map (Dynamic based on engine rankings)
     sensitivity = [
-        {"component": "BGS Supply", "elasticity": 0.58, "impact_type": "high"},
-        {"component": "Distribution", "elasticity": 0.22, "impact_type": "medium"},
-        {"component": "Transmission", "elasticity": 0.13, "impact_type": "low"}
+        {
+            "component": r['label'],
+            "elasticity": r['elasticity'],
+            "impact_type": "high" if r['elasticity'] > 0.4 else ("medium" if r['elasticity'] > 0.1 else "low"),
+            "driver": COMPONENT_TYPES.get(r['component'], {}).get('driver', 'unknown'),
+            "reasoning": r.get('reasoning', '')
+        } for r in rankings
     ]
     
     return {
