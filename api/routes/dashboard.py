@@ -59,7 +59,7 @@ async def get_overview():
 
     # Historical Breakdown
     historical_breakdown = []
-    hist_billing = billing.tail(12)
+    hist_billing = billing.tail(36)
     for _, row in hist_billing.iterrows():
         month_label = row['date'].strftime("%Y-%m")
         point = {"month": month_label}
@@ -81,32 +81,42 @@ async def get_overview():
 
 
 @router.get("/forecast", response_model=ForecastResponse)
-async def get_forecast(horizon: int = Query(12, ge=1, le=24)):
+async def get_forecast(
+    horizon: int = Query(12, ge=1, le=24),
+    model: str = Query("ensemble", regex="^(ensemble|sarima|prophet)$")
+):
     ensemble = app_state.get("forecast_model")
     if ensemble is None:
         raise HTTPException(500, "Forecast model not ready")
     
     res = ensemble.predict_ensemble(horizon)
-    # Format to match schema
-    forecasts = []
     
-    # Generate future dates
+    # Select appropriate column based on model
+    pred_col = f"forecast_{model}"
+    
+    forecasts = []
     last_date = app_state["billing_df"]["date"].max()
     future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=horizon, freq='MS')
     
-    for i, row in res.iterrows():
-        forecasts.append({
-            "month": future_dates[i].strftime("%Y-%m"),
-            "forecast": row['forecast_ensemble'],
-            "lower": row.get('lower'),
-            "upper": row.get('upper')
-        })
+    for i, dt in enumerate(future_dates):
+        pred_val = res[pred_col].iloc[i] if pred_col in res.columns else res["forecast_ensemble"].iloc[i]
+        
+        # Fallback for None values (if prophet failed)
+        if pd.isna(pred_val):
+            pred_val = res["forecast_ensemble"].iloc[i]
+
+        forecasts.append(ForecastPoint(
+            month=dt.strftime("%Y-%m"),
+            forecast=float(pred_val),
+            lower=float(res["lower"].iloc[i]),
+            upper=float(res["upper"].iloc[i])
+        ))
     
     return ForecastResponse(
-        model_type="ensemble",
+        model_type=model,
         horizon_months=horizon,
         forecasts=forecasts,
-        metrics={}
+        metrics={} # Optional: add metrics here if needed
     )
 
 @router.get("/impact", response_model=ImpactResponse)
