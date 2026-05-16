@@ -3,7 +3,8 @@ from api.state import app_state
 from api.schemas import (
     OverviewResponse, ForecastResponse, ImpactResponse, SimulateRequest, 
     SimulateResult, BenchmarkResponse, GeoResponse, PlanSimResponse,
-    OverviewKPI, BillComponent, TrendResponse
+    OverviewKPI, BillComponent, TrendResponse, GeoTrendPoint, GeoDetailResponse,
+    GeoPoint
 )
 from api.services.billing_service import build_breakdown, build_trends
 from api.services.bill_impact_engine import bill_impact_engine, COMPONENT_TYPES
@@ -56,10 +57,28 @@ async def get_overview():
     # Sort by impact
     breakdown = sorted(breakdown, key=lambda x: x.value, reverse=True)
 
+    # Historical Breakdown
+    historical_breakdown = []
+    hist_billing = billing.tail(12)
+    for _, row in hist_billing.iterrows():
+        month_label = row['date'].strftime("%Y-%m")
+        point = {"month": month_label}
+        for key, meta in COMPONENT_TYPES.items():
+            val = row.get(meta['cost_col'], 0)
+            val_with_tax = val * 1.06625
+            point[meta['label']] = round(val_with_tax, 2)
+        historical_breakdown.append(point)
+
     # Trends
     trends = build_trends(billing, 36)
 
-    return OverviewResponse(kpis=kpis, breakdown=breakdown, trends=trends)
+    return OverviewResponse(
+        kpis=kpis, 
+        breakdown=breakdown, 
+        historical_breakdown=historical_breakdown,
+        trends=trends
+    )
+
 
 @router.get("/forecast", response_model=ForecastResponse)
 async def get_forecast(horizon: int = Query(12, ge=1, le=24)):
@@ -160,30 +179,59 @@ async def get_benchmark():
     )
 
 @router.get("/geo", response_model=GeoResponse)
-async def get_geo():
-    df = app_state.get("benchmark_df")
-    if df is None: raise HTTPException(500, "No data")
+async def get_geo(month: Optional[str] = None, view_mode: str = "bill"):
+    from api.services.geo_insights_service import get_map_data, get_available_months
     
-    latest_year = df['year'].max()
-    latest_df = df[df['year'] == latest_year].copy()
-    latest_df['rank'] = latest_df['avg_bill'].rank(ascending=False).astype(int)
+    monthly_df = app_state.get("geo_monthly_df")
+    if monthly_df is None: raise HTTPException(500, "No data")
+    
+    available_months = get_available_months(monthly_df)
+    target_month = month or available_months[-1]
+    
+    raw_data = get_map_data(monthly_df, target_month, data_type=view_mode)
     
     data = []
-    for _, row in latest_df.iterrows():
-        data.append({
-            "state": row['state'],
-            "avg_bill": row['avg_bill'],
-            "avg_rate": row['avg_rate'],
-            "rank": row['rank']
-        })
+    for row in raw_data:
+        data.append(GeoPoint(
+            state=row['state'],
+            avg_bill=row['avg_bill'],
+            avg_rate=row['avg_price'],
+            rank=0 # Will calc below
+        ))
+    
+    # Calc rank
+    data.sort(key=lambda x: x.avg_bill, reverse=True)
+    for i, p in enumerate(data):
+        p.rank = i + 1
         
-    sorted_data = sorted(data, key=lambda x: x['avg_bill'], reverse=True)
+    sorted_data = sorted(data, key=lambda x: x.avg_bill, reverse=True)
     
     return GeoResponse(
         data=data,
         top_5_expensive=sorted_data[:5],
-        top_5_cheapest=sorted_data[-5:][::-1]
+        top_5_cheapest=sorted_data[-5:][::-1],
+        available_months=available_months,
+        current_month=target_month
     )
+
+@router.get("/geo/trend", response_model=GeoTrendPoint)
+async def get_geo_trend(state: str, view_mode: str = "bill"):
+    from api.services.geo_insights_service import get_trend_data
+    monthly_df = app_state.get("geo_monthly_df")
+    res = get_trend_data(monthly_df, state, data_type=view_mode)
+    return GeoTrendPoint(
+        months=res['months'],
+        values=res['values'],
+        total_growth_pct=res['total_growth_pct']
+    )
+
+@router.get("/geo/detail", response_model=GeoDetailResponse)
+async def get_geo_detail(state: str, month: str):
+    from api.services.geo_insights_service import get_detail_data
+    monthly_df = app_state.get("geo_monthly_df")
+    billing_df = app_state.get("billing_df")
+    res = get_detail_data(billing_df, monthly_df, state, month)
+    return GeoDetailResponse(**res)
 
 @router.get("/plans", response_model=PlanSimResponse)
 async def get_plans():

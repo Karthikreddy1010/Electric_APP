@@ -59,22 +59,55 @@ const OverviewTab = () => {
 
       {/* Breakdown Chart */}
       <div className="md:col-span-2 card">
-        <h3 className="text-lg font-semibold mb-6">Bill Breakdown</h3>
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-semibold">Bill Component Breakdown</h3>
+          <select className="bg-slate-100 border-none rounded-lg px-3 py-1.5 text-sm font-medium outline-none text-slate-600">
+            <option>12 months</option>
+          </select>
+        </div>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={[data.breakdown]} layout="vertical" margin={{ left: 40, right: 40 }}>
-              <XAxis type="number" hide />
-              <YAxis type="category" dataKey="label" hide />
+            <BarChart 
+              data={data.historical_breakdown} 
+              margin={{ left: 0, right: 0, top: 10 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+              <XAxis 
+                dataKey="month" 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: '#94A3B8', fontSize: 12}}
+                tickFormatter={(val) => {
+                  const [y, m] = String(val).split('-');
+                  const date = new Date(parseInt(y), parseInt(m) - 1);
+                  return date.toLocaleString('default', { month: 'short', year: 'numeric' });
+                }}
+              />
+              <YAxis 
+                axisLine={false} 
+                tickLine={false} 
+                tick={{fill: '#94A3B8', fontSize: 12}}
+                tickFormatter={(val) => `$${val}`}
+              />
               <Tooltip 
-                cursor={{fill: 'transparent'}}
-                content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
+                cursor={{fill: '#F8FAFC'}}
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length && label) {
+                    const formattedLabel = (() => {
+                      const [y, m] = String(label).split('-');
+                      const date = new Date(parseInt(y), parseInt(m) - 1);
+                      return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+                    })();
                     return (
                       <div className="bg-white border border-border p-3 shadow-sm rounded-lg">
+                        <p className="font-semibold text-slate-900 mb-2">{formattedLabel}</p>
                         {payload.map((entry: any, index: number) => (
                           <div key={index} className="flex justify-between gap-4 text-sm">
-                            <span className="text-slate-500">{entry.name}:</span>
-                            <span className="font-medium">${entry.value}</span>
+                            <span className="text-slate-500 flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full" style={{backgroundColor: entry.color}}></div>
+                              {entry.name}:
+                            </span>
+                            <span className="font-medium">${Number(entry.value).toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -86,24 +119,20 @@ const OverviewTab = () => {
               {data.breakdown.map((entry: any, index: number) => (
                 <Bar 
                   key={entry.label} 
-                  dataKey={() => entry.value} 
-                  name={entry.label} 
+                  dataKey={entry.label} 
                   stackId="a" 
                   fill={['#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE'][index % 5]}
-                  radius={index === 0 ? [4, 0, 0, 4] : index === data.breakdown.length - 1 ? [0, 4, 4, 0] : [0, 0, 0, 0]}
+                  radius={index === data.breakdown.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                 />
               ))}
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="flex flex-wrap gap-x-6 gap-y-2 mt-6 justify-center">
           {data.breakdown.map((item: any, i: number) => (
-            <div key={item.label} className="flex justify-between items-center text-xs">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{backgroundColor: ['#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE'][i % 5]}}></div>
-                <span className="text-slate-600">{item.label}</span>
-              </div>
-              <span className="font-semibold text-slate-900">{item.percentage}%</span>
+            <div key={item.label} className="flex items-center gap-2 text-xs">
+              <div className="w-3 h-3 rounded" style={{backgroundColor: ['#2563EB', '#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE'][i % 5]}}></div>
+              <span className="text-slate-600 font-medium">{item.label}</span>
             </div>
           ))}
         </div>

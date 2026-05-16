@@ -2,7 +2,7 @@
 Pydantic request/response schemas for all API endpoints.
 """
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from datetime import date
 
 
@@ -107,10 +107,26 @@ class GeoPoint(BaseModel):
     avg_rate: float
     rank: int
 
+class GeoTrendPoint(BaseModel):
+    months: list[str]
+    values: list[float]
+    total_growth_pct: float
+
+class GeoDetailResponse(BaseModel):
+    state: str
+    month: str
+    avg_bill: float
+    avg_rate: float
+    usage_kwh: float
+    yoy_change: Optional[float]
+    components: Optional[dict[str, float]]
+
 class GeoResponse(BaseModel):
     data: list[GeoPoint]
     top_5_expensive: list[GeoPoint]
     top_5_cheapest: list[GeoPoint]
+    available_months: list[str]
+    current_month: str
 
 
 # ===== /bill-breakdown =====
@@ -149,6 +165,7 @@ class BillComponent(BaseModel):
 class OverviewResponse(BaseModel):
     kpis: OverviewKPI
     breakdown: list[BillComponent]
+    historical_breakdown: list[dict[str, Any]]
     trends: TrendResponse
 
 
