@@ -3,16 +3,20 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  Line, ComposedChart, Cell
+  Line, ComposedChart, Legend, Area, Cell
 } from 'recharts';
 import { ArrowUpRight, ArrowDownRight, Zap, TrendingUp, DollarSign } from 'lucide-react';
 
 const COLORS = {
-  generation: '#3B82F6',
-  transmission: '#8B5CF6',
-  distribution: '#14B8A6',
-  tax: '#EF4444',
-  others: '#F59E0B'
+  generation: '#2563EB',   // Deep Blue
+  transmission: '#8B5CF6', // Purple
+  distribution: '#0D9488', // Teal
+  tax: '#EF4444',          // Red
+  sbc: '#F59E0B',          // Amber
+  nug: '#38BDF8',          // Sky Blue
+  customer: '#64748B',     // Gray-Slate
+  transition: '#F43F5E',   // Rose
+  others: '#94A3B8'        // Slate-Gray
 };
 
 const getComponentColor = (label: string) => {
@@ -21,6 +25,10 @@ const getComponentColor = (label: string) => {
   if (l.includes('transmission')) return COLORS.transmission;
   if (l.includes('distribution')) return COLORS.distribution;
   if (l.includes('tax')) return COLORS.tax;
+  if (l.includes('societal') || l.includes('sbc')) return COLORS.sbc;
+  if (l.includes('nug')) return COLORS.nug;
+  if (l.includes('customer')) return COLORS.customer;
+  if (l.includes('transition')) return COLORS.transition;
   return COLORS.others;
 };
 
@@ -106,6 +114,12 @@ const OverviewTab = () => {
                 {data.breakdown.map((entry: any) => (
                   <Bar key={entry.label} dataKey={entry.label} stackId="a" fill={getComponentColor(entry.label)} />
                 ))}
+                <Legend 
+                  iconType="circle" 
+                  verticalAlign="bottom" 
+                  align="center" 
+                  wrapperStyle={{ paddingTop: '20px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -118,17 +132,52 @@ const OverviewTab = () => {
           <div className="h-[320px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={trendData}>
+                <defs>
+                  <linearGradient id="colorBill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis dataKey="month" hide />
-                <YAxis yAxisId="left" hide />
-                <YAxis yAxisId="right" orientation="right" hide />
-                <Tooltip />
-                <Bar yAxisId="right" dataKey="yoy" name="YoY %" barSize={12}>
+                <XAxis 
+                  dataKey="month" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{fill: '#94A3B8', fontSize: 10, fontWeight: 500}}
+                  dy={10}
+                  interval={Math.floor(trendData.length / 6)}
+                />
+                <YAxis 
+                  yAxisId="left" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{fill: '#94A3B8', fontSize: 10, fontWeight: 500}}
+                  tickFormatter={(val) => `$${val}`}
+                />
+                <YAxis 
+                  yAxisId="right" 
+                  orientation="right" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{fill: '#94A3B8', fontSize: 10, fontWeight: 500}}
+                  tickFormatter={(val) => `${val}%`}
+                />
+                <Tooltip 
+                  cursor={{stroke: '#E2E8F0', strokeWidth: 1}}
+                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                />
+                <Area yAxisId="left" type="monotone" dataKey="bill" stroke="none" fill="url(#colorBill)" />
+                <Bar yAxisId="right" dataKey="yoy" name="YoY Change %" fill="#EF4444" barSize={8} radius={[2, 2, 0, 0]} opacity={0.6}>
                   {trendData.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.yoy > 0 ? '#EF4444' : '#22C55E'} />
+                    <Cell key={`cell-${index}`} fill={entry.yoy > 0 ? '#22C55E' : '#EF4444'} />
                   ))}
                 </Bar>
-                <Line yAxisId="left" type="monotone" dataKey="bill" name="Total Bill" stroke="#2563EB" strokeWidth={2.5} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="bill" name="Total Bill" stroke="#2563EB" strokeWidth={3} dot={false} />
+                <Legend 
+                  verticalAlign="bottom" 
+                  align="center" 
+                  wrapperStyle={{ paddingTop: '30px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}
+                />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

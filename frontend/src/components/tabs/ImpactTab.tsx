@@ -113,14 +113,22 @@ const ImpactTab = () => {
             </select>
           </div>
 
-          <button onClick={() => reportMutation.mutate()} className="p-2.5 bg-white border border-slate-200 text-blue-600 rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
-            <Sparkles size={18} />
-            <span className="hidden sm:inline">Explain Bill</span>
+          <button 
+            onClick={() => reportMutation.mutate()} 
+            disabled={reportMutation.isPending}
+            className="p-2.5 bg-white border border-slate-200 text-blue-600 rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {reportMutation.isPending ? <Sparkles className="animate-pulse" size={18} /> : <Sparkles size={18} />}
+            <span className="hidden sm:inline">{reportMutation.isPending ? 'Analyzing...' : 'Explain Bill'}</span>
           </button>
           
-          <button onClick={() => pdfMutation.mutate()} className="p-2.5 bg-slate-900 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200">
-            <Download size={18} />
-            <span className="hidden sm:inline">PDF Report</span>
+          <button 
+            onClick={() => pdfMutation.mutate()} 
+            disabled={pdfMutation.isPending}
+            className="p-2.5 bg-slate-900 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {pdfMutation.isPending ? <Download className="animate-bounce" size={18} /> : <Download size={18} />}
+            <span className="hidden sm:inline">{pdfMutation.isPending ? 'Generating...' : 'PDF Report'}</span>
           </button>
         </div>
       </div>
