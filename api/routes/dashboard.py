@@ -4,7 +4,7 @@ from api.schemas import (
     OverviewResponse, ForecastResponse, ImpactResponse, SimulateRequest, 
     SimulateResult, BenchmarkResponse, GeoResponse, PlanSimResponse,
     OverviewKPI, BillComponent, TrendResponse, GeoTrendPoint, GeoDetailResponse,
-    GeoPoint
+    GeoPoint, ForecastPoint
 )
 from api.services.billing_service import build_breakdown, build_trends
 from api.services.bill_impact_engine import bill_impact_engine, COMPONENT_TYPES
@@ -119,50 +119,110 @@ async def get_forecast(
         metrics={} # Optional: add metrics here if needed
     )
 
-@router.get("/impact/top-features")
-async def get_top_features(n: int = Query(10, ge=1, le=50)):
-    # Get all components and their contributions
+def compute_bill_analysis():
+    """Single source of truth for UI, LLM, and PDF."""
     rankings = bill_impact_engine.rank_components()
+    base_bill = float(app_state["billing_df"]["total_bill"].iloc[-1])
     
-    # Sort by absolute contribution (mocking SHAP importance)
-    # In a real model, we would use shap_values = explainer(X)
-    sorted_rankings = sorted(rankings, key=lambda x: abs(x['share_pct']), reverse=True)
+    # Full list sorted by importance
+    all_features = sorted([
+        {
+            "label": r['label'],
+            "shap_value": round(r['share_pct'] * base_bill / 100, 2),
+            "share_pct": round(r['share_pct'], 1),
+            "category": r.get('category', 'others')
+        } for r in rankings
+    ], key=lambda x: abs(x['shap_value']), reverse=True)
     
-    top_n = sorted_rankings[:n]
-    
-    features = [r['label'] for r in top_n]
-    # Scale share_pct to look like dollar impact (SHAP)
-    base_bill = app_state["billing_df"]["total_bill"].iloc[-1]
-    shap_values = [round(r['share_pct'] * base_bill / 100, 2) for r in top_n]
-    
-    total_abs_shap = sum(abs(s) for s in shap_values)
-    percents = [round((abs(s) / total_abs_shap * 100), 1) if total_abs_shap > 0 else 0 for s in shap_values]
+    # Sensitivity Map (Mocked based on elasticity)
+    sensitivity = [
+        {"component": "BGS Supply", "elasticity": 0.58, "impact_type": "high"},
+        {"component": "Distribution", "elasticity": 0.22, "impact_type": "medium"},
+        {"component": "Transmission", "elasticity": 0.13, "impact_type": "low"}
+    ]
     
     return {
-        "features": features,
-        "shap_values": shap_values,
-        "percent_contribution": percents
+        "base_bill": base_bill,
+        "all_features": all_features,
+        "sensitivity": sensitivity,
+        "current_month": app_state["billing_df"]["date"].iloc[-1]
     }
 
-@router.get("/impact", response_model=ImpactResponse)
-async def get_impact():
-    # Keep existing impact for backward compatibility or general overview
-    rankings = bill_impact_engine.rank_components()
-    drivers = []
-    for r in rankings:
-        drivers.append({
-            "feature": r['label'],
-            "shap_value": r['share_pct'] * 1.5,
-            "direction": "increases",
-            "magnitude": "high" if r['share_pct'] > 20 else "medium"
-        })
+@router.get("/impact/top-features")
+async def get_top_features(n: int = Query(10, ge=1, le=50)):
+    analysis = compute_bill_analysis()
+    top_n = analysis["all_features"][:n]
     
-    return ImpactResponse(
-        base_value=float(app_state["billing_df"]["total_bill"].iloc[-1]),
-        predicted_value=float(app_state["billing_df"]["total_bill"].iloc[-1] * 1.05),
-        top_drivers=drivers,
-        category_impacts={"generation": 60, "transmission": 20, "distribution": 20},
-        model_metrics={}
+    return {
+        "features": [f["label"] for f in top_n],
+        "shap_values": [f["shap_value"] for f in top_n],
+        "percent_contribution": [f["share_pct"] for f in top_n]
+    }
+
+@router.get("/impact/full-analysis")
+async def get_full_analysis():
+    return compute_bill_analysis()
+
+@router.post("/report/generate")
+async def generate_report():
+    import ollama
+    analysis = compute_bill_analysis()
+    
+    prompt = f"""
+    You are a Senior Energy Analyst. Analyze the following electricity bill data and provide a professional report.
+    Structure:
+    1. Executive Summary
+    2. Cost Drivers (Top components)
+    3. Sensitivity & Market Risk
+    4. Recommendations for Cost Reduction
+    
+    Data: {analysis}
+    """
+    
+    try:
+        response = ollama.chat(
+            model="qwen3:4b",
+            messages=[{"role": "user", "content": prompt}],
+            options={"temperature": 0.2}
+        )
+        return {"report_text": response['message']['content']}
+    except Exception as e:
+        # Fallback if Ollama is not running
+        return {"report_text": f"AI Report Generation Failed: {str(e)}. \n\n[Fallback Summary]: Your bill of ${analysis['base_bill']} is primarily driven by {analysis['all_features'][0]['label']}."}
+
+@router.post("/report/pdf")
+async def generate_pdf():
+    from reportlab.lib.pagesizes import LETTER
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet
+    import io
+    from fastapi.responses import StreamingResponse
+    
+    analysis = compute_bill_analysis()
+    report_data = await generate_report()
+    text = report_data["report_text"]
+    
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=LETTER)
+    styles = getSampleStyleSheet()
+    elements = []
+    
+    elements.append(Paragraph("Electricity Bill Analysis Report", styles['Title']))
+    elements.append(Spacer(1, 12))
+    
+    # Split text by newlines and add as paragraphs
+    for line in text.split('\n'):
+        if line.strip():
+            elements.append(Paragraph(line, styles['Normal']))
+            elements.append(Spacer(1, 6))
+            
+    doc.build(elements)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer, 
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=bill_report_{analysis['current_month']}.pdf"}
     )
 
 @router.post("/simulate", response_model=SimulateResult)

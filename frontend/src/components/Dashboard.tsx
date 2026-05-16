@@ -10,16 +10,15 @@ interface DashboardProps {
 }
 
 const Dashboard = ({ activeTab }: DashboardProps) => {
-  return (
-    <div className="space-y-6">
-      {activeTab === 'Overview' && <OverviewTab />}
-      {activeTab === 'Forecast' && <ForecastTab />}
-      {activeTab === 'Impact' && <ImpactTab />}
-      {activeTab === 'Benchmark' && <BenchmarkTab />}
-      {activeTab === 'Geo Insights' && <GeoTab />}
-      {activeTab === 'Plans' && <PlansTab />}
-    </div>
-  );
+  switch (activeTab) {
+    case 'Overview': return <OverviewTab />;
+    case 'Forecast': return <ForecastTab />;
+    case 'Impact': return <ImpactTab />;
+    case 'Benchmark': return <BenchmarkTab />;
+    case 'Geo Insights': return <GeoTab />;
+    case 'Plans': return <PlansTab />;
+    default: return <OverviewTab />;
+  }
 };
 
 export default Dashboard;

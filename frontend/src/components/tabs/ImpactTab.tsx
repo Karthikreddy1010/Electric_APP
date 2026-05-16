@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, 
   PieChart, Pie, Cell, Tooltip, CartesianGrid
 } from 'recharts';
-import { Calculator, ArrowUpRight, Layers, Filter } from 'lucide-react';
+import { Calculator, Download, Sparkles, Filter, LayoutGrid, Info } from 'lucide-react';
 
 const CATEGORY_COLORS = ['#3B82F6', '#8B5CF6', '#14B8A6', '#F59E0B', '#6366F1', '#EC4899', '#10B981', '#F97316'];
 
@@ -20,326 +20,288 @@ const COMPONENT_METADATA: Record<string, { label: string; elasticity: number }> 
 
 const ImpactTab = () => {
   const [topN, setTopN] = useState(10);
+  const [viewType, setViewType] = useState<'abs' | 'signed'>('abs');
   const [selectedComp, setSelectedComp] = useState("bgs");
   const [change, setChange] = useState(10);
+  const [report, setReport] = useState<string | null>(null);
 
-  // General Impact Data
-  const { data: impactData } = useQuery({
-    queryKey: ['impact'],
+  // Fetch Top-N SHAP Data
+  const { data: shapData, isLoading: isShapLoading } = useQuery({
+    queryKey: ['impact-top-n', topN],
     queryFn: async () => {
-      const res = await axios.get('http://localhost:8000/impact');
+      const res = await axios.get(`/impact/top-features?n=${topN}`);
       return res.data;
     }
   });
 
-  // Top-N Features Data
-  const { data: topFeatures, isLoading: isTopLoading } = useQuery({
-    queryKey: ['top-features', topN],
-    queryFn: async () => {
-      const res = await axios.get(`http://localhost:8000/impact/top-features?n=${topN}`);
+  // LLM Report Mutation
+  const reportMutation = useMutation({
+    mutationFn: async () => {
+      const res = await axios.post('/report/generate');
       return res.data;
+    },
+    onSuccess: (data) => setReport(data.report_text)
+  });
+
+  // PDF Export
+  const pdfMutation = useMutation({
+    mutationFn: async () => {
+      const res = await axios.post('/report/pdf', {}, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'bill_analysis.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     }
   });
 
-  // Reactive Simulation Logic
+  const chartData = useMemo(() => {
+    if (!shapData) return [];
+    return shapData.features.map((f: any, i: number) => {
+      const rawVal = shapData.shap_values[i];
+      return {
+        name: f,
+        value: viewType === 'abs' ? Math.abs(rawVal) : rawVal,
+        percent: shapData.percent_contribution[i]
+      };
+    });
+  }, [shapData, viewType]);
+
   const simulation = useMemo(() => {
-    const baseBill = impactData?.base_value || 191.12;
+    const baseBill = 191.12; // In real app, pull from API
     const elasticity = COMPONENT_METADATA[selectedComp]?.elasticity || 0;
-    
     const impactAbs = baseBill * elasticity * (change / 100);
     const newBill = baseBill + impactAbs;
-    const impactPct = (impactAbs / baseBill) * 100;
-
-    return {
-      baseBill,
-      newBill,
-      impactAbs,
-      impactPct
-    };
-  }, [impactData, selectedComp, change]);
-
-  const barData = useMemo(() => {
-    if (!topFeatures) return [];
-    return topFeatures.features.map((f: string, i: number) => ({
-      name: f,
-      value: topFeatures.shap_values[i],
-      percent: topFeatures.percent_contribution[i]
-    }));
-  }, [topFeatures]);
-
-  const donutData = useMemo(() => {
-    if (!topFeatures) return [];
-    return topFeatures.features.map((f: string, i: number) => ({
-      name: f,
-      value: topFeatures.percent_contribution[i]
-    }));
-  }, [topFeatures]);
+    return { baseBill, newBill, impactAbs };
+  }, [selectedComp, change]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      {/* SHAP Impact Section */}
-      <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="card-premium p-6">
-          <div className="flex justify-between items-start mb-8">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Feature Impact (SHAP Values)</h3>
-              <p className="text-xs text-slate-400 mt-1">Dollar contribution to total bill variance</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Top-N</span>
-              <select 
-                value={topN}
-                onChange={(e) => setTopN(Number(e.target.value))}
-                className="bg-slate-100 border-none rounded-lg px-2 py-1 text-xs font-bold text-slate-600 outline-none cursor-pointer"
-              >
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-              </select>
-            </div>
-          </div>
-          
-          <div className="h-[350px]">
-            {isTopLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart 
-                  data={barData} 
-                  layout="vertical" 
-                  margin={{ left: 10, right: 60, top: 0, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#3B82F6" />
-                      <stop offset="100%" stopColor="#6366F1" />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
-                  <XAxis type="number" hide />
-                  <YAxis 
-                    type="category" 
-                    dataKey="name" 
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{fill: '#64748B', fontSize: 11, fontWeight: 600}}
-                    width={120}
-                  />
-                  <Tooltip 
-                    cursor={{fill: '#F8FAFC'}}
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-white border border-slate-100 p-3 shadow-xl rounded-xl">
-                            <p className="text-xs font-black text-slate-900 mb-1">{payload[0].payload.name}</p>
-                            <p className="text-sm font-bold text-blue-600">${Number(payload[0].value).toFixed(2)}</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Impact Magnitude</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Bar 
-                    dataKey="value" 
-                    fill="url(#barGradient)"
-                    radius={[0, 8, 8, 0]} 
-                    barSize={20}
-                    label={{ 
-                      position: 'right', 
-                      fill: '#94A3B8', 
-                      fontSize: 11, 
-                      fontWeight: 700,
-                      formatter: (val: any) => `$${Number(val).toFixed(0)}`
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+      {/* Dynamic Header with Top-N Selector */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <LayoutGrid className="text-blue-600" size={28} />
+            SHAP Driver Explorer
+          </h2>
+          <p className="text-slate-500 text-sm mt-1">Interactive ranking of bill components by marginal impact.</p>
         </div>
 
-        <div className="card-premium p-6">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Relative Contribution</h3>
-              <p className="text-xs text-slate-400 mt-1">% importance among Top-{topN} features</p>
-            </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-sm">
+            <Filter size={14} className="text-slate-400" />
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scope:</span>
+            <select 
+              value={topN} 
+              onChange={(e) => setTopN(Number(e.target.value))}
+              className="bg-transparent border-none text-sm font-bold text-slate-900 outline-none cursor-pointer"
+            >
+              <option value="5">Top 5 Features</option>
+              <option value="10">Top 10 Features</option>
+              <option value="15">Top 15 Features</option>
+            </select>
           </div>
+
+          <button onClick={() => reportMutation.mutate()} className="p-2.5 bg-white border border-slate-200 text-blue-600 rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
+            <Sparkles size={18} />
+            <span className="hidden sm:inline">Explain Bill</span>
+          </button>
           
-          <div className="h-[300px] relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={donutData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={80}
-                  outerRadius={110}
-                  paddingAngle={4}
-                  dataKey="value"
-                  animationDuration={1000}
+          <button onClick={() => pdfMutation.mutate()} className="p-2.5 bg-slate-900 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200">
+            <Download size={18} />
+            <span className="hidden sm:inline">PDF Report</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Analysis Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left: Feature Impact (SHAP) - Dark Premium Panel */}
+        <div className="card bg-slate-900 text-white border-none shadow-2xl p-8 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-8 opacity-5">
+            <Info size={120} />
+          </div>
+          <div className="relative z-10">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-lg font-black tracking-tight">Feature Impact (SHAP Values)</h3>
+                <p className="text-xs text-slate-400">Attribution of cost variance per component ($)</p>
+              </div>
+              <div className="flex bg-slate-800 p-1 rounded-xl">
+                <button 
+                  onClick={() => setViewType('abs')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${viewType === 'abs' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}
                 >
-                  {donutData.map((_: any, index: number) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} 
-                      stroke="rgba(255,255,255,0.2)"
-                      strokeWidth={2}
+                  Abs
+                </button>
+                <button 
+                  onClick={() => setViewType('signed')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${viewType === 'signed' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}
+                >
+                  Sign
+                </button>
+              </div>
+            </div>
+
+            <div className="h-[400px]">
+              {isShapLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1E293B" />
+                    <XAxis type="number" hide />
+                    <YAxis 
+                      type="category" 
+                      dataKey="name" 
+                      axisLine={false} 
+                      tickLine={false}
+                      tick={{fill: '#94A3B8', fontSize: 11, fontWeight: 700}}
+                      width={100}
                     />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] uppercase tracking-widest font-black text-slate-400">Total Top-{topN}</span>
-              <span className="text-2xl font-black text-slate-900 mt-1">Drivers</span>
+                    <Tooltip 
+                      cursor={{fill: '#1E293B'}}
+                      contentStyle={{backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '12px', fontSize: '12px'}}
+                    />
+                    <Bar 
+                      dataKey="value" 
+                      radius={[0, 4, 4, 0]}
+                      barSize={20}
+                      animationDuration={1000}
+                    >
+                      {chartData.map((entry: any, index: number) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={viewType === 'abs' 
+                            ? (index < 3 ? '#60A5FA' : '#3B82F6') 
+                            : (entry.value >= 0 ? '#EF4444' : '#10B981')
+                          } 
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
-      </section>
 
-      {/* Real-time Simulator Section */}
-      <section className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl shadow-inner">
-            <Calculator size={20} />
-          </div>
-          <div>
-            <h3 className="text-xl font-bold text-slate-900">Bill Sensitivity Simulator</h3>
-            <p className="text-xs text-slate-400 font-medium">Interactive "What-If" engine with real-time feedback</p>
-          </div>
-        </div>
+        {/* Right: Category Breakdown - Donut Panel */}
+        <div className="card p-8 shadow-xl bg-white flex flex-col items-center">
+           <div className="w-full mb-8">
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">Top-{topN} Contribution</h3>
+              <p className="text-xs text-slate-400">Relative weight of ranked importance features</p>
+           </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-0 overflow-hidden rounded-[24px] border border-slate-200 shadow-2xl bg-white">
-          <div className="lg:col-span-2 p-8 bg-[#F9FAFB] border-r border-slate-100">
-            <div className="space-y-8">
-              <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 block">Target Component</label>
-                <div className="relative group">
-                  <select 
-                    value={selectedComp}
-                    onChange={(e) => setSelectedComp(e.target.value)}
-                    className="w-full bg-white border border-slate-200 p-4 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500/20 transition-all appearance-none cursor-pointer"
+           <div className="h-[350px] w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={90}
+                    outerRadius={120}
+                    paddingAngle={3}
+                    dataKey="percent"
+                    animationDuration={1000}
                   >
-                    {Object.entries(COMPONENT_METADATA).map(([key, meta]) => (
-                      <option key={key} value={key}>{meta.label}</option>
+                    {chartData.map((_: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
                     ))}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                    <Layers size={18} />
-                  </div>
-                </div>
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregate</span>
+                <span className="text-2xl font-black text-slate-900 mt-1">
+                  {chartData.reduce((sum: number, d: any) => sum + d.percent, 0).toFixed(0)}%
+                </span>
+                <span className="text-[10px] font-bold text-slate-400">of Variance</span>
               </div>
+           </div>
 
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Rate Modification</label>
-                  <span className={`px-4 py-1.5 rounded-xl text-sm font-black shadow-sm transition-all duration-300 ${
-                    change > 0 ? 'bg-red-50 text-red-600' : change < 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-50 text-slate-400'
-                  }`}>
-                    {change > 0 ? '+' : ''}{change}%
-                  </span>
+           <div className="grid grid-cols-2 gap-x-8 gap-y-4 mt-8 w-full border-t border-slate-50 pt-8">
+              {chartData.slice(0, 4).map((item: any, index: number) => (
+                <div key={item.name} className="flex items-center justify-between group">
+                   <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: CATEGORY_COLORS[index]}}></div>
+                      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight truncate max-w-[100px]">{item.name}</span>
+                   </div>
+                   <span className="text-xs font-black text-slate-900">{item.percent.toFixed(1)}%</span>
                 </div>
-                <input 
-                  type="range" 
-                  min="-50" 
-                  max="50" 
-                  step="1"
-                  value={change}
-                  onChange={(e) => setChange(Number(e.target.value))}
-                  className={`w-full h-2.5 rounded-lg appearance-none cursor-pointer transition-all ${
-                    change > 0 ? 'accent-red-500 bg-red-100' : 'accent-emerald-500 bg-emerald-100'
-                  }`}
-                />
-              </div>
-
-              <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100/50">
-                <p className="text-[11px] font-semibold text-blue-700 leading-relaxed italic">
-                  "A {Math.abs(change)}% {change >= 0 ? 'increase' : 'decrease'} in {COMPONENT_METADATA[selectedComp]?.label || selectedComp} will {simulation.impactAbs >= 0 ? 'increase' : 'decrease'} your total bill by ${Math.abs(simulation.impactAbs).toFixed(2)} on average."
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="lg:col-span-3 p-8 flex flex-col justify-center bg-white relative">
-            <div className="space-y-10 animate-in fade-in duration-500">
-              <div className="text-center">
-                <span className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4 block">Projected Total Bill</span>
-                <div className="flex items-center justify-center gap-4">
-                  <span className="text-2xl font-bold text-slate-300 line-through">${simulation.baseBill.toFixed(2)}</span>
-                  <div className="w-8 h-px bg-slate-200"></div>
-                  <h2 className="text-6xl font-black text-slate-900 tracking-tighter">${simulation.newBill.toFixed(2)}</h2>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-8 max-w-sm mx-auto">
-                <div className="text-center p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Abs. Impact</span>
-                  <p className={`text-2xl font-black ${simulation.impactAbs > 0 ? 'text-red-600' : simulation.impactAbs < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {simulation.impactAbs > 0 ? '+' : ''}${simulation.impactAbs.toFixed(2)}
-                  </p>
-                </div>
-                <div className="text-center p-6 rounded-3xl bg-slate-50 border border-slate-100">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Relative</span>
-                  <p className={`text-2xl font-black ${simulation.impactPct > 0 ? 'text-red-600' : simulation.impactPct < 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
-                    {simulation.impactPct > 0 ? '+' : ''}{simulation.impactPct.toFixed(2)}%
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Reference Table */}
-      <section className="card-premium p-6">
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-lg font-bold text-slate-900">Component Sensitivity Reference</h3>
-          <div className="p-2 bg-slate-50 text-slate-400 rounded-lg">
-            <Filter size={16} />
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="text-[11px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                <th className="pb-4">Utility Component</th>
-                <th className="pb-4">Elasticity</th>
-                <th className="pb-4">Sensitivity</th>
-                <th className="pb-4">Impact Direction</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {Object.entries(COMPONENT_METADATA).map(([key, meta]) => (
-                <tr key={key} className="group hover:bg-slate-50 transition-colors cursor-default">
-                  <td className="py-4 text-sm font-bold text-slate-700">{meta.label}</td>
-                  <td className="py-4 font-mono text-sm text-slate-500">{meta.elasticity.toFixed(3)}</td>
-                  <td className="py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full max-w-[100px]">
-                        <div className="h-full bg-blue-500 rounded-full" style={{width: `${meta.elasticity * 100}%`}}></div>
-                      </div>
-                      <span className="text-xs font-black text-slate-900">{(meta.elasticity * 100).toFixed(1)}%</span>
-                    </div>
-                  </td>
-                  <td className="py-4">
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-tight bg-blue-50 text-blue-600">
-                      <ArrowUpRight size={12} />
-                      Positive
-                    </span>
-                  </td>
-                </tr>
               ))}
-            </tbody>
-          </table>
+           </div>
+        </div>
+      </div>
+
+      {/* Simulator Layer */}
+      <section className="card p-8 bg-slate-50 border-dashed border-2 border-slate-200 rounded-[32px]">
+        <div className="flex items-center gap-3 mb-8">
+          <Calculator size={22} className="text-blue-600" />
+          <h3 className="text-xl font-bold text-slate-900">What-If Sensitivity Simulator</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+           <div className="space-y-8">
+              <div>
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Simulated Component</label>
+                 <select 
+                    value={selectedComp} 
+                    onChange={(e) => setSelectedComp(e.target.value)}
+                    className="w-full bg-white border border-slate-200 p-4 rounded-2xl text-sm font-bold text-slate-900 outline-none"
+                 >
+                    {Object.entries(COMPONENT_METADATA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                 </select>
+              </div>
+              <div>
+                 <div className="flex justify-between items-center mb-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rate Change (%)</label>
+                    <span className="text-sm font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">{change > 0 ? '+' : ''}{change}%</span>
+                 </div>
+                 <input 
+                    type="range" 
+                    min="-50" 
+                    max="50" 
+                    value={change} 
+                    onChange={(e) => setChange(Number(e.target.value))}
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                 />
+              </div>
+           </div>
+
+           <div className="text-center p-8 bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Projected Bill Impact</p>
+              <div className="flex items-center justify-center gap-4">
+                 <span className="text-xl font-bold text-slate-300 line-through">${simulation.baseBill.toFixed(2)}</span>
+                 <h2 className="text-6xl font-black text-slate-900 tracking-tighter">${simulation.newBill.toFixed(2)}</h2>
+              </div>
+              <div className={`inline-flex items-center gap-1 mt-6 px-4 py-1.5 rounded-full text-xs font-black uppercase ${simulation.impactAbs > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                 {simulation.impactAbs > 0 ? 'Increase' : 'Decrease'} of ${Math.abs(simulation.impactAbs).toFixed(2)}
+              </div>
+           </div>
         </div>
       </section>
+
+      {/* AI Report Fragment */}
+      {report && (
+        <div className="card p-8 border-l-4 border-l-blue-600 animate-in slide-in-from-left-4 duration-500">
+           <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
+              <Sparkles size={20} className="text-blue-600" />
+              Automated Bill Narrative
+           </h4>
+           <div className="text-sm text-slate-600 leading-relaxed space-y-4">
+              {report.split('\n').filter(l => l.trim()).map((p, i) => <p key={i}>{p}</p>)}
+           </div>
+        </div>
+      )}
     </div>
   );
 };

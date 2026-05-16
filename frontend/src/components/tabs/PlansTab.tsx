@@ -1,121 +1,70 @@
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { CheckCircle2, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
+import { ShieldCheck, Zap, ArrowRight } from 'lucide-react';
 
 const PlansTab = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['plans'],
     queryFn: async () => {
-      const res = await axios.get('http://localhost:8000/plans');
+      const res = await axios.get('/plans');
       return res.data;
     }
   });
 
-  if (isLoading) return <div className="text-slate-500">Loading plan analysis...</div>;
+  if (isLoading) return <div className="text-slate-500 p-8">Comparing retail plans...</div>;
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-slate-900">Retail Plan Comparison</h3>
-          <p className="text-slate-500 text-sm">Monte Carlo simulation of annual costs based on 10,000 scenarios.</p>
-        </div>
-        <div className="bg-positive/10 text-positive px-4 py-2 rounded-xl border border-positive/20 flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5" />
-          <span className="font-bold text-sm">Recommendation: {data.recommended}</span>
-        </div>
+    <div className="space-y-8 animate-in fade-in duration-700">
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">Retail Plan Comparison</h2>
       </div>
 
-      <div className="card overflow-hidden border-none shadow-md">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-border">
-            <tr>
-              <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Plan / Provider</th>
-              <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Type</th>
-              <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Avg. Annual Cost</th>
-              <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Risk (Std Dev)</th>
-              <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {data.comparison.map((plan: any) => {
-              const isBest = plan.provider === data.recommended;
-              const isHighRisk = plan.risk_score > 15;
-
-              return (
-                <tr key={plan.provider} className={`transition-colors ${isBest ? 'bg-blue-50/30' : 'hover:bg-slate-50'}`}>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${isBest ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}>
-                        <Zap className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-slate-900">{plan.provider}</p>
-                        <p className="text-xs text-slate-500">{(plan.rate * 100).toFixed(2)}¢ per kWh</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                      {plan.plan_type}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <p className="font-bold text-slate-900">${plan.expected_annual_cost.toFixed(2)}</p>
-                    <p className="text-[10px] text-slate-400">P5: ${plan.p5_annual_cost.toFixed(0)} | P95: ${plan.p95_annual_cost.toFixed(0)}</p>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex flex-col items-end">
-                      <span className={`text-sm font-bold ${isHighRisk ? 'text-negative' : 'text-slate-600'}`}>
-                        {plan.risk_score.toFixed(1)}%
-                      </span>
-                      <div className="w-20 h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden">
-                        <div 
-                          className={`h-full ${isHighRisk ? 'bg-negative' : 'bg-primary'}`} 
-                          style={{ width: `${Math.min(plan.risk_score * 2, 100)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex justify-center">
-                      {isBest && (
-                        <div className="flex items-center gap-1.5 text-positive bg-positive/10 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
-                          <CheckCircle2 className="w-3 h-3" />
-                          Best Plan
-                        </div>
-                      )}
-                      {isHighRisk && !isBest && (
-                        <div className="flex items-center gap-1.5 text-negative bg-negative/10 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider">
-                          <AlertTriangle className="w-3 h-3" />
-                          High Risk
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="card">
-          <h4 className="font-bold text-slate-900 mb-4">Why this matters?</h4>
-          <p className="text-sm text-slate-600 leading-relaxed">
-            Switching to the recommended plan could save you approximately <b>${data.savings_vs_default.toFixed(2)}</b> per year. 
-            Fixed plans offer price stability but may be higher than average market rates. Variable plans can be cheaper but carry the risk of price spikes during extreme weather or market volatility.
-          </p>
-        </div>
-        <div className="card bg-slate-900 text-white border-none shadow-lg">
-          <h4 className="font-bold mb-4">Savings Estimate</h4>
-          <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-bold text-primary">${data.savings_vs_default.toFixed(2)}</span>
-            <span className="text-slate-400">/ Year</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 card p-8">
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">Estimated 12-Month Total</h3>
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data.plans} layout="vertical" margin={{ left: 40, right: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
+                <XAxis type="number" hide />
+                <YAxis dataKey="provider" type="category" axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 11, fontWeight: 600}} />
+                <Tooltip />
+                <Bar dataKey="simulated_annual_cost" fill="#3B82F6" radius={[0, 4, 4, 0]} barSize={24} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
-          <div className="mt-6 pt-6 border-t border-slate-800">
-            <p className="text-xs text-slate-400 italic">Based on your current usage profile and 12-month market forward curves.</p>
+        </div>
+
+        <div className="space-y-6">
+          <div className="card p-6 border-2 border-primary bg-primary/5 shadow-xl shadow-primary/5">
+             <div className="flex items-center gap-2 mb-4">
+                <ShieldCheck className="text-primary" size={20} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-primary">Best Value</span>
+             </div>
+             <h3 className="text-xl font-bold text-slate-900 mb-1">{data.plans[0].provider}</h3>
+             <p className="text-sm text-slate-500 mb-6">{data.plans[0].plan_name}</p>
+             <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                   <span className="text-xs text-slate-500">Avg. Monthly</span>
+                   <span className="text-lg font-bold text-slate-900">${(data.plans[0].simulated_annual_cost / 12).toFixed(2)}</span>
+                </div>
+                <button className="w-full bg-primary text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:brightness-110 transition-all shadow-lg shadow-primary/20">
+                   Switch Now <ArrowRight size={16} />
+                </button>
+             </div>
+          </div>
+
+          <div className="card p-6">
+             <div className="flex items-center gap-2 mb-4">
+                <Zap className="text-amber-500" size={18} />
+                <h4 className="text-sm font-bold text-slate-900">Current Provider</h4>
+             </div>
+             <p className="text-xs text-slate-500 leading-relaxed">
+                You are currently on the PSE&G Standard Offer.
+             </p>
           </div>
         </div>
       </div>
