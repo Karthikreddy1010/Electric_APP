@@ -46,10 +46,36 @@ const ImpactTab = () => {
   // LLM Report Mutation
   const reportMutation = useMutation({
     mutationFn: async () => {
-      const res = await axios.post('/report/generate');
-      return res.data;
+      setReport(""); // Clear previous report
+      const response = await fetch('/report/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          fullText += chunk;
+          setReport(fullText); // Update progressively
+        }
+      }
+      return fullText;
     },
-    onSuccess: (data) => setReport(data.report_text)
+    onSuccess: () => {
+      // State is already updated during streaming
+    }
   });
 
   // PDF Export

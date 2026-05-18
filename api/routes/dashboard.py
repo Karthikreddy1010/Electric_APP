@@ -47,13 +47,20 @@ async def get_overview():
     total = latest['total_bill']
     for key, meta in COMPONENT_TYPES.items():
         val = latest.get(meta['cost_col'], 0)
-        # Add tax to each component for "Clarity"
-        val_with_tax = val * 1.06625 
         breakdown.append(BillComponent(
             label=meta['label'],
-            value=round(val_with_tax, 2),
-            percentage=round((val_with_tax / total * 100), 2) if total > 0 else 0
+            value=round(val, 2),
+            percentage=round((val / total * 100), 2) if total > 0 else 0
         ))
+        
+    # Explicitly add the exact Sales Tax from the actual data
+    tax_val = latest.get('sales_tax', 0)
+    breakdown.append(BillComponent(
+        label='Sales Tax',
+        value=round(tax_val, 2),
+        percentage=round((tax_val / total * 100), 2) if total > 0 else 0
+    ))
+    
     # Sort by impact
     breakdown = sorted(breakdown, key=lambda x: x.value, reverse=True)
 
@@ -65,8 +72,9 @@ async def get_overview():
         point = {"month": month_label}
         for key, meta in COMPONENT_TYPES.items():
             val = row.get(meta['cost_col'], 0)
-            val_with_tax = val * 1.06625
-            point[meta['label']] = round(val_with_tax, 2)
+            point[meta['label']] = round(val, 2)
+            
+        point['Sales Tax'] = round(row.get('sales_tax', 0), 2)
         historical_breakdown.append(point)
 
     # Trends
@@ -167,9 +175,7 @@ async def get_top_features(n: int = Query(10, ge=1, le=50)):
 async def get_full_analysis():
     return compute_bill_analysis()
 
-@router.post("/report/generate")
-async def generate_report():
-    import ollama
+def _get_report_data_and_prompt():
     analysis = compute_bill_analysis()
     
     # Deterministic High-Fidelity Fallback
@@ -198,7 +204,7 @@ async def generate_report():
     """
     
     prompt = f"""
-    You are a Senior Energy Analyst. Analyze the following electricity bill data and provide a professional report.
+    You are a Senior Energy Analyst. Analyze the following electricity bill data and provide a VERY CONCISE professional report (max 150 words).
     Structure:
     1. Executive Summary
     2. Cost Drivers (Top components)
@@ -207,18 +213,44 @@ async def generate_report():
     
     Data: {analysis}
     """
+    return prompt, fallback_text, month, analysis
+
+@router.post("/report/generate")
+async def generate_report():
+    from fastapi.responses import StreamingResponse
+    import ollama
+    import time
     
-    try:
-        # Attempt AI generation with a short timeout
-        response = ollama.chat(
-            model="qwen3:4b",
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0.2}
-        )
-        return {"report_text": response['message']['content']}
-    except Exception as e:
-        # Transparently return fallback if AI is unavailable
-        return {"report_text": f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"}
+    prompt, fallback_text, _, _ = _get_report_data_and_prompt()
+    
+    async def generate_stream():
+        try:
+            client = ollama.AsyncClient()
+            response = await client.chat(
+                model="qwen3:4b",
+                messages=[{"role": "user", "content": prompt}],
+                options={
+                    "temperature": 0.2,
+                    "num_predict": 250  # Strictly limit generated tokens
+                },
+                stream=True
+            )
+            
+            start_time = time.time()
+            time_limit = 10.0  # 10 seconds strict time window
+            
+            async for chunk in response:
+                if time.time() - start_time > time_limit:
+                    yield "\n\n[Generation stopped: Time limit exceeded]"
+                    break
+                    
+                if 'message' in chunk and 'content' in chunk['message']:
+                    yield chunk['message']['content']
+        except Exception as e:
+            # Transparently return fallback if AI is unavailable
+            yield f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
+            
+    return StreamingResponse(generate_stream(), media_type="text/plain")
 
 @router.post("/report/pdf")
 async def generate_pdf():
@@ -227,10 +259,30 @@ async def generate_pdf():
     from reportlab.lib.styles import getSampleStyleSheet
     import io
     from fastapi.responses import StreamingResponse
+    import ollama
+    import asyncio
     
-    analysis = compute_bill_analysis()
-    report_data = await generate_report()
-    text = report_data["report_text"]
+    prompt, fallback_text, month, analysis = _get_report_data_and_prompt()
+    
+    try:
+        # Non-streaming for PDF
+        client = ollama.AsyncClient()
+        
+        async def fetch_chat():
+            return await client.chat(
+                model="qwen3:4b",
+                messages=[{"role": "user", "content": prompt}],
+                options={
+                    "temperature": 0.2,
+                    "num_predict": 250
+                }
+            )
+        
+        # Enforce 10s strict timeout
+        response = await asyncio.wait_for(fetch_chat(), timeout=10.0)
+        text = response['message']['content']
+    except Exception as e:
+        text = f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
     
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=LETTER)
@@ -252,7 +304,7 @@ async def generate_pdf():
     return StreamingResponse(
         buffer, 
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=bill_report_{analysis['current_month']}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename=bill_report_{month}.pdf"}
     )
 
 @router.post("/simulate", response_model=SimulateResult)
