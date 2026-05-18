@@ -162,90 +162,186 @@ class GeoInsightsResponse(BaseModel):
     zip_insights: List[ZipInsight]
     state_trend: StateTrend
 
+MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+NATIONAL_AVG_PRICE = 0.1284  # EIA 2024 residential avg $/kWh
+
+
+def _compute_deterministic_insights(req: GeoInsightsRequest) -> dict:
+    """
+    Fully deterministic fallback: computes ZIP & state insights from raw input
+    data using statistical aggregation. No LLM required.
+    """
+    import statistics
+
+    data = req.electricity_data
+    if not data:
+        return {"zip_insights": [], "state_trend": {"time_series": [], "trend_analysis": "No data", "growth_metrics": {"mom": "0%", "yoy": "0%"}, "forecast_hint": "Insufficient data."}}
+
+    # ── State-level aggregation by month ──────────────────────────────────────
+    from collections import defaultdict
+    monthly: dict = defaultdict(list)
+    for row in data:
+        key = (row.year, row.month)
+        monthly[key].append(row)
+
+    time_series = []
+    sorted_keys = sorted(monthly.keys())
+    for (yr, mo) in sorted_keys:
+        rows = monthly[(yr, mo)]
+        avg_p = statistics.mean(r.avg_price for r in rows)
+        avg_c = statistics.mean(r.consumption_kwh for r in rows)
+        time_series.append({
+            "year": yr,
+            "month": MONTH_NAMES[mo - 1],
+            "avg_price": round(avg_p, 5),
+            "consumption_kwh": round(avg_c, 1),
+        })
+
+    # Growth metrics
+    prices = [t["avg_price"] for t in time_series]
+    mom = round((prices[-1] - prices[-2]) / prices[-2] * 100, 2) if len(prices) >= 2 else 0.0
+    yoy_idx = -13 if len(prices) >= 13 else 0
+    yoy = round((prices[-1] - prices[yoy_idx]) / prices[yoy_idx] * 100, 2) if len(prices) >= 13 else 0.0
+
+    trend_dir = "upward" if prices[-1] > prices[0] else "downward"
+    volatility = round(statistics.stdev(prices) * 100, 3) if len(prices) > 1 else 0
+    trend_analysis = (
+        f"NJ shows a {trend_dir} price trend from {time_series[0]['month']} {time_series[0]['year']} "
+        f"to {time_series[-1]['month']} {time_series[-1]['year']}. "
+        f"Price volatility is {volatility}¢/kWh (std dev). "
+        f"Summer months show elevated consumption due to cooling load."
+    )
+    forecast_price = round(prices[-1] * (1 + mom / 100), 5)
+    forecast_hint = (
+        f"Based on {mom:+.2f}% MoM trend, next 3 months avg price is projected around "
+        f"${forecast_price}/kWh. Expect seasonal uptick if entering summer/winter period."
+    )
+
+    # ── ZIP-level aggregation ─────────────────────────────────────────────────
+    zip_map: dict = defaultdict(list)
+    for row in data:
+        zip_map[row.zip_code].append(row)
+
+    state_avg_price = statistics.mean(r.avg_price for r in data)
+
+    zip_insights = []
+    for zip_code, rows in zip_map.items():
+        avg_price = statistics.mean(r.avg_price for r in rows)
+        avg_kwh   = statistics.mean(r.consumption_kwh for r in rows)
+        avg_peak  = statistics.mean(r.peak_demand for r in rows)
+        avg_renew = statistics.mean(r.renewable_ratio for r in rows)
+
+        vs_state  = round((avg_price - state_avg_price) / state_avg_price * 100, 1)
+        vs_nation = round((avg_price - NATIONAL_AVG_PRICE) / NATIONAL_AVG_PRICE * 100, 1)
+
+        vs_state_str  = f"{vs_state:+.1f}%"
+        vs_nation_str = f"{vs_nation:+.1f}%"
+
+        # Anomaly: detect if latest price is >10% above/below the zip's own avg
+        prices_zip = [r.avg_price for r in sorted(rows, key=lambda r: (r.year, r.month))]
+        latest = prices_zip[-1]
+        rolling_avg = statistics.mean(prices_zip[:-1]) if len(prices_zip) > 1 else latest
+        pct_dev = (latest - rolling_avg) / rolling_avg * 100 if rolling_avg else 0
+        if pct_dev > 10:
+            anomaly = "spike"
+        elif pct_dev < -10:
+            anomaly = "drop"
+        else:
+            anomaly = "stable"
+
+        direction = "above" if vs_state >= 0 else "below"
+        summary = (
+            f"ZIP {zip_code} avg rate is ${avg_price:.5f}/kWh — {abs(vs_state):.1f}% {direction} the NJ state average. "
+            f"Renewable mix at {avg_renew*100:.0f}%, peak demand {avg_peak:.2f} kW."
+        )
+
+        if avg_renew < 0.1:
+            rec = "Low renewable ratio — consider enrolling in a green energy plan or installing solar panels."
+        elif avg_peak > 3.5:
+            rec = "High peak demand detected — shift heavy appliances (HVAC, EV charging) to off-peak hours."
+        elif vs_state > 5:
+            rec = "Above-average rate — compare retail energy suppliers in the Plans tab for potential savings."
+        else:
+            rec = "Stable usage profile. Consider a fixed-rate plan to lock in current favorable rates."
+
+        zip_insights.append({
+            "zip_code": zip_code,
+            "summary": summary,
+            "metrics": {
+                "avg_price": round(avg_price, 5),
+                "consumption_kwh": round(avg_kwh, 1),
+                "peak_demand": round(avg_peak, 2),
+                "renewable_ratio": round(avg_renew, 3),
+            },
+            "comparisons": {
+                "vs_state_avg": vs_state_str,
+                "vs_national_avg": vs_nation_str,
+            },
+            "anomaly_detection": anomaly,
+            "recommendation": rec,
+        })
+
+    return {
+        "zip_insights": zip_insights,
+        "state_trend": {
+            "time_series": time_series,
+            "trend_analysis": trend_analysis,
+            "growth_metrics": {"mom": f"{mom:+.2f}%", "yoy": f"{yoy:+.2f}%"},
+            "forecast_hint": forecast_hint,
+        }
+    }
+
+
 @router.post("/generate-insights", response_model=GeoInsightsResponse)
 async def generate_geo_insights(req: GeoInsightsRequest):
     """
-    Generate detailed AI insights at the ZIP code and State level
-    returning structured JSON optimized for frontend rendering.
+    Generate detailed AI insights at the ZIP code and State level.
+    Uses Ollama/qwen3:4b when available; falls back to deterministic
+    statistical analysis when the LLM is offline.
     """
     import ollama
     import json
-    
+
     prompt = f"""
     You are an advanced energy analytics assistant embedded in a web application called "ElectricAI".
+    Generate Geo Insights at ZIP Code and State level. Return STRICT JSON only — no markdown.
 
-    Your task is to generate Geo Insights at both:
-    1) ZIP Code Level (granular insights)
-    2) State Level (aggregated trends with time series)
+    INPUT: {req.model_dump_json()}
 
-    You must return structured JSON optimized for frontend rendering.
-
-    -----------------------------------
-    INPUT DATA STRUCTURE
-    -----------------------------------
-    {req.model_dump_json()}
-
-    -----------------------------------
-    TASK 1: ZIP CODE LEVEL INSIGHTS
-    -----------------------------------
-    For EACH zip code, generate:
-    1. summary: short insight (1-2 lines), highlight if cost is high/low vs state average
-    2. metrics: avg_price, consumption_kwh, peak_demand, renewable_ratio
-    3. comparisons: vs_state_avg (% difference), vs_national_avg (if available)
-    4. anomaly_detection: detect unusual spikes or drops, label: ["spike", "drop", "stable"]
-    5. recommendation: actionable suggestion (e.g., reduce peak usage, shift load, solar adoption)
-
-    -----------------------------------
-    TASK 2: STATE TREND LINE (MONTH + YEAR)
-    -----------------------------------
-    Aggregate ALL data at state level. Generate:
-    1. time_series: [ {{"year": 2023, "month": "Jan", "avg_price": 0.12, "consumption_kwh": 800}} ]
-    2. trend_analysis: identify seasonal patterns, upward/downward trends, volatility
-    3. growth_metrics: month_over_month_growth (%), year_over_year_growth (%)
-    4. forecast_hint: short prediction for next 3 months
-
-    -----------------------------------
-    OUTPUT FORMAT (STRICT JSON)
-    -----------------------------------
+    OUTPUT FORMAT:
     {{
       "zip_insights": [
         {{
           "zip_code": "string",
           "summary": "string",
           "metrics": {{ "avg_price": 0.0, "consumption_kwh": 0.0, "peak_demand": 0.0, "renewable_ratio": 0.0 }},
-          "comparisons": {{ "vs_state_avg": "string", "vs_national_avg": "string" }},
-          "anomaly_detection": "string",
+          "comparisons": {{ "vs_state_avg": "+X.X%", "vs_national_avg": "+X.X%" }},
+          "anomaly_detection": "spike|drop|stable",
           "recommendation": "string"
         }}
       ],
       "state_trend": {{
-        "time_series": [
-          {{ "year": 2023, "month": "Jan", "avg_price": 0.0, "consumption_kwh": 0.0 }}
-        ],
+        "time_series": [{{"year": 2023, "month": "Jan", "avg_price": 0.0, "consumption_kwh": 0.0}}],
         "trend_analysis": "string",
-        "growth_metrics": {{ "mom": "string", "yoy": "string" }},
+        "growth_metrics": {{"mom": "+X.X%", "yoy": "+X.X%"}},
         "forecast_hint": "string"
       }}
     }}
-    
-    RULES:
-    - ONLY output valid JSON. No markdown blocks like ```json ... ```, just the raw JSON text.
-    - No hallucinated data. If data is missing, return null.
-    - Keep explanations sharp and data-driven.
     """
-    
+
     try:
         client = ollama.AsyncClient()
         response = await client.chat(
             model="qwen3:4b",
             messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0.1},
+            options={"temperature": 0.1, "num_predict": 1500},
             format="json"
         )
-        
         content = response['message']['content'].strip()
         parsed = json.loads(content)
+        logger.info("Geo insights generated via LLM")
         return parsed
     except Exception as e:
-        logger.exception("Geo Insights AI generation failed")
-        raise HTTPException(500, f"Failed to generate insights: {str(e)}")
+        logger.warning(f"LLM unavailable ({e}), using deterministic fallback")
+        return _compute_deterministic_insights(req)
+

@@ -52,6 +52,11 @@ async def lifespan(app: FastAPI):
         app_state["market_df"] = pd.read_parquet(data_dir / "pjm_market.parquet")
         app_state["benchmark_df"] = pd.read_parquet(data_dir / "state_benchmark.parquet")
         app_state["plans_df"] = pd.read_parquet(data_dir / "retail_plans.parquet")
+        
+        if (data_dir / "pseg_rate_history.csv").exists():
+            app_state["pseg_history_df"] = pd.read_csv(data_dir / "pseg_rate_history.csv")
+            logger.info(f"Loaded pseg_history={len(app_state['pseg_history_df'])} rows")
+            
         logger.info(
             f"Loaded billing={len(app_state['billing_df'])}, "
             f"weather={len(app_state['weather_df'])}, "
@@ -135,9 +140,19 @@ app.add_middleware(
 # ── Register modular routers ────────────────────────────────────────────────
 from api.routes.health import router as health_router
 from api.routes.dashboard import router as dashboard_router
+from api.routes.billing import router as billing_router
+from api.routes.geo_insights import router as geo_insights_router
+from api.routes.impact import router as impact_router
+from api.routes.benchmark import router as benchmark_router
+from api.routes.forecast import router as forecast_router
 
 app.include_router(health_router)
 app.include_router(dashboard_router)
+app.include_router(billing_router)
+app.include_router(geo_insights_router)
+app.include_router(impact_router)
+app.include_router(benchmark_router)
+app.include_router(forecast_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────

@@ -28,3 +28,15 @@ async def get_trends(months: int = Query(36, ge=6, le=84)):
     if billing is None:
         raise HTTPException(500, "Data not loaded")
     return build_trends(billing, months)
+
+
+@router.get("/pseg-rate-history")
+async def get_pseg_rate_history():
+    """Get exact historical rate breakdown for PSE&G."""
+    df = app_state.get("pseg_history_df")
+    if df is None:
+        raise HTTPException(404, "PSEG rate history data not available")
+    
+    # Replace NaN with None for JSON compliance
+    records = df.replace({float('nan'): None}).to_dict(orient="records")
+    return {"count": len(records), "data": records}

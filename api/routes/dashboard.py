@@ -91,7 +91,7 @@ async def get_overview():
 @router.get("/forecast", response_model=ForecastResponse)
 async def get_forecast(
     horizon: int = Query(12, ge=1, le=24),
-    model: str = Query("ensemble", regex="^(ensemble|sarima|prophet)$")
+    model: str = Query("ensemble", pattern="^(ensemble|sarima|prophet)$")
 ):
     ensemble = app_state.get("forecast_model")
     if ensemble is None:
@@ -388,24 +388,6 @@ async def get_geo(month: Optional[str] = None, view_mode: str = "bill"):
         current_month=target_month
     )
 
-@router.get("/geo/trend", response_model=GeoTrendPoint)
-async def get_geo_trend(state: str, view_mode: str = "bill"):
-    from api.services.geo_insights_service import get_trend_data
-    monthly_df = app_state.get("geo_monthly_df")
-    res = get_trend_data(monthly_df, state, data_type=view_mode)
-    return GeoTrendPoint(
-        months=res['months'],
-        values=res['values'],
-        total_growth_pct=res['total_growth_pct']
-    )
-
-@router.get("/geo/detail", response_model=GeoDetailResponse)
-async def get_geo_detail(state: str, month: str):
-    from api.services.geo_insights_service import get_detail_data
-    monthly_df = app_state.get("geo_monthly_df")
-    billing_df = app_state.get("billing_df")
-    res = get_detail_data(billing_df, monthly_df, state, month)
-    return GeoDetailResponse(**res)
 
 @router.get("/plans", response_model=PlanSimResponse)
 async def get_plans():
