@@ -27,6 +27,7 @@ class DataService:
         self.feature_cols: list[str] | None = None
         self.impact_model = None
         self.forecast_model = None
+        self.demand_forecaster = None
         self._ready = False
 
     # ─── Public readiness flag ───────────────────────────────────────────────
@@ -118,14 +119,11 @@ class DataService:
     # ─── Step 5: forecast ensemble ────────────────────────────────────────────
 
     def _train_forecast_model(self) -> None:
-        if self.billing_df is None:
-            logger.warning("No billing data — skipping forecast training.")
-            return
         try:
-            from models.forecast_model import ForecastEnsemble
-            ensemble = ForecastEnsemble()
-            ensemble.train_all(self.billing_df["total_bill"], self.billing_df["date"])
-            self.forecast_model = ensemble
-            logger.info("Forecast ensemble trained.")
+            from models.forecast_model import ElectricityDemandForecaster
+            forecaster = ElectricityDemandForecaster()
+            forecaster.train_and_evaluate()
+            self.demand_forecaster = forecaster
+            logger.info("Demand Forecast ensemble trained.")
         except Exception as exc:
             logger.warning(f"Forecast model training failed: {exc}")

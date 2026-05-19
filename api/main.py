@@ -93,14 +93,11 @@ async def lifespan(app: FastAPI):
 
     # ── Step 5: Forecast ensemble (trains SARIMA + Prophet) ──────────────────
     try:
-        from models.forecast_model import ForecastEnsemble
-        ensemble = ForecastEnsemble()
-        ensemble.train_all(
-            app_state["billing_df"]["total_bill"],
-            app_state["billing_df"]["date"],
-        )
+        from models.forecast_model import ElectricityDemandForecaster
+        ensemble = ElectricityDemandForecaster()
+        ensemble.train_and_evaluate()
         app_state["forecast_model"] = ensemble
-        logger.info("Forecast ensemble trained and ready")
+        logger.info("Demand Forecast ensemble trained and ready")
     except Exception as e:
         logger.warning(f"Forecast model training failed: {e}")
 

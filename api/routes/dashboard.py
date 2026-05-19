@@ -30,8 +30,8 @@ async def get_overview():
     forecast_val = latest['total_bill'] # Fallback
     if app_state.get("forecast_model"):
         try:
-            f = app_state["forecast_model"].predict_ensemble(1)
-            forecast_val = f['forecast_ensemble'].values[0]
+            f = app_state["forecast_model"].get_forecast(1)
+            forecast_val = f[-1]['predicted_demand']
         except: pass
 
     kpis = OverviewKPI(
@@ -88,44 +88,6 @@ async def get_overview():
     )
 
 
-@router.get("/forecast", response_model=ForecastResponse)
-async def get_forecast(
-    horizon: int = Query(12, ge=1, le=24),
-    model: str = Query("ensemble", pattern="^(ensemble|sarima|prophet)$")
-):
-    ensemble = app_state.get("forecast_model")
-    if ensemble is None:
-        raise HTTPException(500, "Forecast model not ready")
-    
-    res = ensemble.predict_ensemble(horizon)
-    
-    # Select appropriate column based on model
-    pred_col = f"forecast_{model}"
-    
-    forecasts = []
-    last_date = app_state["billing_df"]["date"].max()
-    future_dates = pd.date_range(start=last_date + pd.DateOffset(months=1), periods=horizon, freq='MS')
-    
-    for i, dt in enumerate(future_dates):
-        pred_val = res[pred_col].iloc[i] if pred_col in res.columns else res["forecast_ensemble"].iloc[i]
-        
-        # Fallback for None values (if prophet failed)
-        if pd.isna(pred_val):
-            pred_val = res["forecast_ensemble"].iloc[i]
-
-        forecasts.append(ForecastPoint(
-            month=dt.strftime("%Y-%m"),
-            forecast=float(pred_val),
-            lower=float(res["lower"].iloc[i]),
-            upper=float(res["upper"].iloc[i])
-        ))
-    
-    return ForecastResponse(
-        model_type=model,
-        horizon_months=horizon,
-        forecasts=forecasts,
-        metrics={} # Optional: add metrics here if needed
-    )
 
 def compute_bill_analysis():
     """Single source of truth for UI, LLM, and PDF."""

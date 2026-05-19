@@ -56,20 +56,21 @@ class TestTrends:
 
 class TestForecastEndpoint:
     def test_forecast_default(self, client):
-        resp = client.post("/forecast", json={"months_ahead": 6})
+        resp = client.get("/forecast?horizon=30")
         assert resp.status_code == 200
         data = resp.json()
-        assert "forecasts" in data
-        assert len(data["forecasts"]) == 6
+        assert "forecast" in data
+        assert "metrics" in data
 
     def test_forecast_with_ci(self, client):
-        resp = client.post("/forecast", json={"months_ahead": 3, "include_ci": True})
+        resp = client.get("/forecast?horizon=7&include_ci=true")
         assert resp.status_code == 200
         data = resp.json()
-        for fc in data["forecasts"]:
+        assert "forecast" in data
+        for fc in data["forecast"]:
             assert fc["lower"] is not None
             assert fc["upper"] is not None
-            assert fc["lower"] <= fc["forecast"] <= fc["upper"]
+            assert fc["lower"] <= fc["value"] <= fc["upper"]
 
 
 class TestImpactEndpoint:

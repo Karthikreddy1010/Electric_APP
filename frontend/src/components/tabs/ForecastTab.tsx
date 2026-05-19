@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceLine
 } from 'recharts';
 import { Calendar, Info, ShieldCheck } from 'lucide-react';
 
 const ForecastTab = () => {
   const [model, setModel] = useState("ensemble");
-  const [range, setRange] = useState(12);
+  const [range, setRange] = useState(30);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['forecast', model, range],
@@ -21,6 +21,12 @@ const ForecastTab = () => {
   if (isLoading) return <div className="animate-spin h-8 w-8 border-b-2 border-primary mx-auto mt-20" />;
   if (error) return <div className="p-8 text-red-600">Failed to generate forecast.</div>;
 
+  const isNaNMetrics = !data || !data.metrics || Number.isNaN(data.metrics.MAE) || data.metrics.MAE === null;
+
+  // Find the forecast start date for the vertical separator
+  const forecastStartItem = data.forecast?.find((d: any) => d.predicted_demand !== null);
+  const forecastStartDate = forecastStartItem ? forecastStartItem.date : null;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -32,24 +38,32 @@ const ForecastTab = () => {
             <option value="prophet">Prophet</option>
           </select>
           <div className="flex bg-slate-100 p-1 rounded-xl">
-            {[12, 24].map((r) => (
-              <button key={r} onClick={() => setRange(r)} className={`px-4 py-1.5 rounded-lg text-xs font-black ${range === r ? 'bg-white shadow-sm' : 'text-slate-500'}`}>{r}M</button>
+            {[7, 30].map((r) => (
+              <button key={r} onClick={() => setRange(r)} className={`px-4 py-1.5 rounded-lg text-xs font-black ${range === r ? 'bg-white shadow-sm text-primary' : 'text-slate-500'}`}>{r}D</button>
             ))}
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 card p-8">
+        <div className="lg:col-span-3 card p-8 relative">
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.forecasts}>
+              <ComposedChart data={data.forecast}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                <XAxis dataKey="month" hide />
-                <YAxis hide />
+                <XAxis dataKey="date" tick={{fontSize: 12}} tickMargin={10} minTickGap={30} />
+                <YAxis domain={['auto', 'auto']} tick={{fontSize: 12}} />
                 <Tooltip />
-                <Line type="monotone" dataKey="forecast" stroke="#2563EB" strokeWidth={3} dot={{ r: 4, fill: '#2563EB' }} />
-              </LineChart>
+                <Area type="monotone" dataKey="upper_band" stroke="none" fill="#DBEAFE" fillOpacity={0.4} />
+                <Area type="monotone" dataKey="lower_band" stroke="none" fill="#ffffff" fillOpacity={1} />
+                
+                <Line type="monotone" dataKey="historical_demand" stroke="#94A3B8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="predicted_demand" stroke="#2563EB" strokeWidth={3} dot={{ r: 3, fill: '#2563EB' }} />
+                
+                {forecastStartDate && (
+                   <ReferenceLine x={forecastStartDate} stroke="#EF4444" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'Forecast Start', fill: '#EF4444', fontSize: 12 }} />
+                )}
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -57,17 +71,29 @@ const ForecastTab = () => {
         <div className="space-y-6">
           <div className="card p-6 bg-slate-900 text-white">
             <ShieldCheck className="text-emerald-400 mb-4" size={20} />
-            <h3 className="text-4xl font-black">{(data.metrics.confidence_score * 100).toFixed(1)}%</h3>
+            {isNaNMetrics ? (
+               <h3 className="text-xl font-black text-slate-400">Insufficient data</h3>
+            ) : (
+               <h3 className="text-4xl font-black">{(data.confidence_score).toFixed(1)}%</h3>
+            )}
             <p className="text-xs text-slate-400">Confidence Score</p>
           </div>
           <div className="card p-6">
             <Calendar className="text-blue-600 mb-4" size={18} />
-            <h4 className="text-sm font-bold">Projected Peak</h4>
-            <p className="text-2xl font-black">{data.forecasts[0].month}</p>
+            <h4 className="text-sm font-bold">Projected End</h4>
+            <p className="text-xl font-black">{data.forecast && data.forecast.length > 0 ? data.forecast[data.forecast.length - 1].date : 'N/A'}</p>
           </div>
           <div className="card p-6 border-dashed border-2">
             <Info size={16} className="text-slate-400 mb-2" />
-            <p className="text-xs text-slate-500 italic">"The {model} model indicates a {data.metrics.trend_direction} trend."</p>
+            {isNaNMetrics ? (
+               <p className="text-xs text-slate-500 italic">Metrics unavailable</p>
+            ) : (
+               <div className="text-sm text-slate-600 space-y-2 font-medium">
+                 <p className="flex justify-between"><span>MAE:</span> <span>{data.metrics.MAE.toFixed(2)}</span></p>
+                 <p className="flex justify-between"><span>RMSE:</span> <span>{data.metrics.RMSE.toFixed(2)}</span></p>
+                 <p className="flex justify-between"><span>MAPE:</span> <span>{data.metrics.MAPE.toFixed(2)}%</span></p>
+               </div>
+            )}
           </div>
         </div>
       </div>
