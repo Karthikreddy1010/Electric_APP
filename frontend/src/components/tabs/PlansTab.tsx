@@ -39,7 +39,7 @@ const PlansTab = () => {
     <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Retail Plan Comparison</h2>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight">Retail Plans</h2>
           <p className="text-slate-500 text-sm mt-2">Personalized simulation based on 12 months of historical consumption.</p>
         </div>
         <div className="hidden md:block bg-blue-50 text-blue-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">

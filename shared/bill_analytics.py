@@ -279,6 +279,7 @@ def simulate_bill(
 ) -> dict:
     """
     Recompute the total bill with user-supplied component overrides.
+    Incorporates weather-aware seasonal pricing multipliers based on CDD and HDD anomalies.
 
     Parameters
     ----------
@@ -301,11 +302,28 @@ def simulate_bill(
     for key, val in overrides.items():
         row[key] = val
 
-    # If usage changed, recompute usage-based components via rates
+    # Weather-aware seasonal rate adjustment multiplier
+    cdd = float(row.get("monthly_CDD", row.get("monthly_cdd", 0)))
+    hdd = float(row.get("monthly_HDD", row.get("monthly_hdd", 0)))
+    
+    weather_multiplier = 1.0
+    if cdd > 100:
+        weather_multiplier = 1.15  # 15% summer peak peak penalty
+    elif cdd > 30:
+        weather_multiplier = 1.05  # 5% mild summer rate scaling
+    elif hdd > 200:
+        weather_multiplier = 1.08  # 8% winter heating tier pricing penalty
+    elif hdd > 50:
+        weather_multiplier = 1.03  # 3% mild winter tier adjustment
+
+    # If usage changed, recompute usage-based components via rates with weather-aware scaling
     if usage_kwh is not None:
         for meta in COMPONENT_REGISTRY:
             if meta.category == "usage_based" and meta.rate_key and meta.rate_key in row:
-                row[meta.key] = float(row[meta.rate_key]) * usage_kwh
+                rate = float(row[meta.rate_key])
+                # Scale rate by weather seasonal penalty
+                scaled_rate = rate * weather_multiplier
+                row[meta.key] = scaled_rate * usage_kwh
         row["usage_kwh"] = usage_kwh
 
     # Recompute subtotal and tax

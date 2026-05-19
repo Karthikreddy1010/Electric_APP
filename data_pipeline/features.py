@@ -67,8 +67,50 @@ def merge_weather_monthly(billing_df: pd.DataFrame,
                           weather_df: pd.DataFrame) -> pd.DataFrame:
     """
     Aggregate daily weather to monthly and merge with billing.
-    Key features: monthly HDD, CDD, avg temp, temp variance.
+    Reads daily NOAA air_temp.csv if available to compute monthly_CDD and monthly_HDD.
+    Key features: monthly_CDD, monthly_HDD, avg temp, temp variance.
     """
+    import os
+    from pathlib import Path
+    
+    raw_dir = Path(__file__).resolve().parent.parent / "data" / "raw"
+    csv_path = raw_dir / "air_temp.csv"
+    
+    noaa_monthly = None
+    if csv_path.exists():
+        try:
+            logger.info("Reading NOAA daily temperature observations from air_temp.csv...")
+            noaa_df = pd.read_csv(csv_path)
+            noaa_df["DATE"] = pd.to_datetime(noaa_df["DATE"])
+            
+            # Fill missing TAVG using (TMAX + TMIN)/2
+            if "TAVG" not in noaa_df.columns:
+                noaa_df["TAVG"] = np.nan
+            tavg_calc = (noaa_df["TMAX"].astype(float) + noaa_df["TMIN"].astype(float)) / 2.0
+            noaa_df["TAVG"] = noaa_df["TAVG"].fillna(tavg_calc)
+            
+            # Clip outlier temperatures
+            noaa_df["TAVG"] = noaa_df["TAVG"].clip(-30, 120)
+            
+            # Compute CDD / HDD with 65°F base
+            noaa_df["cdd_calc"] = np.maximum(noaa_df["TAVG"] - 65.0, 0)
+            noaa_df["hdd_calc"] = np.maximum(65.0 - noaa_df["TAVG"], 0)
+            
+            # Group monthly
+            noaa_df["year_month"] = noaa_df["DATE"].dt.to_period("M")
+            noaa_monthly = noaa_df.groupby("year_month").agg(
+                monthly_CDD=("cdd_calc", "sum"),
+                monthly_HDD=("hdd_calc", "sum"),
+                avg_temp=("TAVG", "mean"),
+                temp_std=("TAVG", "std"),
+                max_temp=("TAVG", "max"),
+                min_temp=("TAVG", "min")
+            ).reset_index()
+            logger.info(f"Successfully aggregated NOAA observations: {len(noaa_monthly)} months.")
+        except Exception as e:
+            logger.error(f"Error parsing NOAA daily air_temp.csv: {e}. Falling back to standard weather.")
+            
+    # Load and clean standard weather fallback
     weather = weather_df.copy()
     weather["date"] = pd.to_datetime(weather["date"])
     weather["year_month"] = weather["date"].dt.to_period("M")
@@ -76,24 +118,46 @@ def merge_weather_monthly(billing_df: pd.DataFrame,
     monthly_weather = weather.groupby("year_month").agg(
         monthly_hdd=("hdd", "sum"),
         monthly_cdd=("cdd", "sum"),
-        avg_temp=("avg_temp_f", "mean"),
-        temp_std=("avg_temp_f", "std"),
-        max_temp=("avg_temp_f", "max"),
-        min_temp=("avg_temp_f", "min"),
-        precip_total=("precip_in", "sum"),
-        humidity_avg=("humidity_pct", "mean"),
+        avg_temp_std=("avg_temp_f", "std"),
+        max_temp_std=("avg_temp_f", "max"),
+        min_temp_std=("avg_temp_f", "min"),
     ).reset_index()
     
     billing = billing_df.copy()
     billing["date"] = pd.to_datetime(billing["date"])
     billing["year_month"] = billing["date"].dt.to_period("M")
     
-    merged = billing.merge(monthly_weather, on="year_month", how="left")
+    # Merge NOAA monthly data or standard weather
+    if noaa_monthly is not None:
+        merged = billing.merge(noaa_monthly, on="year_month", how="left")
+        # Fill any missing periods gracefully using the fallback standard weather
+        merged = merged.merge(monthly_weather, on="year_month", how="left")
+        merged["monthly_CDD"] = merged["monthly_CDD"].fillna(merged["monthly_cdd"])
+        merged["monthly_HDD"] = merged["monthly_HDD"].fillna(merged["monthly_hdd"])
+        merged["avg_temp"] = merged["avg_temp"].fillna(merged["avg_temp_std"])
+        merged["temp_std"] = merged["temp_std"].fillna(merged["avg_temp_std"])
+        merged["max_temp"] = merged["max_temp"].fillna(merged["max_temp_std"])
+        merged["min_temp"] = merged["min_temp"].fillna(merged["min_temp_std"])
+        merged = merged.drop(columns=["monthly_cdd", "monthly_hdd", "avg_temp_std", "max_temp_std", "min_temp_std"])
+    else:
+        merged = billing.merge(monthly_weather, on="year_month", how="left")
+        merged["monthly_CDD"] = merged["monthly_cdd"]
+        merged["monthly_HDD"] = merged["monthly_hdd"]
+        merged["avg_temp"] = merged["avg_temp_std"]
+        merged["temp_std"] = merged["avg_temp_std"]
+        merged["max_temp"] = merged["max_temp_std"]
+        merged["min_temp"] = merged["min_temp_std"]
+        merged = merged.drop(columns=["monthly_cdd", "monthly_hdd", "avg_temp_std", "max_temp_std", "min_temp_std"])
+        
     merged = merged.drop(columns=["year_month"])
     
+    # Add backward compatible lowercase columns too so other endpoints continue to work without changes
+    merged["monthly_cdd"] = merged["monthly_CDD"]
+    merged["monthly_hdd"] = merged["monthly_HDD"]
+    
     # Derived: degree-day adjusted usage
-    merged["hdd_per_kwh"] = merged["monthly_hdd"] / merged["usage_kwh"]
-    merged["cdd_per_kwh"] = merged["monthly_cdd"] / merged["usage_kwh"]
+    merged["hdd_per_kwh"] = merged["monthly_HDD"] / merged["usage_kwh"]
+    merged["cdd_per_kwh"] = merged["monthly_CDD"] / merged["usage_kwh"]
     
     return merged
 

@@ -24,7 +24,7 @@ class ElectricityDemandForecaster:
         else:
             self.data_path = Path(data_path)
             
-        self.weights = {"prophet": 0.5, "sarima": 0.5}
+        self.weights = {"prophet": 0.7, "sarima": 0.3}
         self.metrics = {
             "ensemble": {"MAE": np.nan, "RMSE": np.nan, "MAPE": np.nan},
             "prophet": {"MAE": np.nan, "RMSE": np.nan, "MAPE": np.nan},
@@ -37,20 +37,28 @@ class ElectricityDemandForecaster:
         self.last_trained = None
         
     def prepare_data(self):
-        """Parse, clean and feature engineer hourly PJM demand data."""
+        """Parse, clean and feature engineer PJM hourly/daily demand data."""
         logger.info(f"Loading data from {self.data_path}")
         df = pd.read_csv(self.data_path)
         
-        # Step 1: Parse the hourly timestamp (format: 2019-01-01T00)
+        # Parse datetime
         df["datetime"] = pd.to_datetime(df["period"], format="%Y-%m-%dT%H")
-        df["date"] = df["datetime"].dt.date
         
-        # Step 2: Aggregate all sub-balancing areas per hour → PJM total per hour
+        # Step 1: Clean raw hourly anomalies (unphysical zeros/negatives and extreme spikes)
+        df.loc[df["value"] <= 0, "value"] = np.nan
+        df.loc[df["value"] > 100000, "value"] = np.nan
+        
+        # Step 2: Smooth dropouts by linear interpolation per sub-balancing area
+        df["value"] = df.groupby("subba")["value"].transform(
+            lambda x: x.interpolate(method="linear", limit_direction="both")
+        )
+        
+        # Step 3: Aggregate all sub-balancing areas per hour → PJM total per hour
         hourly_total = df.groupby("datetime")["value"].sum().reset_index()
         hourly_total.rename(columns={"value": "demand_mw"}, inplace=True)
         hourly_total["date"] = hourly_total["datetime"].dt.date
         
-        # Step 3: Aggregate hourly → daily (total demand + peak/trough stats)
+        # Step 4: Aggregate hourly → daily
         daily = hourly_total.groupby("date").agg(
             demand_mw=("demand_mw", "sum"),
             peak_mw=("demand_mw", "max"),
@@ -61,24 +69,24 @@ class ElectricityDemandForecaster:
         daily["date"] = pd.to_datetime(daily["date"])
         daily = daily.sort_values("date").set_index("date")
         
-        # Step 4: Only keep full days (24 hours recorded)
+        # Step 5: Strictly drop partial days to avoid artificial dropouts at the end of the series
         partial_days = daily["hours_recorded"] < 24
         if partial_days.any():
             logger.info(f"Dropping {partial_days.sum()} partial days (< 24 hours)")
             daily = daily[~partial_days]
         
-        # Step 5: Ensure daily continuity
+        # Step 6: Ensure daily continuity
         daily = daily.asfreq("D")
         
-        # Step 6: Handle missing values
+        # Step 7: Handle any remaining missing values via time interpolation
         for col in ["demand_mw", "peak_mw", "trough_mw"]:
             daily[col] = daily[col].interpolate(method="time")
         
-        # Step 7: Feature engineering
+        # Step 8: Feature engineering
         daily["dayofweek"] = daily.index.dayofweek
         daily["month"] = daily.index.month
         daily["is_weekend"] = (daily["dayofweek"] >= 5).astype(int)
-        daily["load_factor"] = daily["trough_mw"] / daily["peak_mw"]  # efficiency metric
+        daily["load_factor"] = daily["trough_mw"] / daily["peak_mw"]
         
         self.df_clean = daily
         logger.info(f"Prepared {len(daily)} days of PJM demand data "
@@ -104,8 +112,12 @@ class ElectricityDemandForecaster:
         self.prophet_model = Prophet(
             yearly_seasonality=True,
             weekly_seasonality=True,
-            daily_seasonality=False
+            daily_seasonality=False,
+            seasonality_mode="multiplicative",
+            changepoint_prior_scale=0.05,
+            seasonality_prior_scale=10.0
         )
+        self.prophet_model.add_country_holidays(country_name='US')
         self.prophet_model.fit(prophet_df)
         
         prophet_future = self.prophet_model.make_future_dataframe(periods=30, freq='D')
@@ -145,9 +157,9 @@ class ElectricityDemandForecaster:
         self.metrics["sarima"]["MAPE"] = float(safe_mape(y_test, sarima_test_pred))
         self.confidence_scores["sarima"] = float(max(0.0, 100.0 - self.metrics["sarima"]["MAPE"]))
         
-        # Weights inversely proportional to error
-        w_prophet = 1 / rmse_prophet
-        w_sarima = 1 / rmse_sarima
+        # Blended weighting based on validation MAPE (directly minimizing primary UI metric)
+        w_prophet = 1.0 / (self.metrics["prophet"]["MAPE"] ** 2)
+        w_sarima = 1.0 / (self.metrics["sarima"]["MAPE"] ** 2)
         w_total = w_prophet + w_sarima
         
         self.weights["prophet"] = float(w_prophet / w_total)
@@ -172,7 +184,15 @@ class ElectricityDemandForecaster:
         
         # Refit Prophet
         prophet_df = full_df.reset_index().rename(columns={"date": "ds", "demand_mw": "y"})
-        final_prophet = Prophet(yearly_seasonality=True, weekly_seasonality=True, daily_seasonality=False)
+        final_prophet = Prophet(
+            yearly_seasonality=True,
+            weekly_seasonality=True,
+            daily_seasonality=False,
+            seasonality_mode="multiplicative",
+            changepoint_prior_scale=0.05,
+            seasonality_prior_scale=10.0
+        )
+        final_prophet.add_country_holidays(country_name='US')
         final_prophet.fit(prophet_df)
         
         future = final_prophet.make_future_dataframe(periods=days, freq='D')

@@ -147,6 +147,7 @@ class TrendResponse(BaseModel):
     usage: list[float]
     rates: list[float]
     yoy_changes: list[Optional[float]]
+    mom_changes: Optional[list[Optional[float]]] = None
 
 
 # ===== /overview =====
@@ -156,6 +157,8 @@ class OverviewKPI(BaseModel):
     effective_rate: float
     forecast_next_month: float
     bill_change_pct: float
+    usage_change_pct: Optional[float] = None
+    rate_change_pct: Optional[float] = None
 
 class BillComponent(BaseModel):
     label: str
@@ -167,6 +170,12 @@ class OverviewResponse(BaseModel):
     breakdown: list[BillComponent]
     historical_breakdown: list[dict[str, Any]]
     trends: TrendResponse
+    vs_national_pct: Optional[float] = None
+    vs_national_label: Optional[str] = None
+    state_rank: Optional[int] = None
+    state_percentile: Optional[float] = None
+    insights: Optional[list[str]] = None
+    alerts: Optional[list[str]] = None
 
 
 # ===== Health =====

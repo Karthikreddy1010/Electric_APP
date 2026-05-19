@@ -19,7 +19,7 @@ const COMPONENT_METADATA: Record<string, { label: string; elasticity: number }> 
 };
 
 const ImpactTab = () => {
-  const [topN, setTopN] = useState(10);
+  const topN = 10;
   const [viewType, setViewType] = useState<'abs' | 'signed'>('abs');
   const [selectedComp, setSelectedComp] = useState("bgs");
   const [change, setChange] = useState(10);
@@ -114,29 +114,21 @@ const ImpactTab = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      {/* Dynamic Header with Top-N Selector */}
+      {/* Dynamic Header with Scope Indicator */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <LayoutGrid className="text-blue-600" size={28} />
-            SHAP Driver Explorer
+            Cost Driver Analysis
           </h2>
           <p className="text-slate-500 text-sm mt-1">Interactive ranking of bill components by marginal impact.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-2xl shadow-sm">
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl shadow-sm">
             <Filter size={14} className="text-slate-400" />
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scope:</span>
-            <select 
-              value={topN} 
-              onChange={(e) => setTopN(Number(e.target.value))}
-              className="bg-transparent border-none text-sm font-bold text-slate-900 outline-none cursor-pointer"
-            >
-              <option value="5">Top 5 Features</option>
-              <option value="10">Top 10 Features</option>
-              <option value="15">Top 15 Features</option>
-            </select>
+            <span className="text-sm font-bold text-slate-900">Major Cost Components</span>
           </div>
 
           <button 
@@ -169,7 +161,7 @@ const ImpactTab = () => {
           <div className="relative z-10">
             <div className="flex justify-between items-center mb-8">
               <div>
-                <h3 className="text-lg font-black tracking-tight">Feature Impact (SHAP Values)</h3>
+                <h3 className="text-lg font-black tracking-tight">Component Impact ($ Contribution)</h3>
                 <p className="text-xs text-slate-400">Attribution of cost variance per component ($)</p>
               </div>
               <div className="flex bg-slate-800 p-1 rounded-xl">
@@ -209,6 +201,10 @@ const ImpactTab = () => {
                     <Tooltip 
                       cursor={{fill: '#1E293B'}}
                       contentStyle={{backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '12px', fontSize: '12px'}}
+                      formatter={(value: any, _name: any, props: any) => [
+                        `${props.payload.name} contributes $${Math.abs(value).toFixed(2)} to your bill`,
+                        "Contribution"
+                      ]}
                     />
                     <Bar 
                       dataKey="value" 
@@ -236,7 +232,7 @@ const ImpactTab = () => {
         {/* Right: Category Breakdown - Donut Panel */}
         <div className="card p-8 shadow-xl bg-white flex flex-col items-center">
            <div className="w-full mb-8">
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">Top-{topN} Contribution</h3>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">Bill Composition</h3>
               <p className="text-xs text-slate-400">Relative weight of ranked importance features</p>
            </div>
 
@@ -262,12 +258,10 @@ const ImpactTab = () => {
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aggregate</span>
-                <span className="text-2xl font-black text-slate-900 mt-1">
-                  {chartData.reduce((sum: number, d: any) => sum + d.percent, 0).toFixed(0)}%
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6 text-center">
+                <span className="text-xs font-bold text-slate-500 max-w-[150px]">
+                  {chartData.reduce((sum: number, d: any) => sum + d.percent, 0).toFixed(0)}% of total bill explained by major components
                 </span>
-                <span className="text-[10px] font-bold text-slate-400">of Variance</span>
               </div>
            </div>
 
@@ -322,9 +316,14 @@ const ImpactTab = () => {
 
            <div className="text-center p-8 bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Projected Bill Impact</p>
-              <div className="flex items-center justify-center gap-4">
-                 <span className="text-xl font-bold text-slate-300 line-through">${simulation.baseBill.toFixed(2)}</span>
-                 <h2 className="text-6xl font-black text-slate-900 tracking-tighter">${simulation.newBill.toFixed(2)}</h2>
+              <div className="flex flex-col items-center justify-center gap-2">
+                 <div className="flex items-center gap-4">
+                   <span className="text-xl font-bold text-slate-300 line-through">${simulation.baseBill.toFixed(2)}</span>
+                   <h2 className="text-5xl font-extrabold text-slate-900 tracking-tight">Projected Bill: ${simulation.newBill.toFixed(2)}</h2>
+                 </div>
+                 <span className={`text-sm font-bold ${simulation.impactAbs > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                   ({simulation.impactAbs > 0 ? '+' : ''}${simulation.impactAbs.toFixed(2)} | {simulation.impactAbs > 0 ? '+' : ''}{((simulation.impactAbs / simulation.baseBill) * 100).toFixed(1)}%)
+                 </span>
               </div>
               <div className={`inline-flex items-center gap-1 mt-6 px-4 py-1.5 rounded-full text-xs font-black uppercase ${simulation.impactAbs > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                  {simulation.impactAbs > 0 ? 'Increase' : 'Decrease'} of ${Math.abs(simulation.impactAbs).toFixed(2)}
@@ -376,9 +375,9 @@ const ImpactTab = () => {
                   <thead>
                     <tr className="bg-slate-50/50">
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Component</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Primary Driver</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Elasticity</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Volatility Risk</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Cost Type</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Sensitivity</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Price Variability</th>
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Description</th>
                     </tr>
                   </thead>

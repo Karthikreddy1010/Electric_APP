@@ -44,6 +44,7 @@ def run_impact_analysis(model, billing: pd.DataFrame, top_n: int) -> dict:
     ]
 
     return {
+        "base_value": result.get("total_bill"),
         "total_bill": result.get("total_bill"),
         "top_drivers": top_drivers,
         "contributions": contribs,
