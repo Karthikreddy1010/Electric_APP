@@ -26,6 +26,26 @@ def post(path, body):
     return json.loads(r.read())
 
 
+def post_text(path, body):
+    req = urllib.request.Request(
+        f"{BASE}{path}",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    r = urllib.request.urlopen(req)
+    return r.read().decode('utf-8')
+
+
+def post_binary(path, body):
+    req = urllib.request.Request(
+        f"{BASE}{path}",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    r = urllib.request.urlopen(req)
+    return r.read()  # returns raw binary
+
+
 def check(name, fn):
     global passed, failed
     t0 = time.time()
@@ -61,10 +81,12 @@ if full_res:
     print(f"        Base Bill: ${full_res.get('base_bill')}, Confidence: {full_res.get('confidence')}")
 
 # 5. LLM or fallback explanation generator (using POST /report/generate)
-check("POST /report/generate", lambda: post("/report/generate", {}))
+check("POST /report/generate", lambda: post_text("/report/generate", {}))
 
 # 6. PDF generation endpoint
-check("POST /report/pdf", lambda: post("/report/pdf", {}))
+pdf_bytes = check("POST /report/pdf", lambda: post_binary("/report/pdf", {}))
+if pdf_bytes:
+    print(f"        PDF Generated: {len(pdf_bytes)} bytes")
 
 # 7. Simulator scenario logic
 sim_body = {"modifications": {"bgs": 10}, "kwh": 750}

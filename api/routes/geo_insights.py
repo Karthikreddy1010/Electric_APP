@@ -330,13 +330,28 @@ async def generate_geo_insights(req: GeoInsightsRequest):
     """
 
     try:
+        # Step 1: Rapid socket check to see if Ollama is listening
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.1)
+        res = sock.connect_ex(('127.0.0.1', 11434))
+        sock.close()
+        if res != 0:
+            raise RuntimeError("Ollama daemon offline")
+
+        # Step 2: Enforce 2.0s strict timeout on JSON model chat loading
+        import asyncio
         client = ollama.AsyncClient()
-        response = await client.chat(
-            model="qwen3:4b",
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0.1, "num_predict": 1500},
-            format="json"
-        )
+        
+        async def fetch_chat():
+            return await client.chat(
+                model="qwen3:4b",
+                messages=[{"role": "user", "content": prompt}],
+                options={"temperature": 0.1, "num_predict": 1500},
+                format="json"
+            )
+            
+        response = await asyncio.wait_for(fetch_chat(), timeout=2.0)
         content = response['message']['content'].strip()
         parsed = json.loads(content)
         logger.info("Geo insights generated via LLM")

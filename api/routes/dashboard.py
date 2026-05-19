@@ -400,34 +400,46 @@ async def generate_report():
     from fastapi.responses import StreamingResponse
     import ollama
     import time
+    import asyncio
+    import socket
     
     prompt, fallback_text, _, _ = _get_report_data_and_prompt()
     
     async def generate_stream():
         try:
-            client = ollama.AsyncClient()
+            # Step 1: Rapid socket check to see if Ollama is listening
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(0.1)
+            res = sock.connect_ex(('127.0.0.1', 11434))
+            sock.close()
+            if res != 0:
+                raise RuntimeError("Ollama daemon offline")
+
+            client = ollama.AsyncClient(timeout=1.5)
             response = await client.chat(
                 model="qwen3:4b",
                 messages=[{"role": "user", "content": prompt}],
                 options={
                     "temperature": 0.2,
-                    "num_predict": 250  # Strictly limit generated tokens
+                    "num_predict": 250
                 },
                 stream=True
             )
             
             start_time = time.time()
-            time_limit = 10.0  # 10 seconds strict time window
-            
-            async for chunk in response:
-                if time.time() - start_time > time_limit:
-                    yield "\n\n[Generation stopped: Time limit exceeded]"
+            # Step 2: Retrieve streamed tokens with a strict timeout to prevent hangs
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(response.__anext__(), timeout=1.0)
+                    if 'message' in chunk and 'content' in chunk['message']:
+                        yield chunk['message']['content']
+                    if time.time() - start_time > 10.0:
+                        yield "\n\n[Generation stopped: Time limit exceeded]"
+                        break
+                except StopAsyncIteration:
                     break
-                    
-                if 'message' in chunk and 'content' in chunk['message']:
-                    yield chunk['message']['content']
         except Exception as e:
-            # Transparently return fallback if AI is unavailable
+            # Transparently return fallback if AI is offline, slow, or times out
             yield f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
             
     return StreamingResponse(generate_stream(), media_type="text/plain")
@@ -445,8 +457,17 @@ async def generate_pdf():
     prompt, fallback_text, month, analysis = _get_report_data_and_prompt()
     
     try:
+        # Step 1: Rapid socket check to see if Ollama is listening
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.1)
+        res = sock.connect_ex(('127.0.0.1', 11434))
+        sock.close()
+        if res != 0:
+            raise RuntimeError("Ollama daemon offline")
+
         # Non-streaming for PDF
-        client = ollama.AsyncClient()
+        client = ollama.AsyncClient(timeout=1.5)
         
         async def fetch_chat():
             return await client.chat(
@@ -458,8 +479,8 @@ async def generate_pdf():
                 }
             )
         
-        # Enforce 10s strict timeout
-        response = await asyncio.wait_for(fetch_chat(), timeout=10.0)
+        # Enforce 1.5s strict timeout
+        response = await asyncio.wait_for(fetch_chat(), timeout=1.5)
         text = response['message']['content']
     except Exception as e:
         text = f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
