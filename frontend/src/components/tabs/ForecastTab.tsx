@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
-  LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceLine
+  Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceLine
 } from 'recharts';
 import { Calendar, Info, ShieldCheck } from 'lucide-react';
 
@@ -21,7 +21,7 @@ const ForecastTab = () => {
   if (isLoading) return <div className="animate-spin h-8 w-8 border-b-2 border-primary mx-auto mt-20" />;
   if (error) return <div className="p-8 text-red-600">Failed to generate forecast.</div>;
 
-  const isNaNMetrics = !data || !data.metrics || Number.isNaN(data.metrics.MAE) || data.metrics.MAE === null;
+  const isNaNMetrics = !data || !data.metrics || data.metrics.MAE === undefined || data.metrics.MAE === null || Number.isNaN(Number(data.metrics.MAE));
 
   // Find the forecast start date for the vertical separator
   const forecastStartItem = data.forecast?.find((d: any) => d.predicted_demand !== null);

@@ -288,31 +288,8 @@ async def simulate_impact(req: SimulateRequest):
         explanation=f"If {', '.join(comp_labels)} change, your bill increases/decreases by approximately {sim['total_impact']} based on historical elasticity."
     )
 
-@router.get("/benchmark", response_model=BenchmarkResponse)
-async def get_benchmark():
-    # Existing logic from benchmark router
-    df = app_state.get("benchmark_df")
-    if df is None: raise HTTPException(500, "No benchmark data")
-    
-    latest_year = df['year'].max()
-    states_data = []
-    national_avg = df[df['year'] == latest_year]['avg_rate'].mean()
-    
-    for _, row in df[df['year'] == latest_year].iterrows():
-        states_data.append({
-            "state": row['state'],
-            "avg_rate": row['avg_rate'],
-            "avg_bill": row['avg_bill']
-        })
-        
-    nj_data = df[(df['year'] == latest_year) & (df['state'] == 'NJ')].iloc[0]
-    
-    return BenchmarkResponse(
-        year=int(latest_year),
-        focus_state={"state": "NJ", "avg_rate": nj_data['avg_rate'], "avg_bill": nj_data['avg_bill']},
-        national_avg=national_avg,
-        states=states_data
-    )
+
+
 
 @router.get("/geo", response_model=GeoResponse)
 async def get_geo(month: Optional[str] = None, view_mode: str = "bill"):

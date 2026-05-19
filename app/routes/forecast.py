@@ -16,6 +16,8 @@ def forecast_costs():
             days_ahead = 30
     except (TypeError, ValueError):
         days_ahead = 30
+        
+    model_type = request.args.get("model", "ensemble")
 
     try:
         from models.forecast_model import ElectricityDemandForecaster
@@ -27,14 +29,14 @@ def forecast_costs():
             svc.demand_forecaster.train_and_evaluate()
             
         forecaster = svc.demand_forecaster
-        forecast_results = forecaster.get_forecast(days=days_ahead)
+        forecast_results = forecaster.get_forecast(days=days_ahead, model_type=model_type)
 
         output = {
             "forecast": forecast_results,
-            "metrics": forecaster.metrics,
-            "model_weights": forecaster.weights,
-            "confidence_score": forecaster.confidence_score,
-            "model_used": "ensemble (prophet + sarima)"
+            "metrics": forecaster.metrics.get(model_type, forecaster.metrics["ensemble"]),
+            "model_weights": forecaster.weights if model_type == "ensemble" else None,
+            "confidence_score": forecaster.confidence_scores.get(model_type, forecaster.confidence_scores["ensemble"]),
+            "model_used": model_type
         }
         
         return jsonify(output)

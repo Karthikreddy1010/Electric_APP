@@ -25,14 +25,14 @@ async def forecast_costs(
             ensemble.train_and_evaluate()
             app_state["forecast_model"] = ensemble
             
-        forecast_results = ensemble.get_forecast(days=days_ahead)
+        forecast_results = ensemble.get_forecast(days=days_ahead, model_type=model)
 
         output = {
             "forecast": forecast_results,
-            "metrics": ensemble.metrics,
-            "model_weights": ensemble.weights,
-            "confidence_score": ensemble.confidence_score,
-            "model_used": "ensemble (prophet + sarima)"
+            "metrics": ensemble.metrics.get(model, ensemble.metrics["ensemble"]),
+            "model_weights": ensemble.weights if model == "ensemble" else None,
+            "confidence_score": ensemble.confidence_scores.get(model, ensemble.confidence_scores["ensemble"]),
+            "model_used": model
         }
         
         return output

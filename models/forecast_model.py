@@ -16,7 +16,7 @@ def safe_mape(y_true, y_pred):
     return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
 
 class ElectricityDemandForecaster:
-    def __init__(self, data_path="data/raw/eia_pjm_daily_demand.csv"):
+    def __init__(self, data_path="data/raw/eia_pjm_hourly_demand.csv"):
         # Resolve the full path based on project root if relative
         if not Path(data_path).is_absolute():
             project_root = Path(__file__).resolve().parent.parent
@@ -25,35 +25,65 @@ class ElectricityDemandForecaster:
             self.data_path = Path(data_path)
             
         self.weights = {"prophet": 0.5, "sarima": 0.5}
-        self.metrics = {"MAE": np.nan, "RMSE": np.nan, "MAPE": np.nan}
-        self.confidence_score = np.nan
+        self.metrics = {
+            "ensemble": {"MAE": np.nan, "RMSE": np.nan, "MAPE": np.nan},
+            "prophet": {"MAE": np.nan, "RMSE": np.nan, "MAPE": np.nan},
+            "sarima": {"MAE": np.nan, "RMSE": np.nan, "MAPE": np.nan}
+        }
+        self.confidence_scores = {
+            "ensemble": np.nan, "prophet": np.nan, "sarima": np.nan
+        }
         self.df_clean = None
         self.last_trained = None
         
     def prepare_data(self):
-        """Parse, clean and feature engineer."""
+        """Parse, clean and feature engineer hourly PJM demand data."""
         logger.info(f"Loading data from {self.data_path}")
         df = pd.read_csv(self.data_path)
         
-        df = df.groupby('period')['value'].sum().reset_index()
-        df.rename(columns={'period': 'date', 'value': 'demand_mw'}, inplace=True)
+        # Step 1: Parse the hourly timestamp (format: 2019-01-01T00)
+        df["datetime"] = pd.to_datetime(df["period"], format="%Y-%m-%dT%H")
+        df["date"] = df["datetime"].dt.date
         
-        df["date"] = pd.to_datetime(df["date"])
-        df = df.sort_values("date").set_index("date")
+        # Step 2: Aggregate all sub-balancing areas per hour → PJM total per hour
+        hourly_total = df.groupby("datetime")["value"].sum().reset_index()
+        hourly_total.rename(columns={"value": "demand_mw"}, inplace=True)
+        hourly_total["date"] = hourly_total["datetime"].dt.date
         
-        # Ensure daily continuity
-        df = df.asfreq("D")
+        # Step 3: Aggregate hourly → daily (total demand + peak/trough stats)
+        daily = hourly_total.groupby("date").agg(
+            demand_mw=("demand_mw", "sum"),
+            peak_mw=("demand_mw", "max"),
+            trough_mw=("demand_mw", "min"),
+            hours_recorded=("demand_mw", "count"),
+        ).reset_index()
         
-        # Handle missing values
-        df["demand_mw"] = df["demand_mw"].interpolate(method="time")
+        daily["date"] = pd.to_datetime(daily["date"])
+        daily = daily.sort_values("date").set_index("date")
         
-        # Features
-        df["dayofweek"] = df.index.dayofweek
-        df["month"] = df.index.month
-        df["is_weekend"] = (df["dayofweek"] >= 5).astype(int)
+        # Step 4: Only keep full days (24 hours recorded)
+        partial_days = daily["hours_recorded"] < 24
+        if partial_days.any():
+            logger.info(f"Dropping {partial_days.sum()} partial days (< 24 hours)")
+            daily = daily[~partial_days]
         
-        self.df_clean = df
-        return df
+        # Step 5: Ensure daily continuity
+        daily = daily.asfreq("D")
+        
+        # Step 6: Handle missing values
+        for col in ["demand_mw", "peak_mw", "trough_mw"]:
+            daily[col] = daily[col].interpolate(method="time")
+        
+        # Step 7: Feature engineering
+        daily["dayofweek"] = daily.index.dayofweek
+        daily["month"] = daily.index.month
+        daily["is_weekend"] = (daily["dayofweek"] >= 5).astype(int)
+        daily["load_factor"] = daily["trough_mw"] / daily["peak_mw"]  # efficiency metric
+        
+        self.df_clean = daily
+        logger.info(f"Prepared {len(daily)} days of PJM demand data "
+                     f"({daily.index.min().date()} → {daily.index.max().date()})")
+        return daily
 
     def _check_stationarity(self, series):
         result = adfuller(series.dropna())
@@ -100,8 +130,20 @@ class ElectricityDemandForecaster:
         
         # ENSEMBLE EVALUATION
         y_test = test["demand_mw"].values
-        rmse_prophet = np.sqrt(np.mean((y_test - prophet_test_pred)**2))
-        rmse_sarima = np.sqrt(np.mean((y_test - sarima_test_pred)**2))
+        rmse_prophet = float(np.sqrt(np.mean((y_test - prophet_test_pred)**2)))
+        rmse_sarima = float(np.sqrt(np.mean((y_test - sarima_test_pred)**2)))
+        
+        # PROPHET METRICS
+        self.metrics["prophet"]["MAE"] = float(np.mean(np.abs(y_test - prophet_test_pred)))
+        self.metrics["prophet"]["RMSE"] = rmse_prophet
+        self.metrics["prophet"]["MAPE"] = float(safe_mape(y_test, prophet_test_pred))
+        self.confidence_scores["prophet"] = float(max(0.0, 100.0 - self.metrics["prophet"]["MAPE"]))
+
+        # SARIMA METRICS
+        self.metrics["sarima"]["MAE"] = float(np.mean(np.abs(y_test - sarima_test_pred)))
+        self.metrics["sarima"]["RMSE"] = rmse_sarima
+        self.metrics["sarima"]["MAPE"] = float(safe_mape(y_test, sarima_test_pred))
+        self.confidence_scores["sarima"] = float(max(0.0, 100.0 - self.metrics["sarima"]["MAPE"]))
         
         # Weights inversely proportional to error
         w_prophet = 1 / rmse_prophet
@@ -113,16 +155,16 @@ class ElectricityDemandForecaster:
         
         ensemble_pred = (self.weights["prophet"] * prophet_test_pred) + (self.weights["sarima"] * sarima_test_pred)
         
-        self.metrics["MAE"] = float(np.mean(np.abs(y_test - ensemble_pred)))
-        self.metrics["RMSE"] = float(np.sqrt(np.mean((y_test - ensemble_pred)**2)))
-        self.metrics["MAPE"] = float(safe_mape(y_test, ensemble_pred))
+        # ENSEMBLE METRICS
+        self.metrics["ensemble"]["MAE"] = float(np.mean(np.abs(y_test - ensemble_pred)))
+        self.metrics["ensemble"]["RMSE"] = float(np.sqrt(np.mean((y_test - ensemble_pred)**2)))
+        self.metrics["ensemble"]["MAPE"] = float(safe_mape(y_test, ensemble_pred))
+        self.confidence_scores["ensemble"] = float(max(0.0, 100.0 - self.metrics["ensemble"]["MAPE"]))
         
-        # Confidence score heuristically
-        self.confidence_score = float(max(0.0, 100.0 - self.metrics["MAPE"]))
         self.last_trained = pd.Timestamp.now()
-        logger.info(f"Ensemble Evaluation Metrics: {self.metrics}")
+        logger.info(f"Ensemble Evaluation Metrics: {self.metrics['ensemble']}")
         
-    def get_forecast(self, days=30):
+    def get_forecast(self, days=30, model_type="ensemble"):
         if self.df_clean is None or self.last_trained is None:
             self.train_and_evaluate()
             
@@ -155,6 +197,13 @@ class ElectricityDemandForecaster:
         
         ensemble_pred = (self.weights["prophet"] * prophet_future_pred) + (self.weights["sarima"] * sarima_future_pred)
         
+        if model_type == "prophet":
+            target_pred = prophet_future_pred
+        elif model_type == "sarima":
+            target_pred = sarima_future_pred
+        else:
+            target_pred = ensemble_pred
+            
         last_date = full_df.index[-1]
         future_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=days, freq='D')
         
@@ -175,7 +224,7 @@ class ElectricityDemandForecaster:
             results.append({
                 "date": future_dates[i].strftime("%Y-%m-%d"),
                 "historical_demand": None,
-                "predicted_demand": round(float(ensemble_pred[i]), 2),
+                "predicted_demand": round(float(target_pred[i]), 2),
                 "lower_band": round(float(prophet_lower[i]), 2),
                 "upper_band": round(float(prophet_upper[i]), 2)
             })
