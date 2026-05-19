@@ -27,10 +27,16 @@ async def forecast_costs(
             
         forecast_results = ensemble.get_forecast(days=days_ahead, model_type=model)
 
+        # FIX: 3 - Return metrics dict with MAE, RMSE, and MAPE rounded to 2 decimal places
+        metrics_dict = ensemble.metrics.get(model, ensemble.metrics["ensemble"]) # FIX: 3
         output = {
             "forecast": forecast_results,
-            "metrics": ensemble.metrics.get(model, ensemble.metrics["ensemble"]),
-            "model_weights": ensemble.weights if model == "ensemble" else None,
+            "metrics": {
+                "MAE": round(metrics_dict["MAE"], 2), # FIX: 3
+                "RMSE": round(metrics_dict["RMSE"], 2), # FIX: 3
+                "MAPE": round(metrics_dict["MAPE"], 2),  # FIX: 3
+            },
+            "model_weights": ensemble.weights if model == "ensemble" else None, # FIX: 3
             "confidence_score": ensemble.confidence_scores.get(model, ensemble.confidence_scores["ensemble"]),
             "model_used": model
         }

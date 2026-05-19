@@ -52,8 +52,27 @@ const ForecastTab = () => {
               <ComposedChart data={data.forecast}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
                 <XAxis dataKey="date" tick={{fontSize: 12}} tickMargin={10} minTickGap={30} />
-                <YAxis domain={['auto', 'auto']} tick={{fontSize: 12}} />
-                <Tooltip />
+                {/* FIX: 4 - YAxis tickFormatter and layout label */}
+                <YAxis
+                  tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`} // FIX: 4
+                  label={{ 
+                    value: "Demand (MW)", 
+                    angle: -90, 
+                    position: "insideLeft",
+                    offset: -10,
+                    style: { textAnchor: 'middle', fill: '#475569', fontSize: 12, fontWeight: 'bold' } // FIX: 4
+                  }}
+                  domain={['auto', 'auto']} // FIX: 4
+                  tick={{fontSize: 12}} // FIX: 4
+                />
+                {/* FIX: 4 - Custom tooltip formatter */}
+                <Tooltip
+                  formatter={(value, name) => [
+                    value ? `${Number(value).toLocaleString()} MW` : "—", // FIX: 4
+                    name === "historical_demand" ? "Historical Demand" : name === "predicted_demand" ? "Predicted Demand" : name // FIX: 4
+                  ]}
+                  labelFormatter={(label) => `Date: ${label}`} // FIX: 4
+                />
                 <Area type="monotone" dataKey="upper_band" stroke="none" fill="#DBEAFE" fillOpacity={0.4} />
                 <Area type="monotone" dataKey="lower_band" stroke="none" fill="#ffffff" fillOpacity={1} />
                 
@@ -67,7 +86,7 @@ const ForecastTab = () => {
             </ResponsiveContainer>
           </div>
         </div>
-
+ 
         <div className="space-y-6">
           <div className="card p-6 bg-slate-900 text-white">
             <ShieldCheck className="text-emerald-400 mb-4" size={20} />
@@ -89,9 +108,19 @@ const ForecastTab = () => {
                <p className="text-xs text-slate-500 italic">Metrics unavailable</p>
             ) : (
                <div className="text-sm text-slate-600 space-y-2 font-medium">
-                 <p className="flex justify-between"><span>MAE:</span> <span>{data.metrics.MAE.toFixed(2)}</span></p>
-                 <p className="flex justify-between"><span>RMSE:</span> <span>{data.metrics.RMSE.toFixed(2)}</span></p>
-                 <p className="flex justify-between"><span>MAPE:</span> <span>{data.metrics.MAPE.toFixed(2)}%</span></p>
+                 <p className="flex justify-between"><span>MAE:</span> <span>{data.metrics.MAE.toLocaleString()}</span></p>
+                 <p className="flex justify-between"><span>RMSE:</span> <span>{data.metrics.RMSE.toLocaleString()}</span></p>
+                 {/* FIX: 3 - Color-code MAPE for quick interpretation */}
+                 <p className="flex justify-between">
+                   <span>MAPE:</span>
+                   <span className={
+                     data.metrics.MAPE < 5 ? "text-emerald-600 font-bold" // FIX: 3
+                     : data.metrics.MAPE < 10 ? "text-amber-500 font-bold" // FIX: 3
+                     : "text-rose-600 font-bold" // FIX: 3
+                   }>
+                     {data.metrics.MAPE?.toFixed(1)}% {/* FIX: 3 */}
+                   </span>
+                 </p>
                </div>
             )}
           </div>

@@ -4,11 +4,11 @@ This module enforces the core analytical objective:
 'If an individual electricity bill component increases or decreases, 
 how much does the total bill change?'
 
-Incorporates weather-normalized analysis using only NOAA weather data (TAVG -> CDD/HDD).
+Incorporates weather-normalized causal analysis using Newark NOAA weather data (TAVG/TMAX/TMIN -> CDD/HDD).
 """
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from pathlib import Path
 import logging
 
@@ -43,197 +43,295 @@ class BillImpactModel:
         self._calibrate_from_history()
 
     def _calibrate_from_history(self):
-        """Fit a robust Least-Squares regression of usage on CDD and HDD using historical data."""
+        """Fit a robust Least-Squares regression of usage on CDD and HDD using NOAA air_temp.csv and billing history."""
+        # FIX: 4 - Calibrate OLS regression from actual air_temp.csv NOAA data
         try:
             root_dir = Path(__file__).resolve().parent.parent
             data_dir = root_dir / "data" / "raw"
+            air_temp_path = data_dir / "air_temp.csv"
             billing_path = data_dir / "billing.csv"
             if not billing_path.exists():
                 billing_path = data_dir / "billing.parquet"
                 
-            if billing_path.exists():
-                logger.info(f"Calibrating weather attribution from history at {billing_path.name}...")
-                if billing_path.suffix == ".csv":
-                    df = pd.read_csv(billing_path)
+            if air_temp_path.exists() and billing_path.exists():
+                logger.info(f"Calibrating weather attribution from {air_temp_path.name} and {billing_path.name}...")
+                
+                # 1. Parse weather data and compute daily CDD & HDD
+                weather_df = pd.read_csv(air_temp_path)
+                weather_df["DATE"] = pd.to_datetime(weather_df["DATE"])
+                
+                # Compute TAVG if missing
+                if "TAVG" not in weather_df.columns or weather_df["TAVG"].isna().all():
+                    weather_df["TAVG"] = (weather_df["TMAX"].astype(float) + weather_df["TMIN"].astype(float)) / 2
                 else:
-                    df = pd.read_parquet(billing_path)
+                    weather_df["TAVG"] = weather_df["TAVG"].astype(float).fillna(
+                        (weather_df["TMAX"].astype(float) + weather_df["TMIN"].astype(float)) / 2
+                    )
                 
-                # Check for weather features
-                cdd = df.get("monthly_CDD", df.get("monthly_cdd", pd.Series(dtype=float)))
-                hdd = df.get("monthly_HDD", df.get("monthly_hdd", pd.Series(dtype=float)))
-                usage = df.get("usage_kwh", pd.Series(dtype=float))
+                weather_df["CDD"] = np.maximum(0, weather_df["TAVG"] - 65)
+                weather_df["HDD"] = np.maximum(0, 65 - weather_df["TAVG"])
+                weather_df["month_str"] = weather_df["DATE"].dt.strftime("%Y-%m")
                 
-                if not cdd.empty and not hdd.empty and not usage.empty:
-                    valid_mask = cdd.notna() & hdd.notna() & usage.notna()
-                    if valid_mask.sum() >= 6:
-                        # Construct design matrix
-                        X = np.column_stack([
-                            np.ones(valid_mask.sum()),
-                            cdd[valid_mask].values,
-                            hdd[valid_mask].values
-                        ])
-                        y = usage[valid_mask].values
-                        
-                        # Least-Squares Solve
-                        coefs, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
-                        
-                        # Apply non-negativity constraints to degree-day coefficients
-                        self.intercept = float(max(coefs[0], 100.0))
-                        self.beta_cdd = float(max(coefs[1], 0.05))
-                        self.beta_hdd = float(max(coefs[2], 0.05))
-                        self.calibrated = True
-                        logger.info(f"Weather calibration complete: Int={self.intercept:.1f}, CDD={self.beta_cdd:.3f}, HDD={self.beta_hdd:.3f}")
+                # Aggregate CDD/HDD to monthly sums
+                weather_monthly = weather_df.groupby("month_str")[["CDD", "HDD"]].sum()
+                
+                # 2. Parse billing data
+                if billing_path.suffix == ".csv":
+                    bill_df = pd.read_csv(billing_path)
+                else:
+                    bill_df = pd.read_parquet(billing_path)
+                
+                bill_df["month_str"] = pd.to_datetime(bill_df["date"]).dt.strftime("%Y-%m")
+                
+                # 3. Merge billing and weather datasets
+                merged = bill_df.merge(weather_monthly, on="month_str", how="left")
+                
+                # Climatological averages for NJ missing months fallback
+                def get_climatology(month_num):
+                    cdd_map = {1:0.0, 2:0.0, 3:0.0, 4:5.0, 5:45.0, 6:180.0, 7:310.0, 8:260.0, 9:100.0, 10:15.0, 11:0.0, 12:0.0}
+                    hdd_map = {1:950.0, 2:820.0, 3:650.0, 4:350.0, 5:120.0, 6:10.0, 7:0.0, 8:0.0, 9:30.0, 10:220.0, 11:500.0, 12:820.0}
+                    return cdd_map.get(month_num, 0.0), hdd_map.get(month_num, 0.0)
+                
+                for idx, row in merged.iterrows():
+                    m_num = pd.to_datetime(row["date"]).month
+                    clim_cdd, clim_hdd = get_climatology(m_num)
+                    if pd.isna(row["CDD"]):
+                        merged.at[idx, "CDD"] = clim_cdd
+                    if pd.isna(row["HDD"]):
+                        merged.at[idx, "HDD"] = clim_hdd
+                
+                # 4. Solve Least-Squares Regression (usage_kwh = intercept + beta_cdd * CDD + beta_hdd * HDD)
+                X = np.column_stack([
+                    np.ones(len(merged)),
+                    merged["CDD"].values,
+                    merged["HDD"].values
+                ])
+                y = merged["usage_kwh"].values
+                
+                coefs, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
+                
+                self.intercept = float(max(coefs[0], 100.0))
+                self.beta_cdd = float(max(coefs[1], 0.05))
+                self.beta_hdd = float(max(coefs[2], 0.05))
+                self.calibrated = True
+                logger.info(f"Weather OLS Regression Calibrated: Int={self.intercept:.1f}, CDD={self.beta_cdd:.3f}, HDD={self.beta_hdd:.3f}")
         except Exception as e:
-            logger.warning(f"Weather regression calibration failed, using high-fidelity defaults: {e}")
+            logger.warning(f"Weather regression calibration failed, using baseline defaults: {e}")
 
-    def get_analysis(self, row: Dict[str, Any]) -> Dict[str, Any]:
+    def get_analysis(self, row: Dict[str, Any], prev_row: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Main entry point to get contribution, sensitivity, and insights.
-        Performs weather-normalized causal split to isolate behavior from weather.
+        Performs weather-normalized causal split to isolate rate/behavior changes from weather shifts.
         """
+        # FIX: 1 - Redefine Impact Calculation: ΔBill = (ΔUsage x Rate) + (ΔRate x Usage) + Weather_Adjustment
+        if prev_row is None:
+            prev_row = row.copy()
+            
         total_bill = float(row.get("total_bill", 0))
-        if total_bill == 0:
+        prev_bill = float(prev_row.get("total_bill", 0))
+        if total_bill == 0 or prev_bill == 0:
             return {}
 
         usage = float(row.get("usage_kwh", 0))
-        cdd = float(row.get("monthly_CDD", row.get("monthly_cdd", 0)))
-        hdd = float(row.get("monthly_HDD", row.get("monthly_hdd", 0)))
+        prev_usage = float(prev_row.get("usage_kwh", 0))
 
-        # 1. Distinguish weather-driven usage vs behavioral usage
-        weather_usage = 0.0
-        if usage > 0:
-            weather_usage = max(0.0, self.beta_cdd * cdd + self.beta_hdd * hdd)
-            # Cap weather-driven usage at 90% of total to avoid extreme anomalies
-            weather_usage = min(weather_usage, 0.9 * usage)
-            
-        behavior_usage = usage - weather_usage
-        weather_ratio = weather_usage / usage if usage > 0 else 0.0
-        behavior_ratio = behavior_usage / usage if usage > 0 else 1.0
+        latest_date = pd.to_datetime(row.get("date", pd.Timestamp.now()))
+        prev_date = pd.to_datetime(prev_row.get("date", pd.Timestamp.now()))
 
-        # Calculate weather cost share (aggregated across all variable billing rates)
-        weather_cost = 0.0
+        # Get seasonal CDD/HDD climatology fallbacks
+        def get_climatology(month_num):
+            cdd_map = {1:0.0, 2:0.0, 3:0.0, 4:5.0, 5:45.0, 6:180.0, 7:310.0, 8:260.0, 9:100.0, 10:15.0, 11:0.0, 12:0.0}
+            hdd_map = {1:950.0, 2:820.0, 3:650.0, 4:350.0, 5:120.0, 6:10.0, 7:0.0, 8:0.0, 9:30.0, 10:220.0, 11:500.0, 12:820.0}
+            return cdd_map.get(month_num, 0.0), hdd_map.get(month_num, 0.0)
 
-        # 2. Decompose components
+        cdd_latest, hdd_latest = get_climatology(latest_date.month)
+        cdd_prev, hdd_prev = get_climatology(prev_date.month)
+        
+        # Load precise NOAA air_temp.csv values on the fly
+        try:
+            root_dir = Path(__file__).resolve().parent.parent
+            air_temp_path = root_dir / "data" / "raw" / "air_temp.csv"
+            if air_temp_path.exists():
+                weather_df = pd.read_csv(air_temp_path)
+                weather_df["DATE"] = pd.to_datetime(weather_df["DATE"])
+                if "TAVG" not in weather_df.columns or weather_df["TAVG"].isna().all():
+                    weather_df["TAVG"] = (weather_df["TMAX"].astype(float) + weather_df["TMIN"].astype(float)) / 2
+                weather_df["CDD"] = np.maximum(0, weather_df["TAVG"] - 65)
+                weather_df["HDD"] = np.maximum(0, 65 - weather_df["TAVG"])
+                weather_df["month_str"] = weather_df["DATE"].dt.strftime("%Y-%m")
+                weather_monthly = weather_df.groupby("month_str")[["CDD", "HDD"]].sum().to_dict(orient="index")
+                
+                m_str_latest = latest_date.strftime("%Y-%m")
+                m_str_prev = prev_date.strftime("%Y-%m")
+                if m_str_latest in weather_monthly:
+                    cdd_latest = weather_monthly[m_str_latest]["CDD"]
+                    hdd_latest = weather_monthly[m_str_latest]["HDD"]
+                if m_str_prev in weather_monthly:
+                    cdd_prev = weather_monthly[m_str_prev]["CDD"]
+                    hdd_prev = weather_monthly[m_str_prev]["HDD"]
+        except Exception:
+            pass
+
+        # Distinguish weather-driven usage vs discretionary behavioral usage
+        weather_usage_latest = self.beta_cdd * cdd_latest + self.beta_hdd * hdd_latest
+        weather_usage_prev = self.beta_cdd * cdd_prev + self.beta_hdd * hdd_prev
+        
+        # Keep weather caps safe
+        weather_usage_latest = min(weather_usage_latest, 0.9 * usage)
+        weather_usage_prev = min(weather_usage_prev, 0.9 * prev_usage)
+        
+        ΔWeatherUsage = weather_usage_latest - weather_usage_prev
+        ΔUsage = usage - prev_usage
+        ΔNonWeatherUsage = ΔUsage - ΔWeatherUsage
+
+        tax_mult = 1.06625  # NJ Sales Tax factor on utility charges
+
+        # Variables mapped as: key, label, driver
+        variable_keys = [
+            ("bgs_rate", "BGS Supply", "Market"),
+            ("distribution_rate", "Distribution Charge", "Infrastructure"),
+            ("transmission_rate", "Transmission Charge", "Market"),
+            ("sbc_rate", "Societal Benefits Charge", "Policy"),
+            ("nug_rate", "Non-Utility Generation", "Regulatory")
+        ]
+
+        prev_rate_total = 0.0
+        latest_rate_total = 0.0
+        for rate_key, _, _ in variable_keys:
+            prev_rate_total += float(prev_row.get(rate_key, 0.0))
+            latest_rate_total += float(row.get(rate_key, 0.0))
+
+        avg_rate_total = (prev_rate_total + latest_rate_total) / 2.0
+        avg_usage = (prev_usage + usage) / 2.0
+
         contributions = {}
         
-        # Customer charge is purely behavioral fixed cost
-        customer_val = float(row.get("customer_charge", 8.24))
+        # A. Customer Charge (Fixed) - FIX: 2 Handle customer charge correctly as fixed
+        fixed_prev = float(prev_row.get("customer_charge", 8.24))
+        fixed_latest = float(row.get("customer_charge", 8.24))
+        ΔFixed = fixed_latest - fixed_prev
         contributions["customer"] = {
-            "value": round(customer_val, 2),
-            "percent": round((customer_val / total_bill) * 100, 2)
+            "value": round(ΔFixed * tax_mult, 2),
+            "percent": round(((ΔFixed * tax_mult) / total_bill) * 100, 2) if total_bill else 0
         }
 
-        # Variable components
-        variable_keys = ["distribution_cost", "market_transition_cost", "sbc_cost", "transmission_cost", "rider_cost", "bgs_cost"]
-        for key in variable_keys:
-            val = float(row.get(key, 0))
-            if val != 0:
-                json_key = key.replace("_cost", "").replace("_charge", "").replace("_adjustment", "")
-                
-                # Split weather-driven vs behavioral cost
-                comp_weather = val * weather_ratio
-                comp_behavior = val * behavior_ratio
-                
-                weather_cost += comp_weather
-                
-                # Contributions dictionary holds the behavior-driven portion
-                contributions[json_key] = {
-                    "value": round(comp_behavior, 2),
-                    "percent": round((comp_behavior / total_bill) * 100, 2)
-                }
+        # B. Weather Impact attribution - FIX: 5 Deterministic Attribution
+        ΔBill_weather = ΔWeatherUsage * avg_rate_total * tax_mult
+        contributions["weather"] = {
+            "value": round(ΔBill_weather, 2),
+            "percent": round((ΔBill_weather / total_bill) * 100, 2) if total_bill else 0
+        }
 
-        # Add Weather as a premium distinct External cost driver
-        if weather_cost != 0:
-            contributions["weather"] = {
-                "value": round(weather_cost, 2),
-                "percent": round((weather_cost / total_bill) * 100, 2)
+        # C. Behavioral Usage Impact (Discretionary usage shifts)
+        ΔBill_usage = ΔNonWeatherUsage * avg_rate_total * tax_mult
+        contributions["behavioral_usage"] = {
+            "value": round(ΔBill_usage, 2),
+            "percent": round((ΔBill_usage / total_bill) * 100, 2) if total_bill else 0
+        }
+
+        # D. Component rate change impacts
+        for rate_key, label, driver in variable_keys:
+            rate_prev = float(prev_row.get(rate_key, 0.0))
+            rate_latest = float(row.get(rate_key, 0.0))
+            ΔRate = rate_latest - rate_prev
+            
+            # Midpoint causal price impact
+            comp_impact = ΔRate * avg_usage * tax_mult
+            short_key = rate_key.replace("_rate", "")
+            
+            contributions[short_key] = {
+                "value": round(comp_impact, 2),
+                "percent": round((comp_impact / total_bill) * 100, 2) if total_bill else 0
             }
 
-        # Add Sales Tax
-        tax_val = float(row.get("sales_tax", 0))
-        if tax_val != 0:
-            contributions["tax"] = {
-                "value": round(tax_val, 2),
-                "percent": round((tax_val / total_bill) * 100, 2)
-            }
-
-        # 3. Sensitivity Analysis (+/- 10%)
+        # 3. Sensitivity Analysis (Dynamic and Elasticity-Based) - FIX: 7 Dynamic Elasticity
         sensitivity = {}
-        tax_rate = 0.06625  # NJ Sales Tax
-        
-        # Weather Sensitivity: CDD/HDD scaling
-        weather_sensitivity_val = weather_cost * 0.10
-        sensitivity["weather"] = {
-            "+10%": round(weather_sensitivity_val * (1 + tax_rate), 2),
-            "-10%": round(-weather_sensitivity_val * (1 + tax_rate), 2)
-        }
-        
-        # Component Sensitivities
-        for key, (label, cat, driver) in self.components_config.items():
-            if key in ["sales_tax"]:
-                continue
-            
-            base_val = float(row.get(key, 0))
-            if base_val == 0:
+        for rate_key, label, driver in variable_keys:
+            short_key = rate_key.replace("_rate", "")
+            base_rate = float(row.get(rate_key, 0.0))
+            if base_rate == 0:
                 continue
                 
-            json_key = key.replace("_cost", "").replace("_charge", "").replace("_adjustment", "")
-            
             impacts = {}
             for pct in [10, -10]:
-                delta = base_val * (pct / 100.0)
-                # Apply behavioral ratio to component sensitivity to stay consistent with attribution split
-                if key != "customer_charge":
-                    delta *= behavior_ratio
-                total_delta = delta * (1 + tax_rate)
+                delta_rate = base_rate * (pct / 100.0)
+                # Rate impact
+                rate_impact = delta_rate * usage * tax_mult
+                # Demand response (typical elasticity = -0.2)
+                usage_response = usage * (pct / 100.0) * -0.2
+                usage_impact = usage_response * prev_rate_total * tax_mult
+                total_delta = rate_impact + usage_impact
                 impacts[f"{'+' if pct > 0 else ''}{pct}%"] = round(total_delta, 2)
-            
-            sensitivity[json_key] = impacts
+                
+            sensitivity[short_key] = impacts
 
-        # 4. Insight Generation
-        insights = self._generate_insights(contributions, sensitivity, cdd, hdd)
+        # Weather sensitivity CDD/HDD scaling
+        weather_sens = {}
+        for pct in [10, -10]:
+            cdd_shift = cdd_latest * (pct / 100.0)
+            hdd_shift = hdd_latest * (pct / 100.0)
+            usage_shift = self.beta_cdd * cdd_shift + self.beta_hdd * hdd_shift
+            total_delta = usage_shift * prev_rate_total * tax_mult
+            weather_sens[f"{'+' if pct > 0 else ''}{pct}%"] = round(total_delta, 2)
+        sensitivity["weather"] = weather_sens
+
+        # FIX: 8 - Add Time Awareness & Seasonal Insight Generation
+        insights = self._generate_insights_causal(contributions, sensitivity, cdd_latest, hdd_latest, latest_date.month)
 
         return {
             "total_bill": round(total_bill, 2),
             "contributions": contributions,
             "sensitivity": sensitivity,
-            "insights": insights
+            "insights": insights,
+            "weather_cdd": cdd_latest,
+            "weather_hdd": hdd_latest,
+            "alpha": self.beta_cdd,
+            "beta": self.beta_hdd,
+            "base_usage": self.intercept,
+            "confidence": "High" if self.calibrated else "Medium"
         }
 
-    def _generate_insights(self, contributions: Dict, sensitivity: Dict, cdd: float, hdd: float) -> List[str]:
-        """Generate human-readable weather-normalized cost explanations."""
+    def _generate_insights_causal(self, contributions: Dict, sensitivity: Dict, cdd: float, hdd: float, month: int) -> List[str]:
+        """Generate human-readable, time-aware causal insights about bill drivers."""
         insights = []
+        season = "Summer" if month in [6, 7, 8] else ("Winter" if month in [12, 1, 2] else "Transition")
         
-        # 1. Weather insights
-        if cdd > 100:
-            insights.append("Bill increase primarily driven by higher cooling demand (heatwave impact).")
-        elif cdd > 30:
-            insights.append("Cooling demand contributed to moderate increases in electricity usage.")
+        # 1. Weather Impact Insight
+        weather_val = contributions.get("weather", {}).get("value", 0.0)
+        if weather_val > 3.0:
+            insights.append(f"🌡️ **Weather impact**: Abnormal seasonal temperatures caused a **+${weather_val:.2f}** bill increase from heating/cooling degree days.")
+        elif weather_val < -3.0:
+            insights.append(f"🌡️ **Weather relief**: Favorable seasonal weather reduced your bill by **-${abs(weather_val):.2f}** due to lighter HVAC loads.")
             
-        if hdd > 200:
-            insights.append("Winter heating demand contributed to increased electricity usage.")
-        elif hdd > 50:
-            insights.append("Mild heating demand contributed to slight shifts in usage patterns.")
+        # 2. Behavioral Usage Insight
+        usage_val = contributions.get("behavioral_usage", {}).get("value", 0.0)
+        if usage_val > 3.0:
+            insights.append(f"🔌 **Behavioral shift**: Higher non-heating/cooling appliance usage added **+${usage_val:.2f}** to your monthly costs.")
+        elif usage_val < -3.0:
+            insights.append(f"🔌 **Energy efficiency**: Conservation efforts and reduced usage lowered your bill by **-${abs(usage_val):.2f}**.")
 
-        # 2. General behavior / rate insights
-        insights.append("Non-weather-related cost drivers include supply and distribution charges.")
-        
-        # Backward compatibility for test cases (satisfying legacy assertions when CDD/HDD are 0)
-        if cdd == 0 and hdd == 0:
-            sorted_contribs = sorted(contributions.items(), key=lambda x: x[1]['value'], reverse=True)
-            if sorted_contribs:
-                top_key, top_data = sorted_contribs[0]
-                label = "BGS Supply" if top_key == "bgs" else top_key.capitalize()
-                insights.append(f"{label} is the primary driver, accounting for {top_data['percent']}% of the total bill.")
+        # 3. Rate Adjustments Insight
+        rate_contribs = {k: v["value"] for k, v in contributions.items() if k not in ["weather", "behavioral_usage", "customer"]}
+        if rate_contribs:
+            sorted_rates = sorted(rate_contribs.items(), key=lambda x: abs(x[1]), reverse=True)
+            top_rate_key, top_rate_val = sorted_rates[0]
+            label_map = {
+                "bgs": "BGS Supply (market wholesale rates)",
+                "distribution": "Distribution Charge (local grid delivery costs)",
+                "transmission": "Transmission Charge (regional high-voltage grid)",
+                "sbc": "Societal Benefits Charge (state-mandated assistance programs)",
+                "nug": "Non-Utility Generation Charge (historical contracts recovery)"
+            }
+            label = label_map.get(top_rate_key, top_rate_key.capitalize())
+            direction = "added" if top_rate_val > 0 else "saved"
+            insights.append(f"📈 **Tariff adjustment**: Rate shifts in **{label}** {direction} **${abs(top_rate_val):.2f}** on your bill.")
 
-        # 3. Specific sensitivity insights
-        if "distribution" in sensitivity:
-            dist_impact = sensitivity["distribution"]["+10%"]
-            insights.append(f"Distribution charges have an infrastructure-driven impact (${dist_impact:+.2f} per 10% change) dependent on behavioral usage.")
-
-        if "customer" in sensitivity:
-            insights.append("Customer charge is a fixed infrastructure driver and does not scale with behavioral usage changes.")
-
+        # 4. Seasonality insight
+        if season == "Summer":
+            insights.append("☀️ **Season awareness**: Summer exhibit high cooling sensitivity. Every additional degree day scales your bill via distribution/supply rates.")
+        elif season == "Winter":
+            insights.append("❄️ **Season awareness**: Winter exhibits high space-heating demand. Keep thermostat settings optimized to control HDD-driven consumption.")
+            
         return insights
 
 def get_bill_impact(row: Dict[str, Any]) -> Dict[str, Any]:

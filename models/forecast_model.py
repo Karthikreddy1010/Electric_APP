@@ -173,47 +173,57 @@ class ElectricityDemandForecaster:
         self.metrics["ensemble"]["MAPE"] = float(safe_mape(y_test, ensemble_pred))
         self.confidence_scores["ensemble"] = float(max(0.0, 100.0 - self.metrics["ensemble"]["MAPE"]))
         
-        self.last_trained = pd.Timestamp.now()
+        # ADD: Store fitted models for reuse in get_forecast()
+        self.fitted_prophet = self.prophet_model   # already fitted above # FIX: 6
+        self.fitted_sarima_result = sarima_fitted  # store the fitted result # FIX: 6
+        self.fitted_sarima_model_spec = self.sarima_model  # store spec too # FIX: 6
+        self.last_trained = pd.Timestamp.now() # FIX: 6
         logger.info(f"Ensemble Evaluation Metrics: {self.metrics['ensemble']}")
         
     def get_forecast(self, days=30, model_type="ensemble"):
         if self.df_clean is None or self.last_trained is None:
-            self.train_and_evaluate()
+            self.train_and_evaluate() # FIX: 6
             
         full_df = self.df_clean.copy()
         
-        # Refit Prophet
-        prophet_df = full_df.reset_index().rename(columns={"date": "ds", "demand_mw": "y"})
-        final_prophet = Prophet(
-            yearly_seasonality=True,
-            weekly_seasonality=True,
-            daily_seasonality=False,
-            seasonality_mode="multiplicative",
-            changepoint_prior_scale=0.05,
-            seasonality_prior_scale=10.0
-        )
-        final_prophet.add_country_holidays(country_name='US')
-        final_prophet.fit(prophet_df)
+        # SKIP refitting — reuse stored fitted models
+        # Only refit if new data has arrived since last training
+        data_changed = full_df.index[-1] > self.last_trained # FIX: 6
         
-        future = final_prophet.make_future_dataframe(periods=days, freq='D')
-        prophet_forecast = final_prophet.predict(future)
-        prophet_future_pred = prophet_forecast.iloc[-days:]['yhat'].values
-        prophet_lower = prophet_forecast.iloc[-days:]['yhat_lower'].values
-        prophet_upper = prophet_forecast.iloc[-days:]['yhat_upper'].values
+        if data_changed or not hasattr(self, "fitted_prophet"): # FIX: 6
+            # Refit only when data actually changed
+            self.train_and_evaluate() # FIX: 6
+            
+        final_prophet = self.fitted_prophet # FIX: 6
+        final_sarima_result = self.fitted_sarima_result # FIX: 6
         
-        # Refit SARIMA
-        y_all = full_df["demand_mw"]
-        is_stat = self._check_stationarity(y_all)
-        d = 0 if is_stat else 1
-        final_sarima = SARIMAX(
-            y_all, 
-            order=(1, d, 1), 
-            seasonal_order=(1, 0, 1, 7),
-            enforce_stationarity=False, 
-            enforce_invertibility=False
-        ).fit(disp=False)
+        # Prophet forecast (no refit needed — extend future dataframe only)
+        future = final_prophet.make_future_dataframe(periods=days, freq='D') # FIX: 6
+        prophet_forecast = final_prophet.predict(future) # FIX: 6
+        prophet_future_pred = prophet_forecast.iloc[-days:]['yhat'].values # FIX: 6
+        prophet_lower = prophet_forecast.iloc[-days:]['yhat_lower'].values # FIX: 6
+        prophet_upper = prophet_forecast.iloc[-days:]['yhat_upper'].values # FIX: 6
         
-        sarima_future_pred = final_sarima.forecast(steps=days).values
+        # SARIMA forecast using stored fitted result
+        sarima_future_pred = final_sarima_result.forecast(steps=days).values # FIX: 6
+        sarima_forecast_obj = final_sarima_result.get_forecast(steps=days) # FIX: 2
+        sarima_ci = sarima_forecast_obj.conf_int(alpha=0.20) # FIX: 2
+        sarima_lower = sarima_ci.iloc[:, 0].values # FIX: 2
+        sarima_upper = sarima_ci.iloc[:, 1].values # FIX: 2
+        
+        # Ensemble bands: weighted blend of both models
+        ensemble_lower = (self.weights["prophet"] * prophet_lower + 
+                          self.weights["sarima"] * sarima_lower) # FIX: 2
+        ensemble_upper = (self.weights["prophet"] * prophet_upper + 
+                          self.weights["sarima"] * sarima_upper) # FIX: 2
+        
+        # Select correct bands for the requested model
+        band_map = { # FIX: 2
+            "prophet":  (prophet_lower, prophet_upper), # FIX: 2
+            "sarima":   (sarima_lower, sarima_upper), # FIX: 2
+            "ensemble": (ensemble_lower, ensemble_upper), # FIX: 2
+        } # FIX: 2
+        lower_band, upper_band = band_map.get(model_type, band_map["ensemble"]) # FIX: 2
         
         ensemble_pred = (self.weights["prophet"] * prophet_future_pred) + (self.weights["sarima"] * sarima_future_pred)
         
@@ -230,7 +240,12 @@ class ElectricityDemandForecaster:
         results = []
         
         # Add last 30 days of historical data
-        hist_df = full_df.tail(30)
+        # FIX: 1 - Filter partial days from historical display
+        hist_df = full_df[full_df["hours_recorded"] >= 24].tail(30) # FIX: 1
+        # FIX: 1 - Guard against anomalous low values
+        floor = full_df["demand_mw"].quantile(0.05) # FIX: 1
+        hist_df = hist_df[hist_df["demand_mw"] >= floor] # FIX: 1
+        
         for idx, row in hist_df.iterrows():
             results.append({
                 "date": idx.strftime("%Y-%m-%d"),
@@ -240,13 +255,19 @@ class ElectricityDemandForecaster:
                 "upper_band": None
             })
             
+        # FIX: 5 - Share the last historical point as the first forecast anchor
+        if len(results) > 0: # FIX: 5
+            results[-1]["predicted_demand"] = round(float(target_pred[0]), 2) # FIX: 5
+            results[-1]["lower_band"] = round(float(lower_band[0]), 2) # FIX: 5
+            results[-1]["upper_band"] = round(float(upper_band[0]), 2) # FIX: 5
+            
         for i in range(days):
             results.append({
                 "date": future_dates[i].strftime("%Y-%m-%d"),
                 "historical_demand": None,
                 "predicted_demand": round(float(target_pred[i]), 2),
-                "lower_band": round(float(prophet_lower[i]), 2),
-                "upper_band": round(float(prophet_upper[i]), 2)
+                "lower_band": round(float(lower_band[i]), 2), # FIX: 2
+                "upper_band": round(float(upper_band[i]), 2) # FIX: 2
             })
             
         return results

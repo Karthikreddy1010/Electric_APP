@@ -241,8 +241,9 @@ def compute_bill_analysis():
     
     billing = app_state["billing_df"]
     latest_row = billing.iloc[-1].to_dict()
+    prev_row = billing.iloc[-2].to_dict() if len(billing) > 1 else latest_row
     
-    analysis = model.get_analysis(latest_row)
+    analysis = model.get_analysis(latest_row, prev_row)
     base_bill = analysis["total_bill"]
     
     # Map contributions to features
@@ -256,6 +257,8 @@ def compute_bill_analysis():
         "rider": ("Rider Charges", "Regulatory"),
         "bgs": ("BGS Supply", "Market"),
         "weather": ("Weather Impact", "External"),
+        "behavioral_usage": ("Discretionary Usage", "Behavioral"),
+        "nug": ("Non-Utility Generation Charge", "Regulatory"),
         "tax": ("Sales Tax", "Policy")
     }
     
@@ -282,6 +285,8 @@ def compute_bill_analysis():
         "Rider Charges": "Temporary regulatory tariff adjustments for utility costs.",
         "BGS Supply": "Basic Generation Service market price for wholesale supply.",
         "Weather Impact": "Attributed cooling/heating demand costs based on NOAA degree-day anomalies.",
+        "Discretionary Usage": "Behavioral consumption changes unrelated to seasonal temperature anomalies.",
+        "Non-Utility Generation Charge": "Historical independent power producer contract recovery.",
         "Sales Tax": "New Jersey state utility sales tax (6.625%) on all components."
     }
     
@@ -292,7 +297,7 @@ def compute_bill_analysis():
         sensitivity.append({
             "component": label,
             "elasticity": round(elasticity, 4),
-            "impact_type": "high" if elasticity > 0.4 else ("medium" if elasticity > 0.1 else "low"),
+            "impact_type": "high" if elasticity > 0.3 else ("medium" if elasticity > 0.1 else "low"),
             "driver": driver,
             "reasoning": descriptions.get(label, "Variable billing component sensitivity.")
         })
@@ -300,12 +305,35 @@ def compute_bill_analysis():
     # Sort sensitivity by elasticity descending
     sensitivity = sorted(sensitivity, key=lambda x: x["elasticity"], reverse=True)
     
+    # Format date cleanly
+    current_m = billing["date"].iloc[-1]
+    if hasattr(current_m, "strftime"):
+        current_m = current_m.strftime("%Y-%m")
+    else:
+        current_m = str(current_m)[:7]
+        
     return {
         "base_bill": base_bill,
         "all_features": all_features,
         "sensitivity": sensitivity,
-        "current_month": billing["date"].iloc[-1],
-        "insights": analysis["insights"]
+        "current_month": current_m,
+        "insights": analysis["insights"],
+        "latest_row": {
+            "usage_kwh": float(latest_row.get("usage_kwh", 750)),
+            "base_bill": float(latest_row.get("total_bill", base_bill)),
+            "bgs_rate": float(latest_row.get("bgs_rate", 0.11)),
+            "distribution_rate": float(latest_row.get("distribution_rate", 0.04)),
+            "transmission_rate": float(latest_row.get("transmission_rate", 0.02)),
+            "sbc_rate": float(latest_row.get("sbc_rate", 0.008)),
+            "nug_rate": float(latest_row.get("nug_rate", 0.002)),
+            "customer_charge": 8.24,
+            "cdd": float(analysis.get("weather_cdd", 0.0)),
+            "hdd": float(analysis.get("weather_hdd", 0.0))
+        },
+        "alpha": analysis.get("alpha", 0.85),
+        "beta": analysis.get("beta", 0.45),
+        "base_usage": analysis.get("base_usage", 450.0),
+        "confidence": analysis.get("confidence", "High")
     }
 
 @router.get("/impact/top-features")
@@ -466,7 +494,17 @@ async def simulate_impact(req: SimulateRequest):
     # Formula construction
     # New Bill = Base Bill × (1 + % Change × Elasticity)
     # We'll simplify for the UI display
-    comp_labels = [f"{COMPONENT_TYPES[k]['label']} ({v}%)" for k, v in req.modifications.items()]
+    comp_labels = []
+    for k, v in req.modifications.items():
+        key = k
+        if key not in COMPONENT_TYPES:
+            if f"{key}_rate" in COMPONENT_TYPES:
+                key = f"{key}_rate"
+            elif f"{key}_charge" in COMPONENT_TYPES:
+                key = f"{key}_charge"
+        label = COMPONENT_TYPES[key]['label'] if key in COMPONENT_TYPES else k.upper()
+        comp_labels.append(f"{label} ({v}%)")
+        
     formula = "New Bill = Base Bill × (1 + Σ(% Change_i × Weight_i) × Elasticity)"
     
     return SimulateResult(

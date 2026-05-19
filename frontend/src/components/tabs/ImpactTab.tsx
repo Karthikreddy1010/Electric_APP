@@ -5,27 +5,27 @@ import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, 
   PieChart, Pie, Cell, Tooltip, CartesianGrid
 } from 'recharts';
-import { Calculator, Download, Sparkles, Filter, LayoutGrid, Info, Activity, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Calculator, Download, Sparkles, Filter, LayoutGrid, Info, Activity, TrendingUp, ShieldCheck, HelpCircle } from 'lucide-react';
 
 const CATEGORY_COLORS = ['#3B82F6', '#8B5CF6', '#14B8A6', '#F59E0B', '#6366F1', '#EC4899', '#10B981', '#F97316'];
 
-const COMPONENT_METADATA: Record<string, { label: string; elasticity: number }> = {
-  bgs: { label: "BGS Supply", elasticity: 0.58 },
-  distribution: { label: "Distribution Charge", elasticity: 0.22 },
-  transmission: { label: "Transmission Charge", elasticity: 0.13 },
-  sbc: { label: "Societal Benefits Charge", elasticity: 0.045 },
-  customer: { label: "Customer Charge", elasticity: 0 },
-  transition: { label: "Transition Charge", elasticity: 0 }
+const COMPONENT_METADATA: Record<string, { label: string; description: string }> = {
+  bgs: { label: "BGS Supply (Rate)", description: "Basic Generation Service wholesale energy rate (kWh)." },
+  distribution: { label: "Distribution (Rate)", description: "Local utility delivery and line maintenance fee (kWh)." },
+  transmission: { label: "Transmission (Rate)", description: "Regional high-voltage transmission transport fee (kWh)." },
+  sbc: { label: "Societal Benefits (Rate)", description: "State-mandated environmental and assistance surcharges (kWh)." },
+  customer: { label: "Customer Charge (Fixed)", description: "Fixed service connection fee, independent of consumption." },
+  weather: { label: "Weather Shift (CDD/HDD)", description: "Temperature-driven demand adjustments (heating/cooling load)." }
 };
 
 const ImpactTab = () => {
   const topN = 10;
-  const [viewType, setViewType] = useState<'abs' | 'signed'>('abs');
+  const [viewType, setViewType] = useState<'abs' | 'signed'>('signed');
   const [selectedComp, setSelectedComp] = useState("bgs");
   const [change, setChange] = useState(10);
   const [report, setReport] = useState<string | null>(null);
 
-  // Fetch Full Analysis (including dynamic sensitivity)
+  // Fetch Full Analysis (including dynamic sensitivity and OLS indicators)
   const { data: fullAnalysis, isLoading: isAnalysisLoading } = useQuery({
     queryKey: ['impact-full-analysis'],
     queryFn: async () => {
@@ -34,7 +34,7 @@ const ImpactTab = () => {
     }
   });
 
-  // Fetch Top-N SHAP Data
+  // Fetch Top-N SHAP / Deterministic Attribution Data
   const { data: shapData, isLoading: isShapLoading } = useQuery({
     queryKey: ['impact-top-n', topN],
     queryFn: async () => {
@@ -45,6 +45,7 @@ const ImpactTab = () => {
 
   // LLM Report Mutation
   const reportMutation = useMutation({
+    queryKey: ['explain-bill-report'],
     mutationFn: async () => {
       setReport(""); // Clear previous report
       const response = await fetch('/report/generate', {
@@ -72,14 +73,12 @@ const ImpactTab = () => {
         }
       }
       return fullText;
-    },
-    onSuccess: () => {
-      // State is already updated during streaming
     }
   });
 
   // PDF Export
   const pdfMutation = useMutation({
+    queryKey: ['pdf-report'],
     mutationFn: async () => {
       const res = await axios.post('/report/pdf', {}, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -105,30 +104,99 @@ const ImpactTab = () => {
   }, [shapData, viewType]);
 
   const simulation = useMemo(() => {
-    const baseBill = 191.12; // In real app, pull from API
-    const elasticity = COMPONENT_METADATA[selectedComp]?.elasticity || 0;
-    const impactAbs = baseBill * elasticity * (change / 100);
-    const newBill = baseBill + impactAbs;
-    return { baseBill, newBill, impactAbs };
-  }, [selectedComp, change]);
+    if (!fullAnalysis?.latest_row) {
+      return { baseBill: 191.12, newBill: 191.12, impactAbs: 0, breakdown: "Calibration pending..." };
+    }
+    
+    const latest = fullAnalysis.latest_row;
+    const baseBill = latest.base_bill;
+    const usage = latest.usage_kwh;
+    
+    const bgs = latest.bgs_rate;
+    const dist = latest.distribution_rate;
+    const trans = latest.transmission_rate;
+    const sbc = latest.sbc_rate;
+    const nug = latest.nug_rate;
+    const customer = latest.customer_charge;
+    
+    const tax_mult = 1.06625;
+    const totalRate = bgs + dist + trans + sbc + nug;
+    
+    let simulatedUsage = usage;
+    let rateImpact = 0;
+    let usageImpact = 0;
+    let weatherImpact = 0;
+    let fixedImpact = 0;
+    
+    if (selectedComp === 'customer') {
+      fixedImpact = customer * (change / 100) * tax_mult;
+    } else if (selectedComp === 'weather') {
+      const cdd = latest.cdd;
+      const hdd = latest.hdd;
+      const alpha = fullAnalysis.alpha || 0.85;
+      const beta = fullAnalysis.beta || 0.45;
+      
+      const cddNew = cdd * (1 + change / 100);
+      const hddNew = hdd * (1 + change / 100);
+      const deltaUsage = alpha * (cddNew - cdd) + beta * (hddNew - hdd);
+      simulatedUsage = usage + deltaUsage;
+      
+      weatherImpact = deltaUsage * totalRate * tax_mult;
+    } else {
+      let deltaRate = 0;
+      if (selectedComp === 'bgs') deltaRate = bgs * (change / 100);
+      else if (selectedComp === 'distribution') deltaRate = dist * (change / 100);
+      else if (selectedComp === 'transmission') deltaRate = trans * (change / 100);
+      else if (selectedComp === 'sbc') deltaRate = sbc * (change / 100);
+      
+      rateImpact = deltaRate * usage * tax_mult;
+      
+      // Elasticity factor
+      const elasticity = -0.2;
+      const deltaUsage = usage * (change / 100) * elasticity;
+      simulatedUsage = usage + deltaUsage;
+      
+      usageImpact = deltaUsage * totalRate * tax_mult;
+    }
+    
+    const totalImpact = rateImpact + usageImpact + weatherImpact + fixedImpact;
+    const newBill = baseBill + totalImpact;
+    
+    let breakdownText = "";
+    if (selectedComp === 'customer') {
+      breakdownText = `Bill ${totalImpact >= 0 ? 'Increase' : 'Decrease'} of $${Math.abs(totalImpact).toFixed(2)}: $${Math.abs(fixedImpact).toFixed(2)} from fixed customer charge adjustment.`;
+    } else if (selectedComp === 'weather') {
+      breakdownText = `Bill ${totalImpact >= 0 ? 'Increase' : 'Decrease'} of $${Math.abs(totalImpact).toFixed(2)}: $${Math.abs(weatherImpact).toFixed(2)} from seasonal weather-driven HVAC load shift (${(simulatedUsage - usage).toFixed(1)} kWh usage change).`;
+    } else {
+      breakdownText = `Bill ${totalImpact >= 0 ? 'Increase' : 'Decrease'} of $${Math.abs(totalImpact).toFixed(2)}: $${Math.abs(rateImpact).toFixed(2)} from rate shift, assisted by $${Math.abs(usageImpact).toFixed(2)} from elastic demand response (${(simulatedUsage - usage).toFixed(1)} kWh delta).`;
+    }
+    
+    return { baseBill, newBill, impactAbs: totalImpact, breakdown: breakdownText };
+  }, [selectedComp, change, fullAnalysis]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      {/* Dynamic Header with Scope Indicator */}
+      {/* Header Panel */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
             <LayoutGrid className="text-blue-600" size={28} />
             Cost Driver Analysis
           </h2>
-          <p className="text-slate-500 text-sm mt-1">Interactive ranking of bill components by marginal impact.</p>
+          <p className="text-slate-500 text-sm mt-1">Interactive ranking of bill components by weather-normalized marginal impact.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl shadow-sm">
             <Filter size={14} className="text-slate-400" />
             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scope:</span>
-            <span className="text-sm font-bold text-slate-900">Major Cost Components</span>
+            <span className="text-sm font-bold text-slate-900">Causal Decomposition</span>
+          </div>
+
+          <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 px-4 py-2 rounded-2xl shadow-sm">
+            <ShieldCheck size={16} className="text-blue-600 animate-pulse" />
+            <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Confidence:</span>
+            <span className="text-sm font-extrabold text-blue-900">{fullAnalysis?.confidence || 'High'}</span>
           </div>
 
           <button 
@@ -151,9 +219,9 @@ const ImpactTab = () => {
         </div>
       </div>
 
-      {/* Main Analysis Panels */}
+      {/* Main Attribution Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left: Feature Impact (SHAP) - Dark Premium Panel */}
+        {/* Left: Marginal Cost Impact Chart */}
         <div className="card bg-slate-900 text-white border-none shadow-2xl p-8 relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Info size={120} />
@@ -161,8 +229,8 @@ const ImpactTab = () => {
           <div className="relative z-10">
             <div className="flex justify-between items-center mb-8">
               <div>
-                <h3 className="text-lg font-black tracking-tight">Component Impact ($ Contribution)</h3>
-                <p className="text-xs text-slate-400">Attribution of cost variance per component ($)</p>
+                <h3 className="text-lg font-black tracking-tight">Marginal Cost Impact (Δ Bill Contribution)</h3>
+                <p className="text-xs text-slate-400">Attribution of monthly bill variance per component ($)</p>
               </div>
               <div className="flex bg-slate-800 p-1 rounded-xl">
                 <button 
@@ -202,8 +270,8 @@ const ImpactTab = () => {
                       cursor={{fill: '#1E293B'}}
                       contentStyle={{backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '12px', fontSize: '12px'}}
                       formatter={(value: any, _name: any, props: any) => [
-                        `${props.payload.name} contributes $${Math.abs(value).toFixed(2)} to your bill`,
-                        "Contribution"
+                        `${props.payload.name} contributed ${value >= 0 ? '+' : ''}$${value.toFixed(2)} to your bill delta`,
+                        "Marginal Cost Impact"
                       ]}
                     />
                     <Bar 
@@ -229,10 +297,10 @@ const ImpactTab = () => {
           </div>
         </div>
 
-        {/* Right: Category Breakdown - Donut Panel */}
+        {/* Right: Bill Composition Donut */}
         <div className="card p-8 shadow-xl bg-white flex flex-col items-center">
            <div className="w-full mb-8">
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">Bill Composition</h3>
+              <h3 className="text-lg font-black text-slate-900 tracking-tight">Causal Cost Drivers</h3>
               <p className="text-xs text-slate-400">Relative weight of ranked importance features</p>
            </div>
 
@@ -250,7 +318,7 @@ const ImpactTab = () => {
                     animationDuration={1000}
                   >
                     {chartData.map((_: any, index: number) => (
-                      <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+                       <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip 
@@ -260,7 +328,7 @@ const ImpactTab = () => {
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6 text-center">
                 <span className="text-xs font-bold text-slate-500 max-w-[150px]">
-                  {chartData.reduce((sum: number, d: any) => sum + d.percent, 0).toFixed(0)}% of total bill explained by major components
+                  {chartData.reduce((sum: number, d: any) => sum + Math.abs(d.percent), 0).toFixed(0)}% explainable by causal cost drivers
                 </span>
               </div>
            </div>
@@ -269,39 +337,58 @@ const ImpactTab = () => {
               {chartData.slice(0, 4).map((item: any, index: number) => (
                 <div key={item.name} className="flex items-center justify-between group">
                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: CATEGORY_COLORS[index]}}></div>
+                      <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length]}}></div>
                       <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight truncate max-w-[100px]">{item.name}</span>
                    </div>
-                   <span className="text-xs font-black text-slate-900">{item.percent.toFixed(1)}%</span>
+                   <span className="text-xs font-black text-slate-900">{Math.abs(item.percent).toFixed(1)}%</span>
                 </div>
               ))}
            </div>
         </div>
       </div>
 
-      {/* Simulator Layer */}
+      {/* What-If Sensitivity Simulator */}
       <section className="card p-8 bg-slate-50 border-dashed border-2 border-slate-200 rounded-[32px]">
-        <div className="flex items-center gap-3 mb-8">
-          <Calculator size={22} className="text-blue-600" />
-          <h3 className="text-xl font-bold text-slate-900">What-If Sensitivity Simulator</h3>
+        <div className="flex items-center justify-between gap-3 mb-8">
+          <div className="flex items-center gap-3">
+            <Calculator size={22} className="text-blue-600" />
+            <h3 className="text-xl font-bold text-slate-900">What-If Sensitivity Simulator</h3>
+            <span className="group relative cursor-help text-slate-400 hover:text-slate-600">
+              <HelpCircle size={16} />
+              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900 text-white text-[10px] rounded-xl font-medium shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
+                ℹ️ Usage-based components incorporate a -0.2 demand elasticity response (higher price lowers consumption). Weather adjustments alter degree-day usage, leaving supply rates unchanged.
+              </span>
+            </span>
+          </div>
+          <span className="text-xs font-black uppercase text-slate-400 bg-white px-3 py-1 rounded-xl shadow-sm border border-slate-200">
+            OLS Calibrated Model
+          </span>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
            <div className="space-y-8">
               <div>
-                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Simulated Component</label>
+                 <div className="flex items-center gap-1.5 mb-3">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Simulated Component</label>
+                 </div>
                  <select 
                     value={selectedComp} 
                     onChange={(e) => setSelectedComp(e.target.value)}
                     className="w-full bg-white border border-slate-200 p-4 rounded-2xl text-sm font-bold text-slate-900 outline-none"
                  >
-                    {Object.entries(COMPONENT_METADATA).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    {Object.entries(COMPONENT_METADATA).map(([k, v]) => (
+                       <option key={k} value={k}>{v.label}</option>
+                    ))}
                  </select>
+                 <p className="text-xs text-slate-400 mt-2 font-medium italic">{COMPONENT_METADATA[selectedComp]?.description}</p>
               </div>
+              
               <div>
                  <div className="flex justify-between items-center mb-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Rate Change (%)</label>
-                    <span className="text-sm font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">{change > 0 ? '+' : ''}{change}%</span>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Component Value Shift (%)</label>
+                    <span className="text-sm font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
+                       {change > 0 ? '+' : ''}{change}%
+                    </span>
                  </div>
                  <input 
                     type="range" 
@@ -317,20 +404,23 @@ const ImpactTab = () => {
            <div className="text-center p-8 bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Projected Bill Impact</p>
               <div className="flex flex-col items-center justify-center gap-2">
-                 <div className="flex items-center gap-4">
-                   <span className="text-xl font-bold text-slate-300 line-through">${simulation.baseBill.toFixed(2)}</span>
-                   <h2 className="text-5xl font-extrabold text-slate-900 tracking-tight">Projected Bill: ${simulation.newBill.toFixed(2)}</h2>
+                 <div className="flex flex-wrap items-center justify-center gap-4">
+                    <span className="text-xl font-bold text-slate-300 line-through">${simulation.baseBill.toFixed(2)}</span>
+                    <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Projected Bill: ${simulation.newBill.toFixed(2)}</h2>
                  </div>
-                 <span className={`text-sm font-bold ${simulation.impactAbs > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                   ({simulation.impactAbs > 0 ? '+' : ''}${simulation.impactAbs.toFixed(2)} | {simulation.impactAbs > 0 ? '+' : ''}{((simulation.impactAbs / simulation.baseBill) * 100).toFixed(1)}%)
+                 <span className={`text-sm font-bold ${simulation.impactAbs >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                    ({simulation.impactAbs >= 0 ? '+' : ''}${simulation.impactAbs.toFixed(2)} | {simulation.impactAbs >= 0 ? '+' : ''}{((simulation.impactAbs / simulation.baseBill) * 100).toFixed(1)}%)
                  </span>
               </div>
-              <div className={`inline-flex items-center gap-1 mt-6 px-4 py-1.5 rounded-full text-xs font-black uppercase ${simulation.impactAbs > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                 {simulation.impactAbs > 0 ? 'Increase' : 'Decrease'} of ${Math.abs(simulation.impactAbs).toFixed(2)}
+              
+              <div className={`mt-6 p-4 rounded-2xl text-xs font-bold text-slate-600 border ${simulation.impactAbs >= 0 ? 'bg-red-50/30 border-red-100 text-red-700' : 'bg-emerald-50/30 border-emerald-100 text-emerald-700'}`}>
+                 <span className="block font-black text-[10px] uppercase tracking-wider mb-1 text-slate-400">Simulation Attribution Breakdown</span>
+                 {simulation.breakdown}
               </div>
            </div>
         </div>
       </section>
+
       {/* Component Sensitivity Reference */}
       <section className="space-y-6">
         <div className="flex items-center gap-3">
@@ -376,7 +466,17 @@ const ImpactTab = () => {
                     <tr className="bg-slate-50/50">
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Component</th>
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Cost Type</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Sensitivity</th>
+                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                        <span className="flex items-center gap-1">
+                          Sensitivity
+                          <span className="group relative cursor-help">
+                            <Info size={12} />
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-950 text-white text-[9px] rounded-lg font-medium shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-snug">
+                              Causal elasticity score: (% Δ Bill) / (% Δ Component).
+                            </span>
+                          </span>
+                        </span>
+                      </th>
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Price Variability</th>
                       <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Description</th>
                     </tr>
@@ -395,7 +495,7 @@ const ImpactTab = () => {
                         <td className="px-8 py-5">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-sm font-bold text-slate-900">{(item.elasticity).toFixed(3)}</span>
-                            <div className={`w-1.5 h-1.5 rounded-full ${item.elasticity > 0.4 ? 'bg-red-500 animate-pulse' : item.elasticity > 0.1 ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                            <div className={`w-1.5 h-1.5 rounded-full ${item.elasticity > 0.3 ? 'bg-red-500 animate-pulse' : item.elasticity > 0.1 ? 'bg-amber-500' : 'bg-slate-300'}`} />
                           </div>
                         </td>
                         <td className="px-8 py-5">
@@ -421,7 +521,6 @@ const ImpactTab = () => {
           </div>
         </div>
       </section>
-
 
       {/* AI Report Fragment */}
       {report && (

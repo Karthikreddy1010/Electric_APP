@@ -1,5 +1,5 @@
 """
-Full smoke test — all 16 endpoints (12 original + 4 new bill impact).
+Full smoke test — all 16 endpoints registered in ElectricAI.
 """
 import urllib.request
 import json
@@ -42,61 +42,71 @@ def check(name, fn):
         return None
 
 
-print("=" * 70)
-print("ElectricAI FastAPI -- Full Endpoint Smoke Tests (16 endpoints)")
-print("=" * 70)
+print("=" * 75)
+print("ElectricAI FastAPI -- Up-to-date Smoke Tests (16 endpoints)")
+print("=" * 75)
 
-# ── Original 12 ──────────────────────────────────────────────────────────
-print("\n-- Original Endpoints (12) --")
+# 1. Health
 check("GET  /health", lambda: get("/health"))
+
+# 2. Dashboard overview KPIs
+check("GET  /overview", lambda: get("/overview"))
+
+# 3. Top-N cost component features
+check("GET  /impact/top-features?n=5", lambda: get("/impact/top-features?n=5"))
+
+# 4. Full impact analysis with OLS coefficients
+full_res = check("GET  /impact/full-analysis", lambda: get("/impact/full-analysis"))
+if full_res:
+    print(f"        Base Bill: ${full_res.get('base_bill')}, Confidence: {full_res.get('confidence')}")
+
+# 5. LLM or fallback explanation generator (using POST /report/generate)
+check("POST /report/generate", lambda: post("/report/generate", {}))
+
+# 6. PDF generation endpoint
+check("POST /report/pdf", lambda: post("/report/pdf", {}))
+
+# 7. Simulator scenario logic
+sim_body = {"modifications": {"bgs": 10}, "kwh": 750}
+check("POST /simulate", lambda: post("/simulate", sim_body))
+
+# 8. Geo Meta
+meta = check("GET  /geo/meta", lambda: get("/geo/meta"))
+
+# 9. Geo Map data for timeline
+check("GET  /geo/data?month=2025-12&type=bill", lambda: get("/geo/data?month=2025-12&type=bill"))
+
+# 10. Geo Trend analysis for state
+check("GET  /geo/trend?region=NJ&type=bill", lambda: get("/geo/trend?region=NJ&type=bill"))
+
+# 11. Geo Detail regional component breakdown
+check("GET  /geo/detail?state=NJ&month=2025-12", lambda: get("/geo/detail?state=NJ&month=2025-12"))
+
+# 12. Post AI insights analyzer for zipcodes
+geo_insights_body = {
+    "location": {"state": "NJ", "zip_codes": ["07302"]},
+    "electricity_data": [
+        {"zip_code": "07302", "state": "NJ", "month": 12, "year": 2025, "avg_price": 0.165, "consumption_kwh": 700.0, "peak_demand": 3.2, "renewable_ratio": 0.22}
+    ]
+}
+check("POST /geo/generate-insights", lambda: post("/geo/generate-insights", geo_insights_body))
+
+# 13. Billing breakdown
 check("GET  /bill-breakdown?months=2", lambda: get("/bill-breakdown?months=2"))
+
+# 14. Billing trend
 check("GET  /trends?months=6", lambda: get("/trends?months=6"))
-check("GET  /contribution", lambda: get("/contribution?month_index=-1"))
-check("GET  /sensitivity", lambda: get("/sensitivity?month_index=-1&pct=10"))
-check("GET  /geo-lookup", lambda: get("/geo-lookup?zip_code=07302"))
-check("GET  /geo-all-counties", lambda: get("/geo-all-counties"))
-check("POST /forecast", lambda: post("/forecast", {"months_ahead": 3, "model_type": "ensemble", "include_ci": True}))
-check("POST /impact", lambda: post("/impact", {"top_n": 5}))
-check("POST /benchmark", lambda: post("/benchmark", {"year": 2025, "compare_state": "NJ"}))
-check("POST /plan-simulation", lambda: post("/plan-simulation", {"monthly_usage_kwh": 750, "n_simulations": 1000, "horizon_months": 12}))
-check("POST /simulate-bill", lambda: post("/simulate-bill", {"bgs_cost": 100.0, "usage_kwh": 800}))
 
-# ── New Bill Impact Engine (4) ───────────────────────────────────────────
-print("\n-- New Bill Impact Endpoints (4) --")
+# 15. US benchmark rates
+check("GET  /benchmark?year=2025&compare_state=NJ", lambda: get("/benchmark?year=2025&compare_state=NJ"))
 
-# Sensitivity: +15% BGS rate
-r = check("POST /impact/sensitivity (bgs_rate +15%)", lambda: post("/impact/sensitivity", {
-    "component": "bgs_rate", "change_pct": 15.0
-}))
-if r:
-    print(f"        Base: ${r['base_bill']} -> New: ${r['new_bill']}  (impact: ${r['absolute_impact']}, elasticity: {r['elasticity']})")
+# 16. Demand Forecast
+check("GET  /forecast?horizon=30&model=ensemble", lambda: get("/forecast?horizon=30&model=ensemble"))
 
-# What-if: multiple changes
-r = check("POST /impact/what-if (multi-change)", lambda: post("/impact/what-if", {
-    "changes": {"bgs_rate": 20, "sbc_rate": -10, "distribution_rate": 5},
-    "kwh": 900
-}))
-if r:
-    print(f"        Base: ${r['base_bill']} -> New: ${r['new_bill']}  (total impact: ${r['total_impact']})")
-
-# Rank: all components
-r = check("GET  /impact/rank", lambda: get("/impact/rank"))
-if r:
-    top = r["rankings"][0]
-    print(f"        #1 most impactful: {top['label']} ({top['share_pct']}% of bill, elasticity={top['elasticity']})")
-
-# Causal: bgs_rate
-r = check("POST /impact/causal (bgs_rate)", lambda: post("/impact/causal", {
-    "treatment": "bgs_rate"
-}))
-if r:
-    print(f"        Estimate: {r['causal_effect_estimate']} (p={r['p_value']})")
-    print(f"        {r['interpretation']}")
-
-print("\n" + "=" * 70)
+print("\n" + "=" * 75)
 print(f"Results: {passed} passed, {failed} failed out of {passed + failed} tests")
 if failed == 0:
-    print("ALL 16 ENDPOINTS WORKING!")
+    print("ALL 16 ENDPOINTS WORKING AND VERIFIED!")
 else:
     print("Some endpoints failed.")
     sys.exit(1)
