@@ -102,7 +102,7 @@ const CustomTrendTooltip = ({ active, payload, label }: any) => {
           {mom !== undefined && mom !== null && (
             <p className={`text-xs font-semibold flex items-center gap-1 ${mom > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
               {mom > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-              MoM Change: {Math.abs(mom).toFixed(1)}%
+              Monthly changes: {Math.abs(mom).toFixed(1)}%
             </p>
           )}
         </div>
@@ -169,7 +169,7 @@ const OverviewTab = () => {
             {data.kpis.usage_change_pct !== undefined && data.kpis.usage_change_pct !== null && (
               <div className={`flex items-center gap-0.5 text-xs font-bold px-2.5 py-1 rounded-lg ${data.kpis.usage_change_pct > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                 {data.kpis.usage_change_pct > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {Math.abs(data.kpis.usage_change_pct).toFixed(1)}% MoM
+                {Math.abs(data.kpis.usage_change_pct).toFixed(1)}% Monthly changes
               </div>
             )}
           </div>
@@ -187,7 +187,7 @@ const OverviewTab = () => {
             {data.kpis.rate_change_pct !== undefined && data.kpis.rate_change_pct !== null && (
               <div className={`flex items-center gap-0.5 text-xs font-bold px-2.5 py-1 rounded-lg ${data.kpis.rate_change_pct > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                 {data.kpis.rate_change_pct > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                {Math.abs(data.kpis.rate_change_pct).toFixed(1)}% MoM
+                {Math.abs(data.kpis.rate_change_pct).toFixed(1)}% Monthly changes
               </div>
             )}
           </div>
@@ -244,7 +244,7 @@ const OverviewTab = () => {
           <div className="flex justify-between items-center mb-8">
             <div>
               <h3 className="text-lg font-bold text-slate-950">Cost Trend</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Total monthly bill vs Month-over-Month percentage change</p>
+              <p className="text-xs text-slate-400 mt-0.5">Total monthly bill vs Monthly changes</p>
             </div>
             <TimeRangeSelector value={trendRange} onChange={setTrendRange} options={[12, 24, 36]} />
           </div>
@@ -284,8 +284,8 @@ const OverviewTab = () => {
                 <Tooltip content={<CustomTrendTooltip />} cursor={{stroke: '#E2E8F0', strokeWidth: 1}} />
                 <Area yAxisId="left" type="monotone" dataKey="bill" stroke="none" fill="url(#colorBill)" />
                 
-                {/* MoM % Change Bars */}
-                <Bar yAxisId="right" dataKey="mom" name="MoM Change %" barSize={8} radius={[2, 2, 0, 0]} opacity={0.7}>
+                {/* Monthly changes % Bars */}
+                <Bar yAxisId="right" dataKey="mom" name="Monthly changes" barSize={8} radius={[2, 2, 0, 0]} opacity={0.7}>
                   {trendData.map((entry: any, index: number) => {
                     const isPositive = (entry.mom || 0) > 0;
                     return (

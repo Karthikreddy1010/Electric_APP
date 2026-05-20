@@ -45,7 +45,7 @@ const ImpactTab = () => {
 
   // LLM Report Mutation
   const reportMutation = useMutation({
-    queryKey: ['explain-bill-report'],
+    mutationKey: ['explain-bill-report'],
     mutationFn: async () => {
       setReport(""); // Clear previous report
       const response = await fetch('/report/generate', {
@@ -78,7 +78,7 @@ const ImpactTab = () => {
 
   // PDF Export
   const pdfMutation = useMutation({
-    queryKey: ['pdf-report'],
+    mutationKey: ['pdf-report'],
     mutationFn: async () => {
       const res = await axios.post('/report/pdf', {}, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
