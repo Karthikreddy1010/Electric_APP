@@ -113,6 +113,35 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Impact model init failed: {e}")
 
+    # ── Step 4b: Demand model (learned elasticity) ───────────────────────────
+    try:
+        from models.demand_model import DemandResponseModel
+        demand_model = DemandResponseModel()
+        demand_model.train(app_state["feature_matrix"], app_state["feature_cols"])
+        app_state["demand_model"] = demand_model
+        logger.info(f"DemandResponseModel trained (elasticity={demand_model.get_learned_elasticity():.4f})")
+    except Exception as e:
+        logger.warning(f"Demand model training failed (non-fatal): {e}")
+
+    # ── Step 4c: Causal model ────────────────────────────────────────────────
+    try:
+        from api.services.causal_model_service import CausalModelService
+        causal_svc = CausalModelService()
+        causal_svc.fit(app_state["feature_matrix"])
+        app_state["causal_service"] = causal_svc
+        logger.info("CausalModelService (DML) fitted")
+    except Exception as e:
+        logger.warning(f"Causal model fit failed (non-fatal): {e}")
+
+    # ── Step 4d: Rate Covariance Matrix for Simulation ───────────────────────
+    try:
+        from api.services.simulation_service_v2 import build_rate_covariance
+        if app_state.get("billing_df") is not None:
+            app_state["rate_cov_matrix"] = build_rate_covariance(app_state["billing_df"])
+            logger.info("Rate covariance matrix built")
+    except Exception as e:
+        logger.warning(f"Rate covariance matrix build failed (non-fatal): {e}")
+
     # ── Step 5: Forecast ensemble (trains SARIMA + Prophet) ──────────────────
     try:
         from models.forecast_model import ElectricityDemandForecaster

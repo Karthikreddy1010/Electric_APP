@@ -220,6 +220,35 @@ class WhatIfResponse(BaseModel):
     usage_response: float
     contributions: dict
 
+# ===== /impact/what-if-v2 =====
+class WhatIfV2Request(BaseModel):
+    changes: dict[str, float] = Field(
+        ..., description="Map of component -> change_pct, e.g. {'bgs_rate': 15, 'sbc_rate': -5}"
+    )
+    kwh: Optional[float] = Field(None, ge=0, le=10000)
+    scenario: Optional[str] = Field(
+        None, description="Named scenario preset: cold_winter, hot_summer, high_market, low_usage, conservation"
+    )
+    n_simulations: int = Field(2000, ge=500, le=10000)
+
+class BillDecomposition(BaseModel):
+    direct_price_effect: float
+    indirect_behavioral_effect: float
+    weather_effect: float
+    interaction_effect: float
+
+class WhatIfV2Response(BaseModel):
+    base_bill: float
+    simulated_bill: float
+    confidence_interval: list[float] = Field(..., description="95% CI from Monte Carlo simulation")
+    usage_change_kwh: float
+    learned_elasticity: float
+    decomposition: BillDecomposition
+    contributions: dict
+    scenario_applied: Optional[str] = None
+    model_info: dict
+    distribution: Optional[dict] = None
+
 # ===== /impact/rank =====
 class RankItem(BaseModel):
     component: str
@@ -240,5 +269,16 @@ class CausalResponse(BaseModel):
     treatment: str
     causal_effect_estimate: float
     p_value: float
+    interpretation: str
+    caveat: str
+
+class CausalV2Response(BaseModel):
+    treatment: str
+    causal_effect_estimate: float
+    std_error: float
+    p_value: float
+    ci_95: list[float]
+    confounders_controlled: list[str]
+    method: str
     interpretation: str
     caveat: str

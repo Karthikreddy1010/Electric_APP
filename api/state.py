@@ -15,4 +15,7 @@ app_state: dict = {
     "feature_matrix": None,
     "feature_cols": None,
     "geo_monthly_df": None,
+    "demand_model": None,
+    "causal_service": None,
+    "rate_cov_matrix": None,
 }

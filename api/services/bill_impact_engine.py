@@ -12,7 +12,6 @@ import logging
 from typing import Any, Dict, List, Optional
 import pandas as pd
 import numpy as np
-from sklearn.linear_model import RidgeCV
 
 from api.state import app_state
 
@@ -20,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 # Constants
 NJ_SALES_TAX_RATE = 0.06625
-DEMAND_ELASTICITY = -0.2  # Typical short-run electricity price elasticity
 
 COMPONENT_TYPES = {
     "customer_charge": {
@@ -70,6 +68,12 @@ COMPONENT_TYPES = {
 class BillImpactEngine:
     def __init__(self):
         self.tax_rate = NJ_SALES_TAX_RATE
+
+    def get_elasticity(self) -> float:
+        demand_model = app_state.get("demand_model")
+        if demand_model and demand_model.is_trained:
+            return demand_model.get_learned_elasticity()
+        return -0.20
 
     # ═══════════════════════════════════════════════════════════════════════════
     #  1. DETERMINISTIC LAYER (Ground Truth)
@@ -137,59 +141,52 @@ class BillImpactEngine:
         }
 
     # ═══════════════════════════════════════════════════════════════════════════
-    #  3. WHAT-IF SIMULATION
+    #  3. WHAT-IF SIMULATION (V1 and V2)
     # ═══════════════════════════════════════════════════════════════════════════
 
     def what_if_simulation(self, modifications: dict[str, float], kwh: Optional[float] = None) -> dict[str, Any]:
         """
-        Scenario Simulation with Monte Carlo uncertainty.
-        Propagates uncertainty in demand elasticity and rate volatility.
+        Scenario Simulation V1 - backward compatible.
+        Delegates to V2 engine but returns the expected shape.
         """
-        df = app_state.get("billing_df")
-        latest = df.iloc[-1].to_dict()
-        usage = kwh if kwh is not None else float(latest.get("usage_kwh", 750))
+        return self.what_if_simulation_v2(modifications, kwh=kwh)
 
-        base_comps = {k: float(latest.get(k, 0.0)) for k in COMPONENT_TYPES.keys()}
-        base_bill = self.calculate_total_bill(base_comps, usage)
+    def what_if_simulation_v2(self, modifications: dict[str, float], kwh: Optional[float] = None,
+                              scenario: Optional[str] = None, n_sim: int = 2000) -> dict[str, Any]:
+        """
+        Scenario Simulation V2 with learned demand model, weather variations,
+        and full multivariate Monte Carlo simulation.
+        """
+        from api.services.simulation_service_v2 import simulate_v2, build_weather_stats
 
-        mod_comps = dict(base_comps)
-        for comp, pct in modifications.items():
-            if comp in mod_comps:
-                mod_comps[comp] *= (1 + pct / 100.0)
+        billing_df = app_state.get("billing_df")
+        if billing_df is None or len(billing_df) == 0:
+            return {"error": "Billing data not loaded"}
 
-        # Monte Carlo Simulation
-        n_sim = 1000
-        sim_results = []
+        feature_df = app_state.get("feature_matrix")
+        demand_model = app_state.get("demand_model")
+        rate_cov = app_state.get("rate_cov_matrix")
         
-        for _ in range(n_sim):
-            # Sample elasticity from a normal distribution (mean -0.2, std 0.05)
-            e_draw = np.random.normal(DEMAND_ELASTICITY, 0.05)
-            
-            # Temporary bill to find price change
-            temp = self.calculate_total_bill(mod_comps, usage)
-            p_change = (temp["total_bill"] - base_bill["total_bill"]) / base_bill["total_bill"]
-            
-            # Simulated usage response
-            sim_usage = usage * (1 + p_change * e_draw)
-            sim_bill = self.calculate_total_bill(mod_comps, sim_usage)
-            sim_results.append(sim_bill["total_bill"])
+        weather_stats = None
+        if feature_df is not None:
+            weather_stats = build_weather_stats(feature_df)
 
-        sim_results = np.array(sim_results)
-        
-        return {
-            "base_bill": base_bill["total_bill"],
-            "new_bill": round(float(np.median(sim_results)), 2),
-            "total_impact": round(float(np.median(sim_results)) - base_bill["total_bill"], 2),
-            "confidence_interval": [
-                round(float(np.percentile(sim_results, 2.5)), 2),
-                round(float(np.percentile(sim_results, 97.5)), 2)
-            ],
-            "usage_response": round(float(np.median(sim_results) / base_bill["total_bill"] * usage) - usage, 2),
-            "contributions": {
-                COMPONENT_TYPES[k]["label"]: round(float(mod_comps[k] * usage * (1+self.tax_rate)), 2) if COMPONENT_TYPES[k]["type"] == "variable" else round(mod_comps[k] * (1+self.tax_rate), 2)
-                for k in mod_comps
-            }
-        }
+        try:
+            res = simulate_v2(
+                modifications=modifications,
+                billing_df=billing_df,
+                feature_df=feature_df,
+                demand_model=demand_model,
+                rate_cov=rate_cov,
+                weather_stats=weather_stats,
+                scenario=scenario,
+                kwh_override=kwh,
+                n_sim=n_sim
+            )
+            return res
+        except Exception as e:
+            logger.exception("Simulation V2 failed")
+            return {"error": str(e)}
 
     # ═══════════════════════════════════════════════════════════════════════════
     #  4. IMPACT RANKING
@@ -224,9 +221,15 @@ class BillImpactEngine:
 
     def get_causal_impact(self, treatment: str) -> dict[str, Any]:
         """
-        Estimate causal effect of a rate component on the total bill using DoWhy.
-        This distinguishes correlation from causation by controlling for confounders.
+        Estimate causal effect of a rate component on the total bill using Double ML.
         """
+        causal_service = app_state.get("causal_service")
+        
+        # If DML service is available, use it
+        if causal_service and causal_service.is_fitted:
+            return causal_service.get_causal_impact_legacy(treatment)
+            
+        # Fallback to older dowhy if DML is not available
         try:
             from dowhy import CausalModel
             
@@ -234,12 +237,6 @@ class BillImpactEngine:
             if df is None or len(df) < 24:
                 return {"error": "Insufficient data for causal inference (min 24 months)"}
 
-            # Define causal variables
-            # Treatment: component rate
-            # Outcome: total bill
-            # Confounders: usage_kwh, month (seasonality), and weather if available
-            
-            # Ensure month is numeric for regression
             if 'month' in df.columns:
                 df['month_num'] = pd.to_datetime(df['month']).dt.month if df['month'].dtype == 'object' else df['month']
             
@@ -250,10 +247,7 @@ class BillImpactEngine:
                 common_causes=["usage_kwh", "month_num"] if 'month_num' in df.columns else ["usage_kwh"]
             )
             
-            # Identification
             identified_estimand = model.identify_effect(proceed_when_unidentifiable=True)
-            
-            # Estimation
             estimate = model.estimate_effect(
                 identified_estimand,
                 method_name="backdoor.linear_regression",
@@ -268,9 +262,18 @@ class BillImpactEngine:
                 "caveat": "Estimated using observational data; results assume no unobserved confounders."
             }
         except ImportError:
-            return {"error": "DoWhy not installed for causal inference"}
+            return {"error": "Causal inference services not available"}
         except Exception as e:
             logger.warning(f"Causal inference failed for {treatment}: {e}")
             return {"error": str(e)}
+
+    def get_causal_impact_v2(self, treatment: str) -> dict[str, Any]:
+        """
+        Get the full rich CausalV2Response from the DML causal model.
+        """
+        causal_service = app_state.get("causal_service")
+        if causal_service and causal_service.is_fitted:
+            return causal_service.estimate(treatment)
+        return {"error": "Causal model not fitted"}
 
 bill_impact_engine = BillImpactEngine()

@@ -9,8 +9,10 @@ from api.state import app_state
 from api.schemas import (
     SensitivityRequest, SensitivityResponse,
     WhatIfRequest, WhatIfResponse,
+    WhatIfV2Request, WhatIfV2Response,
     RankResponse,
-    CausalRequest, CausalResponse
+    CausalRequest, CausalResponse,
+    CausalV2Response
 )
 from api.services.bill_impact_engine import bill_impact_engine, COMPONENT_TYPES
 
@@ -48,6 +50,25 @@ async def impact_what_if(req: WhatIfRequest):
         raise HTTPException(400, result["error"])
     return result
 
+@router.post("/what-if-v2", response_model=WhatIfV2Response)
+async def impact_what_if_v2(req: WhatIfV2Request):
+    """
+    Enhanced what-if simulation with learned demand, weather variations,
+    and full multivariate Monte Carlo simulation.
+    """
+    if not req.changes and not req.scenario:
+        raise HTTPException(400, "No changes or scenario provided")
+        
+    result = bill_impact_engine.what_if_simulation_v2(
+        modifications=req.changes,
+        kwh=req.kwh,
+        scenario=req.scenario,
+        n_sim=req.n_simulations
+    )
+    if "error" in result:
+        raise HTTPException(400, result["error"])
+    return result
+
 @router.get("/rank", response_model=RankResponse)
 async def impact_rank():
     """
@@ -70,6 +91,20 @@ async def impact_causal(req: CausalRequest):
         raise HTTPException(400, f"Invalid treatment component: {req.treatment}")
         
     result = bill_impact_engine.get_causal_impact(req.treatment)
+    if "error" in result:
+        raise HTTPException(500, result["error"])
+    return result
+
+@router.post("/causal-v2", response_model=CausalV2Response)
+async def impact_causal_v2(req: CausalRequest):
+    """
+    Estimate the causal impact using Double Machine Learning (DML)
+    controlling for high-dimensional confounders.
+    """
+    if req.treatment not in COMPONENT_TYPES:
+        raise HTTPException(400, f"Invalid treatment component: {req.treatment}")
+        
+    result = bill_impact_engine.get_causal_impact_v2(req.treatment)
     if "error" in result:
         raise HTTPException(500, result["error"])
     return result
