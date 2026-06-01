@@ -56,8 +56,7 @@ async def impact_what_if_v2(req: WhatIfV2Request):
     Enhanced what-if simulation with learned demand, weather variations,
     and full multivariate Monte Carlo simulation.
     """
-    if not req.changes and not req.scenario:
-        raise HTTPException(400, "No changes or scenario provided")
+
         
     result = bill_impact_engine.what_if_simulation_v2(
         modifications=req.changes,

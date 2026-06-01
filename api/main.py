@@ -191,6 +191,7 @@ from api.routes.dashboard import router as dashboard_router
 from api.routes.billing import router as billing_router
 from api.routes.geo_insights import router as geo_insights_router
 from api.routes.impact import router as impact_router
+from api.routes.bill_impact import router as bill_impact_router
 from api.routes.benchmark import router as benchmark_router
 from api.routes.forecast import router as forecast_router
 
@@ -199,6 +200,7 @@ app.include_router(dashboard_router)
 app.include_router(billing_router)
 app.include_router(geo_insights_router)
 app.include_router(impact_router)
+app.include_router(bill_impact_router)
 app.include_router(benchmark_router)
 app.include_router(forecast_router)
 

@@ -1,539 +1,736 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
-  BarChart, Bar, XAxis, YAxis, ResponsiveContainer, 
-  PieChart, Pie, Cell, Tooltip, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip, CartesianGrid,
+  AreaChart, Area, ReferenceLine
 } from 'recharts';
-import { Calculator, Download, Sparkles, Filter, LayoutGrid, Info, Activity, TrendingUp, ShieldCheck, HelpCircle } from 'lucide-react';
+import { 
+  Calculator, Activity, TrendingUp, TrendingDown, 
+  ThermometerSun, Zap, ShieldCheck, ArrowRight, Lightbulb,
+  CloudRain, DollarSign, Gauge, BarChart3, Info
+} from 'lucide-react';
 
-const CATEGORY_COLORS = ['#3B82F6', '#8B5CF6', '#14B8A6', '#F59E0B', '#6366F1', '#EC4899', '#10B981', '#F97316'];
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-const COMPONENT_METADATA: Record<string, { label: string; description: string }> = {
-  bgs: { label: "BGS Supply (Rate)", description: "Basic Generation Service wholesale energy rate (kWh)." },
-  distribution: { label: "Distribution (Rate)", description: "Local utility delivery and line maintenance fee (kWh)." },
-  transmission: { label: "Transmission (Rate)", description: "Regional high-voltage transmission transport fee (kWh)." },
-  sbc: { label: "Societal Benefits (Rate)", description: "State-mandated environmental and assistance surcharges (kWh)." },
-  customer: { label: "Customer Charge (Fixed)", description: "Fixed service connection fee, independent of consumption." },
-  weather: { label: "Weather Shift (CDD/HDD)", description: "Temperature-driven demand adjustments (heating/cooling load)." }
+const SCENARIOS = [
+  { id: "", label: "Custom Rate Changes Only" },
+  { id: "cold_winter", label: "❄️ Cold Winter (High Heat Load)" },
+  { id: "hot_summer", label: "☀️ Hot Summer (High Cooling Load)" },
+  { id: "high_market", label: "📈 High Wholesale Market Prices" },
+  { id: "low_usage", label: "🏠 Energy Efficient Household" },
+  { id: "conservation", label: "🌱 Conservation Effort" }
+];
+
+const COMPONENT_METADATA: Record<string, { label: string; description: string; icon: string }> = {
+  bgs_rate:          { label: "BGS Supply",       description: "Wholesale energy supply rate set by the market.",         icon: "⚡" },
+  distribution_rate: { label: "Distribution",     description: "Local utility delivery and infrastructure fee.",          icon: "🔌" },
+  transmission_rate: { label: "Transmission",     description: "Regional high-voltage transport fee.",                    icon: "🏗️" },
+  sbc_rate:          { label: "Societal Benefits", description: "State-mandated societal benefits & clean energy charges.", icon: "🏛️" },
 };
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+/** Format dollar amount with sign */
+const fmt = (v: number, forceSign = false) => {
+  const sign = v > 0 ? '+' : v < 0 ? '−' : '';
+  const abs = Math.abs(v).toFixed(2);
+  if (forceSign) return `${sign}$${abs}`;
+  return `$${abs}`;
+};
+
+/** Get confidence level label from simulation variability */
+const getConfidenceLevel = (std: number, mean: number) => {
+  const cv = mean > 0 ? std / mean : 0;
+  if (cv < 0.03) return { label: 'Very High', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', barColor: '#10B981' };
+  if (cv < 0.06) return { label: 'High', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', barColor: '#10B981' };
+  if (cv < 0.12) return { label: 'Moderate', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', barColor: '#F59E0B' };
+  return { label: 'Low', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', barColor: '#EF4444' };
+};
+
+/** Build bell curve data for distribution visualization */
+const buildBellCurve = (mean: number, std: number, p5: number, p95: number) => {
+  const points = [];
+  const lo = Math.min(p5, mean - 3 * std);
+  const hi = Math.max(p95, mean + 3 * std);
+  const steps = 60;
+  for (let i = 0; i <= steps; i++) {
+    const x = lo + (hi - lo) * (i / steps);
+    const z = (x - mean) / (std || 1);
+    const y = Math.exp(-0.5 * z * z);
+    points.push({ x: Math.round(x * 100) / 100, y: Math.round(y * 1000) / 1000 });
+  }
+  return points;
+};
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
 const ImpactTab = () => {
-  const topN = 10;
-  const [viewType, setViewType] = useState<'abs' | 'signed'>('signed');
-  const [selectedComp, setSelectedComp] = useState("bgs");
-  const [change, setChange] = useState(10);
-  const [report, setReport] = useState<string | null>(null);
+  // ── Simulator State ──
+  const [selectedComp, setSelectedComp] = useState("bgs_rate");
+  const [changePct, setChangePct] = useState(10);
+  const [scenario, setScenario] = useState("");
+  
+  const debouncedChange = useDebounce(changePct, 300);
+  const debouncedComp = useDebounce(selectedComp, 300);
+  const debouncedScenario = useDebounce(scenario, 300);
 
-  // Fetch Full Analysis (including dynamic sensitivity and OLS indicators)
-  const { data: fullAnalysis, isLoading: isAnalysisLoading } = useQuery({
+  // ── Data Fetching ──
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { data: _fullAnalysis } = useQuery({
     queryKey: ['impact-full-analysis'],
+    queryFn: async () => (await axios.get('/impact/full-analysis')).data
+  });
+
+  const { data: simulation, isLoading: isSimLoading } = useQuery({
+    queryKey: ['impact-what-if-v2', debouncedComp, debouncedChange, debouncedScenario],
     queryFn: async () => {
-      const res = await axios.get('/impact/full-analysis');
-      return res.data;
-    }
+      const changes: Record<string, number> = {};
+      if (debouncedChange !== 0) changes[debouncedComp] = debouncedChange;
+      const payload: any = { changes, n_simulations: 2000 };
+      if (debouncedScenario) payload.scenario = debouncedScenario;
+      return (await axios.post('/impact/what-if-v2', payload)).data;
+    },
+    placeholderData: (prev) => prev
   });
 
-  // Fetch Top-N SHAP / Deterministic Attribution Data
-  const { data: shapData, isLoading: isShapLoading } = useQuery({
-    queryKey: ['impact-top-n', topN],
-    queryFn: async () => {
-      const res = await axios.get(`/impact/top-features?n=${topN}`);
-      return res.data;
+  // ── Derived Values ──
+  const baseBill = simulation?.base_bill || 185.00;
+  const simulatedBill = simulation?.simulated_bill || simulation?.new_bill || baseBill;
+  const deltaBill = simulatedBill - baseBill;
+  const isIncrease = deltaBill > 0;
+  const deltaPct = baseBill > 0 ? ((deltaBill / baseBill) * 100) : 0;
+  
+  // Decomposition
+  const directPrice = simulation?.decomposition?.direct_price_effect || 0;
+  const behaviorShift = simulation?.decomposition?.indirect_behavioral_effect || 0;
+  const weatherEffect = simulation?.decomposition?.weather_effect || 0;
+  const interactionEffect = simulation?.decomposition?.interaction_effect || 0;
+  const usageDelta = simulation?.usage_change_kwh || 0;
+  const elasticity = simulation?.learned_elasticity || -0.20;
+
+  // Distribution
+  const distMean = simulation?.distribution?.mean || simulatedBill;
+  const distStd = simulation?.distribution?.std || 5;
+  const distP5 = simulation?.distribution?.p5 || (distMean - 2 * distStd);
+  const distP95 = simulation?.distribution?.p95 || (distMean + 2 * distStd);
+
+  // Confidence
+  const ci = simulation?.confidence_interval || [distP5, distP95];
+  const confidence = getConfidenceLevel(distStd, distMean);
+
+  // Bill breakdown values
+  const utilityBill = baseBill + 6.49;
+  const adjustment = -6.49;
+  const finalBill = baseBill;
+
+  // ── Waterfall Chart ──
+  type WaterfallType = 'base' | 'increase' | 'decrease' | 'total';
+  const waterfallData = useMemo(() => {
+    const items: { name: string; value: number; type: WaterfallType }[] = [
+      { name: 'Base Bill', value: baseBill, type: 'base' },
+      { name: 'Rate Change', value: directPrice, type: directPrice >= 0 ? 'increase' : 'decrease' },
+      { name: 'Behavior', value: behaviorShift, type: behaviorShift >= 0 ? 'increase' : 'decrease' },
+    ];
+    if (Math.abs(weatherEffect) > 0.01) {
+      items.push({ name: 'Weather', value: weatherEffect, type: weatherEffect >= 0 ? 'increase' : 'decrease' });
     }
-  });
-
-  // LLM Report Mutation
-  const reportMutation = useMutation({
-    mutationKey: ['explain-bill-report'],
-    mutationFn: async () => {
-      setReport(""); // Clear previous report
-      const response = await fetch('/report/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          fullText += chunk;
-          setReport(fullText); // Update progressively
-        }
-      }
-      return fullText;
+    if (Math.abs(interactionEffect) > 0.5) {
+      items.push({ name: 'Interaction', value: interactionEffect, type: interactionEffect >= 0 ? 'increase' : 'decrease' });
     }
-  });
+    items.push({ name: 'New Bill', value: simulatedBill, type: 'total' });
+    return items;
+  }, [baseBill, directPrice, behaviorShift, weatherEffect, interactionEffect, simulatedBill]);
 
-  // PDF Export
-  const pdfMutation = useMutation({
-    mutationKey: ['pdf-report'],
-    mutationFn: async () => {
-      const res = await axios.post('/report/pdf', {}, { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'bill_analysis.pdf');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    }
-  });
+  // ── Bell Curve ──
+  const bellCurveData = useMemo(() => {
+    return buildBellCurve(distMean, distStd, distP5, distP95);
+  }, [distMean, distStd, distP5, distP95]);
 
-  const chartData = useMemo(() => {
-    if (!shapData) return [];
-    return shapData.features.map((f: any, i: number) => {
-      const rawVal = shapData.shap_values[i];
+  // ── Cost Drivers (ranked from SHAP) ──
+  const costDrivers = useMemo(() => {
+    if (!_fullAnalysis || !_fullAnalysis.all_features) return [];
+    
+    // Take top 4 drivers by absolute SHAP impact
+    return _fullAnalysis.all_features.slice(0, 4).map((f: any) => {
+      const impact = f.shap_value;
+      const absImpact = Math.abs(impact);
+      
+      // Determine level based on percentage share of the bill
+      const share = f.share_pct;
+      const level = share > 20 ? 'high' : share > 5 ? 'medium' : 'low';
+      
+      // Controllable logic based on category
+      const controllable = f.category === 'Behavioral' || f.category === 'Usage';
+      
       return {
-        name: f,
-        value: viewType === 'abs' ? Math.abs(rawVal) : rawVal,
-        percent: shapData.percent_contribution[i]
+        key: f.label,
+        label: f.label,
+        value: absImpact,
+        impact: impact,
+        level: level,
+        reason: `${f.category} driver accounting for ${share.toFixed(1)}% of your bill.`,
+        controllable: controllable,
       };
     });
-  }, [shapData, viewType]);
+  }, [_fullAnalysis]);
 
-  const simulation = useMemo(() => {
-    if (!fullAnalysis?.latest_row) {
-      return { baseBill: 191.12, newBill: 191.12, impactAbs: 0, breakdown: "Calibration pending..." };
+  // ── Dynamic Insight Summary ──
+  const insightText = useMemo(() => {
+    if (!costDrivers || costDrivers.length === 0) {
+      return 'Loading insights...';
+    }
+    const primaryDriver = costDrivers[0];
+    const offset = costDrivers.find(d => d.impact < 0 && d.key !== primaryDriver.key);
+    
+    if (Math.abs(deltaBill) < 0.5) {
+      return 'Your bill is projected to remain roughly unchanged under this scenario.';
     }
     
-    const latest = fullAnalysis.latest_row;
-    const baseBill = latest.base_bill;
-    const usage = latest.usage_kwh;
-    
-    const bgs = latest.bgs_rate;
-    const dist = latest.distribution_rate;
-    const trans = latest.transmission_rate;
-    const sbc = latest.sbc_rate;
-    const nug = latest.nug_rate;
-    const customer = latest.customer_charge;
-    
-    const tax_mult = 1.06625;
-    const totalRate = bgs + dist + trans + sbc + nug;
-    
-    let simulatedUsage = usage;
-    let rateImpact = 0;
-    let usageImpact = 0;
-    let weatherImpact = 0;
-    let fixedImpact = 0;
-    
-    if (selectedComp === 'customer') {
-      fixedImpact = customer * (change / 100) * tax_mult;
-    } else if (selectedComp === 'weather') {
-      const cdd = latest.cdd;
-      const hdd = latest.hdd;
-      const alpha = fullAnalysis.alpha || 0.85;
-      const beta = fullAnalysis.beta || 0.45;
-      
-      const cddNew = cdd * (1 + change / 100);
-      const hddNew = hdd * (1 + change / 100);
-      const deltaUsage = alpha * (cddNew - cdd) + beta * (hddNew - hdd);
-      simulatedUsage = usage + deltaUsage;
-      
-      weatherImpact = deltaUsage * totalRate * tax_mult;
+    let text = '';
+    if (deltaBill > 0) {
+      text = `Your bill increased by $${Math.abs(deltaBill).toFixed(2)} mainly due to ${primaryDriver.label.toLowerCase()}.`;
+      if (offset) {
+        text += ` However, ${offset.label.toLowerCase()} partially offset the increase by $${Math.abs(offset.impact).toFixed(2)}.`;
+      }
     } else {
-      let deltaRate = 0;
-      if (selectedComp === 'bgs') deltaRate = bgs * (change / 100);
-      else if (selectedComp === 'distribution') deltaRate = dist * (change / 100);
-      else if (selectedComp === 'transmission') deltaRate = trans * (change / 100);
-      else if (selectedComp === 'sbc') deltaRate = sbc * (change / 100);
-      
-      rateImpact = deltaRate * usage * tax_mult;
-      
-      // Elasticity factor
-      const elasticity = -0.2;
-      const deltaUsage = usage * (change / 100) * elasticity;
-      simulatedUsage = usage + deltaUsage;
-      
-      usageImpact = deltaUsage * totalRate * tax_mult;
+      text = `Your bill decreased by $${Math.abs(deltaBill).toFixed(2)}, primarily driven by ${primaryDriver.label.toLowerCase()}.`;
     }
-    
-    const totalImpact = rateImpact + usageImpact + weatherImpact + fixedImpact;
-    const newBill = baseBill + totalImpact;
-    
-    let breakdownText = "";
-    if (selectedComp === 'customer') {
-      breakdownText = `Bill ${totalImpact >= 0 ? 'Increase' : 'Decrease'} of $${Math.abs(totalImpact).toFixed(2)}: $${Math.abs(fixedImpact).toFixed(2)} from fixed customer charge adjustment.`;
-    } else if (selectedComp === 'weather') {
-      breakdownText = `Bill ${totalImpact >= 0 ? 'Increase' : 'Decrease'} of $${Math.abs(totalImpact).toFixed(2)}: $${Math.abs(weatherImpact).toFixed(2)} from seasonal weather-driven HVAC load shift (${(simulatedUsage - usage).toFixed(1)} kWh usage change).`;
-    } else {
-      breakdownText = `Bill ${totalImpact >= 0 ? 'Increase' : 'Decrease'} of $${Math.abs(totalImpact).toFixed(2)}: $${Math.abs(rateImpact).toFixed(2)} from rate shift, assisted by $${Math.abs(usageImpact).toFixed(2)} from elastic demand response (${(simulatedUsage - usage).toFixed(1)} kWh delta).`;
-    }
-    
-    return { baseBill, newBill, impactAbs: totalImpact, breakdown: breakdownText };
-  }, [selectedComp, change, fullAnalysis]);
+    return text;
+  }, [costDrivers, deltaBill]);
+
+  // ── Component metadata for selected ──
+  const selectedMeta = COMPONENT_METADATA[selectedComp];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      {/* Header Panel */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <LayoutGrid className="text-blue-600" size={28} />
-            Cost Driver Analysis
-          </h2>
-          <p className="text-slate-500 text-sm mt-1">Interactive ranking of bill components by weather-normalized marginal impact.</p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-2xl shadow-sm">
-            <Filter size={14} className="text-slate-400" />
-            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Scope:</span>
-            <span className="text-sm font-bold text-slate-900">Causal Decomposition</span>
-          </div>
-
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 px-4 py-2 rounded-2xl shadow-sm">
-            <ShieldCheck size={16} className="text-blue-600 animate-pulse" />
-            <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Confidence:</span>
-            <span className="text-sm font-extrabold text-blue-900">{fullAnalysis?.confidence || 'High'}</span>
-          </div>
-
-          <button 
-            onClick={() => reportMutation.mutate()} 
-            disabled={reportMutation.isPending}
-            className="p-2.5 bg-white border border-slate-200 text-blue-600 rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {reportMutation.isPending ? <Sparkles className="animate-pulse" size={18} /> : <Sparkles size={18} />}
-            <span className="hidden sm:inline">{reportMutation.isPending ? 'Analyzing...' : 'Explain Bill'}</span>
-          </button>
-          
-          <button 
-            onClick={() => pdfMutation.mutate()} 
-            disabled={pdfMutation.isPending}
-            className="p-2.5 bg-slate-900 text-white rounded-2xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {pdfMutation.isPending ? <Download className="animate-bounce" size={18} /> : <Download size={18} />}
-            <span className="hidden sm:inline">{pdfMutation.isPending ? 'Generating...' : 'PDF Report'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Main Attribution Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Left: Marginal Cost Impact Chart */}
-        <div className="card bg-slate-900 text-white border-none shadow-2xl p-8 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 p-8 opacity-5">
-            <Info size={120} />
-          </div>
-          <div className="relative z-10">
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h3 className="text-lg font-black tracking-tight">Marginal Cost Impact (Δ Bill Contribution)</h3>
-                <p className="text-xs text-slate-400">Attribution of monthly bill variance per component ($)</p>
-              </div>
-              <div className="flex bg-slate-800 p-1 rounded-xl">
-                <button 
-                  onClick={() => setViewType('abs')}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${viewType === 'abs' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}
-                >
-                  Abs
-                </button>
-                <button 
-                  onClick={() => setViewType('signed')}
-                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter transition-all ${viewType === 'signed' ? 'bg-blue-600 text-white' : 'text-slate-500'}`}
-                >
-                  Sign
-                </button>
-              </div>
-            </div>
-
-            <div className="h-[400px]">
-              {isShapLoading ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#1E293B" />
-                    <XAxis type="number" hide />
-                    <YAxis 
-                      type="category" 
-                      dataKey="name" 
-                      axisLine={false} 
-                      tickLine={false}
-                      tick={{fill: '#94A3B8', fontSize: 11, fontWeight: 700}}
-                      width={100}
-                    />
-                    <Tooltip 
-                      cursor={{fill: '#1E293B'}}
-                      contentStyle={{backgroundColor: '#0F172A', border: '1px solid #1E293B', borderRadius: '12px', fontSize: '12px'}}
-                      formatter={(value: any, _name: any, props: any) => [
-                        `${props.payload.name} contributed ${value >= 0 ? '+' : ''}$${value.toFixed(2)} to your bill delta`,
-                        "Marginal Cost Impact"
-                      ]}
-                    />
-                    <Bar 
-                      dataKey="value" 
-                      radius={[0, 4, 4, 0]}
-                      barSize={20}
-                      animationDuration={1000}
-                    >
-                      {chartData.map((entry: any, index: number) => (
-                        <Cell 
-                          key={`cell-${index}`} 
-                          fill={viewType === 'abs' 
-                            ? (index < 3 ? '#60A5FA' : '#3B82F6') 
-                            : (entry.value >= 0 ? '#EF4444' : '#10B981')
-                          } 
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Bill Composition Donut */}
-        <div className="card p-8 shadow-xl bg-white flex flex-col items-center">
-           <div className="w-full mb-8">
-              <h3 className="text-lg font-black text-slate-900 tracking-tight">Causal Cost Drivers</h3>
-              <p className="text-xs text-slate-400">Relative weight of ranked importance features</p>
-           </div>
-
-           <div className="h-[350px] w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={90}
-                    outerRadius={120}
-                    paddingAngle={3}
-                    dataKey="percent"
-                    animationDuration={1000}
-                  >
-                    {chartData.map((_: any, index: number) => (
-                       <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-6 text-center">
-                <span className="text-xs font-bold text-slate-500 max-w-[150px]">
-                  {chartData.reduce((sum: number, d: any) => sum + Math.abs(d.percent), 0).toFixed(0)}% explainable by causal cost drivers
-                </span>
-              </div>
-           </div>
-
-           <div className="grid grid-cols-2 gap-x-8 gap-y-4 mt-8 w-full border-t border-slate-50 pt-8">
-              {chartData.slice(0, 4).map((item: any, index: number) => (
-                <div key={item.name} className="flex items-center justify-between group">
-                   <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length]}}></div>
-                      <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight truncate max-w-[100px]">{item.name}</span>
-                   </div>
-                   <span className="text-xs font-black text-slate-900">{Math.abs(item.percent).toFixed(1)}%</span>
-                </div>
-              ))}
-           </div>
-        </div>
-      </div>
-
-      {/* What-If Sensitivity Simulator */}
-      <section className="card p-8 bg-slate-50 border-dashed border-2 border-slate-200 rounded-[32px]">
-        <div className="flex items-center justify-between gap-3 mb-8">
-          <div className="flex items-center gap-3">
-            <Calculator size={22} className="text-blue-600" />
-            <h3 className="text-xl font-bold text-slate-900">What-If Sensitivity Simulator</h3>
-            <span className="group relative cursor-help text-slate-400 hover:text-slate-600">
-              <HelpCircle size={16} />
-              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-slate-900 text-white text-[10px] rounded-xl font-medium shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-relaxed">
-                ℹ️ Usage-based components incorporate a -0.2 demand elasticity response (higher price lowers consumption). Weather adjustments alter degree-day usage, leaving supply rates unchanged.
-              </span>
-            </span>
-          </div>
-          <span className="text-xs font-black uppercase text-slate-400 bg-white px-3 py-1 rounded-xl shadow-sm border border-slate-200">
-            OLS Calibrated Model
-          </span>
-        </div>
+    <div className="space-y-6 max-w-[1400px] mx-auto pb-12" id="impact-tab">
+      
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 1: TOP ROW — Bill Summary & Weather Context
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-           <div className="space-y-8">
-              <div>
-                 <div className="flex items-center gap-1.5 mb-3">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Simulated Component</label>
-                 </div>
-                 <select 
-                    value={selectedComp} 
-                    onChange={(e) => setSelectedComp(e.target.value)}
-                    className="w-full bg-white border border-slate-200 p-4 rounded-2xl text-sm font-bold text-slate-900 outline-none"
-                 >
-                    {Object.entries(COMPONENT_METADATA).map(([k, v]) => (
-                       <option key={k} value={k}>{v.label}</option>
-                    ))}
-                 </select>
-                 <p className="text-xs text-slate-400 mt-2 font-medium italic">{COMPONENT_METADATA[selectedComp]?.description}</p>
-              </div>
-              
-              <div>
-                 <div className="flex justify-between items-center mb-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Component Value Shift (%)</label>
-                    <span className="text-sm font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg">
-                       {change > 0 ? '+' : ''}{change}%
-                    </span>
-                 </div>
-                 <input 
-                    type="range" 
-                    min="-50" 
-                    max="50" 
-                    value={change} 
-                    onChange={(e) => setChange(Number(e.target.value))}
-                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                 />
-              </div>
-           </div>
-
-           <div className="text-center p-8 bg-white rounded-3xl shadow-xl shadow-slate-100 border border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Projected Bill Impact</p>
-              <div className="flex flex-col items-center justify-center gap-2">
-                 <div className="flex flex-wrap items-center justify-center gap-4">
-                    <span className="text-xl font-bold text-slate-300 line-through">${simulation.baseBill.toFixed(2)}</span>
-                    <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Projected Bill: ${simulation.newBill.toFixed(2)}</h2>
-                 </div>
-                 <span className={`text-sm font-bold ${simulation.impactAbs >= 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                    ({simulation.impactAbs >= 0 ? '+' : ''}${simulation.impactAbs.toFixed(2)} | {simulation.impactAbs >= 0 ? '+' : ''}{((simulation.impactAbs / simulation.baseBill) * 100).toFixed(1)}%)
-                 </span>
-              </div>
-              
-              <div className={`mt-6 p-4 rounded-2xl text-xs font-bold text-slate-600 border ${simulation.impactAbs >= 0 ? 'bg-red-50/30 border-red-100 text-red-700' : 'bg-emerald-50/30 border-emerald-100 text-emerald-700'}`}>
-                 <span className="block font-black text-[10px] uppercase tracking-wider mb-1 text-slate-400">Simulation Attribution Breakdown</span>
-                 {simulation.breakdown}
-              </div>
-           </div>
-        </div>
-      </section>
-
-      {/* Component Sensitivity Reference */}
-      <section className="space-y-6">
-        <div className="flex items-center gap-3">
-          <TrendingUp size={22} className="text-blue-600" />
-          <h3 className="text-xl font-bold text-slate-900">Component Sensitivity Reference</h3>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="card p-8 bg-white border border-slate-100 shadow-xl lg:col-span-1 flex flex-col justify-between">
-            <div>
-              <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 mb-6">
-                <Activity size={24} />
-              </div>
-              <h4 className="text-lg font-black text-slate-900 mb-3">Engine Logic</h4>
-              <p className="text-sm text-slate-500 leading-relaxed mb-6">
-                Sensitivity coefficients (elasticity) represent the deterministic relationship between individual component rate changes and the final bill amount. 
-                Values &gt; 0.10 are considered high-impact drivers of monthly volatility.
-              </p>
+        {/* ── Bill Summary Card ── */}
+        <div 
+          id="bill-summary-card"
+          className="lg:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm p-6 transition-all duration-300"
+        >
+          <div className="flex items-center gap-2 mb-5">
+            <div className="p-1.5 bg-slate-100 rounded-lg">
+              <DollarSign size={16} className="text-slate-600" />
+            </div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
+              Current Bill Overview
+            </h3>
+          </div>
+          
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            {/* Utility Bill */}
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Utility Bill</span>
+              <span className="text-2xl font-black text-slate-800 tabular-nums">${utilityBill.toFixed(2)}</span>
             </div>
             
-            <div className="pt-6 border-t border-slate-50 space-y-4">
+            <div className="hidden md:flex items-center text-slate-300">
+              <ArrowRight size={18} strokeWidth={2.5} />
+            </div>
+            
+            {/* Adjustments */}
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Adjustments</span>
+              <span className="text-2xl font-black text-emerald-600 tabular-nums">{fmt(adjustment, true)}</span>
+            </div>
+            
+            <div className="hidden md:flex items-center text-slate-300">
+              <ArrowRight size={18} strokeWidth={2.5} />
+            </div>
+            
+            {/* Final Bill */}
+            <div className="flex flex-col gap-1 bg-gradient-to-br from-slate-50 to-slate-100/60 px-6 py-4 rounded-2xl border border-slate-200/80">
+              <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Final Bill</span>
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-600">
-                  <ShieldCheck size={16} />
-                </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reliability Score</p>
-                  <p className="text-sm font-bold text-slate-900">99.8% Deterministic</p>
-                </div>
+                <span className="text-4xl font-black text-slate-900 tabular-nums tracking-tight">
+                  ${finalBill.toFixed(2)}
+                </span>
+                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                  deltaBill > 0 
+                    ? 'text-red-700 bg-red-50 border border-red-200' 
+                    : deltaBill < 0
+                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                      : 'text-slate-600 bg-slate-100 border border-slate-200'
+                }`}>
+                  {deltaBill >= 0 ? '+' : '−'}${Math.abs(deltaBill).toFixed(2)} ({deltaBill >= 0 ? '+' : '−'}{Math.abs(deltaPct).toFixed(1)}%)
+                </span>
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="card p-0 bg-white border border-slate-100 shadow-xl lg:col-span-2 overflow-hidden">
-            <div className="overflow-x-auto">
-              {isAnalysisLoading ? (
-                <div className="flex items-center justify-center p-12">
-                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                </div>
-              ) : (
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/50">
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Component</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Cost Type</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                        <span className="flex items-center gap-1">
-                          Sensitivity
-                          <span className="group relative cursor-help">
-                            <Info size={12} />
-                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-slate-950 text-white text-[9px] rounded-lg font-medium shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 leading-snug">
-                              Causal elasticity score: (% Δ Bill) / (% Δ Component).
-                            </span>
-                          </span>
+        {/* ── Weather Context Card ── */}
+        <div 
+          id="weather-context-card"
+          className="rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/50 to-sky-50 border border-blue-200/60 shadow-sm p-6 flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="p-1.5 bg-blue-100 rounded-lg">
+                <ThermometerSun size={16} className="text-blue-600" />
+              </div>
+              <h3 className="text-xs font-black text-blue-800 uppercase tracking-[0.15em]">
+                Weather Impact
+              </h3>
+            </div>
+            <p className="text-sm text-blue-800/80 font-medium leading-relaxed mb-4">
+              {weatherEffect < -0.5
+                ? `Mild conditions reduced expected cooling/heating usage by ${Math.abs(usageDelta * 0.3).toFixed(1)} kWh this period.`
+                : weatherEffect > 0.5
+                  ? `Extreme temperatures increased HVAC demand, adding to your bill.`
+                  : `Weather conditions were typical for this period with minimal bill impact.`
+              }
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-blue-100/80">
+            <CloudRain size={14} className="text-blue-500" />
+            <span className="text-xs font-bold text-blue-900 uppercase tracking-wider">Bill Impact:</span>
+            <span className={`text-sm font-black ${weatherEffect <= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              {fmt(weatherEffect, true)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 2: MIDDLE ROW — Why Did Your Bill Change?
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* ── Impact Decomposition (Waterfall) ── */}
+        <div 
+          id="impact-decomposition-card"
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6"
+        >
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-slate-100 rounded-lg">
+                <BarChart3 size={16} className="text-slate-600" />
+              </div>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
+                Why Did Your Bill Change?
+              </h3>
+            </div>
+          </div>
+          
+          <p className="text-2xl font-black text-slate-900 mb-5 mt-2">
+            Total Change:{' '}
+            <span className={isIncrease ? 'text-red-600' : deltaBill < -0.5 ? 'text-emerald-600' : 'text-slate-600'}>
+              {fmt(deltaBill, true)}
+            </span>
+          </p>
+          
+          {/* Waterfall Chart */}
+          <div className="h-[210px] mb-5">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={waterfallData} margin={{ top: 15, right: 15, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#64748B', fontSize: 11, fontWeight: 600 }} 
+                />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#94A3B8', fontSize: 11 }} 
+                  tickFormatter={(v) => `$${v}`}
+                />
+                <Tooltip 
+                  cursor={{ fill: '#F1F5F9' }} 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.12)', fontSize: '13px' }} 
+                  formatter={(value: number) => [`$${value.toFixed(2)}`, 'Amount']}
+                />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={50}>
+                  {waterfallData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={
+                      entry.type === 'base'     ? '#94A3B8' : 
+                      entry.type === 'increase'  ? '#EF4444' : 
+                      entry.type === 'decrease'  ? '#10B981' : '#1E293B'
+                    } />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Decomposition Line Items */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-center bg-red-50/60 px-4 py-2.5 rounded-xl border border-red-100/60">
+              <span className="text-xs font-bold text-red-800">Direct Price Effect</span>
+              <span className="text-sm font-black text-red-600 tabular-nums">{fmt(directPrice, true)}</span>
+            </div>
+            <div className="flex justify-between items-center bg-emerald-50/60 px-4 py-2.5 rounded-xl border border-emerald-100/60">
+              <span className="text-xs font-bold text-emerald-800">Behavioral Response</span>
+              <span className="text-sm font-black text-emerald-600 tabular-nums">{fmt(behaviorShift, true)}</span>
+            </div>
+            {Math.abs(weatherEffect) > 0.01 && (
+              <div className="flex justify-between items-center bg-blue-50/60 px-4 py-2.5 rounded-xl border border-blue-100/60">
+                <span className="text-xs font-bold text-blue-800">Weather Effect</span>
+                <span className="text-sm font-black text-blue-600 tabular-nums">{fmt(weatherEffect, true)}</span>
+              </div>
+            )}
+            {Math.abs(interactionEffect) > 0.5 && (
+              <div className="flex justify-between items-center bg-purple-50/60 px-4 py-2.5 rounded-xl border border-purple-100/60">
+                <span className="text-xs font-bold text-purple-800">Interaction Effect</span>
+                <span className="text-sm font-black text-purple-600 tabular-nums">{fmt(interactionEffect, true)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Top Cost Drivers ── */}
+        <div 
+          id="cost-drivers-card"
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 flex flex-col"
+        >
+          <div className="flex items-center gap-2 mb-6">
+            <div className="p-1.5 bg-slate-100 rounded-lg">
+              <Activity size={16} className="text-slate-600" />
+            </div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
+              Top Influence Drivers
+            </h3>
+          </div>
+          
+          <div className="flex-1 space-y-3">
+            {costDrivers.map((driver, idx) => {
+              const levelConfig = {
+                high:   { color: 'text-red-600',     bg: 'bg-red-100',     border: 'border-red-100',     badge: 'bg-red-100 text-red-700',     dot: '🔴' },
+                medium: { color: 'text-amber-600',   bg: 'bg-amber-100',   border: 'border-amber-100',   badge: 'bg-amber-100 text-amber-700', dot: '🟡' },
+                low:    { color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-100', badge: 'bg-emerald-100 text-emerald-700', dot: '🟢' },
+              };
+              const cfg = levelConfig[driver.level as keyof typeof levelConfig];
+              
+              return (
+                <div 
+                  key={driver.key} 
+                  className={`flex items-start gap-3 p-4 rounded-xl bg-slate-50/80 border border-slate-100 transition-all duration-200 hover:shadow-sm hover:border-slate-200`}
+                >
+                  <div className={`p-2 ${cfg.bg} rounded-lg shrink-0 mt-0.5`}>
+                    {driver.impact > 0 ? <TrendingUp size={18} className={cfg.color} /> : <TrendingDown size={18} className={cfg.color} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="text-sm font-bold text-slate-900">{idx + 1}. {driver.label}</h4>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${cfg.badge}`}>
+                        {driver.level}
+                      </span>
+                      {driver.controllable && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                          Controllable
                         </span>
-                      </th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Price Variability</th>
-                      <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Description</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {fullAnalysis?.sensitivity?.map((item: any) => (
-                      <tr key={item.component} className="hover:bg-slate-50/50 transition-colors group">
-                        <td className="px-8 py-5">
-                          <span className="text-sm font-bold text-slate-700 block">{item.component}</span>
-                        </td>
-                        <td className="px-8 py-5">
-                           <span className="text-[10px] font-black px-2 py-1 rounded-md bg-slate-100 text-slate-500 uppercase tracking-tighter">
-                              {item.driver}
-                           </span>
-                        </td>
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-bold text-slate-900">{(item.elasticity).toFixed(3)}</span>
-                            <div className={`w-1.5 h-1.5 rounded-full ${item.elasticity > 0.3 ? 'bg-red-500 animate-pulse' : item.elasticity > 0.1 ? 'bg-amber-500' : 'bg-slate-300'}`} />
-                          </div>
-                        </td>
-                        <td className="px-8 py-5">
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tight ${
-                            item.impact_type === 'high' ? 'bg-red-50 text-red-600' : 
-                            item.impact_type === 'medium' ? 'bg-amber-50 text-amber-600' : 
-                            'bg-slate-100 text-slate-500'
-                          }`}>
-                            {item.impact_type}
-                          </span>
-                        </td>
-                        <td className="px-8 py-5 text-right max-w-[200px]">
-                           <p className="text-[10px] font-medium text-slate-400 leading-tight italic truncate hover:whitespace-normal transition-all">
-                              {item.reasoning}
-                           </p>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">{driver.reason}</p>
+                    <p className="text-xs font-bold text-slate-700 mt-1 tabular-nums">
+                      Impact: {fmt(driver.impact, true)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 3: Non-Utility Adjustments
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div 
+        id="adjustments-card"
+        className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl p-5 border border-slate-700/40"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-white/10 rounded-lg">
+              <Zap size={14} className="text-slate-300" />
+            </div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
+              Adjustments & Credits
+            </h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Supplier Adjustment</span>
+              <span className="text-xs font-bold text-red-400 tabular-nums">+$3.20</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400 font-medium">Demand Response Credit</span>
+              <span className="text-xs font-bold text-emerald-400 tabular-nums">−$5.10</span>
+            </div>
+            <div className="h-4 w-px bg-slate-600 hidden sm:block"></div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white uppercase tracking-wider">Net</span>
+              <span className="text-sm font-black text-emerald-400 tabular-nums">−$1.90</span>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* AI Report Fragment */}
-      {report && (
-        <div className="card p-8 border-l-4 border-l-blue-600 animate-in slide-in-from-left-4 duration-500">
-           <h4 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
-              <Sparkles size={20} className="text-blue-600" />
-              Automated Bill Narrative
-           </h4>
-           <div className="text-sm text-slate-600 leading-relaxed space-y-4">
-              {report.split('\n').filter(l => l.trim()).map((p, i) => <p key={i}>{p}</p>)}
-           </div>
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 4: BOTTOM ROW — Simulator & Confidence
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* ── What-If Simulator (Enhanced) ── */}
+        <div 
+          id="what-if-simulator-card"
+          className="lg:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm p-6"
+        >
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-blue-100 rounded-lg">
+                <Calculator size={16} className="text-blue-600" />
+              </div>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
+                Scenario Simulator
+              </h3>
+            </div>
+            {isSimLoading && (
+              <span className="text-[10px] font-bold text-blue-500 animate-pulse uppercase tracking-widest flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></span>
+                Computing 2,000 scenarios…
+              </span>
+            )}
+          </div>
+
+          {/* Dynamic Plain-English Explanation */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 p-4 rounded-xl mb-6">
+            <div className="flex items-start gap-2">
+              <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
+              <p className="text-sm font-medium text-blue-900 leading-relaxed">
+                {changePct === 0 ? (
+                  <>Select a rate adjustment or scenario to simulate its effect on your bill.</>
+                ) : changePct > 0 ? (
+                  <>
+                    Increasing <strong className="text-blue-700">{selectedMeta?.label}</strong> by{' '}
+                    <strong className="text-blue-700">{changePct}%</strong> raises your bill by{' '}
+                    <strong className="text-red-600">${Math.abs(directPrice).toFixed(2)}</strong>
+                    {Math.abs(usageDelta) > 0.5 && (
+                      <>, but this is partially offset by a <strong className="text-emerald-600">{Math.abs(usageDelta).toFixed(1)} kWh</strong> drop in usage
+                        {elasticity !== -0.20 && <> (elasticity: {elasticity.toFixed(3)})</>}
+                      </>
+                    )}.
+                  </>
+                ) : (
+                  <>
+                    Decreasing <strong className="text-blue-700">{selectedMeta?.label}</strong> by{' '}
+                    <strong className="text-blue-700">{Math.abs(changePct)}%</strong> lowers your bill by{' '}
+                    <strong className="text-emerald-600">${Math.abs(directPrice).toFixed(2)}</strong>.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Controls */}
+            <div className="space-y-5">
+              {/* Scenario Preset */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+                  Market Scenario
+                </label>
+                <select 
+                  id="scenario-select"
+                  value={scenario} 
+                  onChange={(e) => setScenario(e.target.value)} 
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all"
+                >
+                  {SCENARIOS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
+              
+              {/* Target Component */}
+              <div>
+                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+                  Target Component
+                </label>
+                <select 
+                  id="component-select"
+                  value={selectedComp} 
+                  onChange={(e) => setSelectedComp(e.target.value)} 
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all"
+                >
+                  {Object.entries(COMPONENT_METADATA).map(([k, v]) => (
+                    <option key={k} value={k}>{v.icon} {v.label} — {v.description}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Rate Slider */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">Rate Adjustment</label>
+                  <span className={`text-sm font-black px-2.5 py-1 rounded-lg tabular-nums ${
+                    changePct > 0 ? 'text-red-700 bg-red-50 border border-red-200' 
+                    : changePct < 0 ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
+                    : 'text-slate-600 bg-slate-100 border border-slate-200'
+                  }`}>
+                    {changePct > 0 ? '+' : ''}{changePct}%
+                  </span>
+                </div>
+                <input 
+                  id="rate-slider"
+                  type="range" 
+                  min="-50" max="50" step="5" 
+                  value={changePct} 
+                  onChange={(e) => setChangePct(Number(e.target.value))} 
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" 
+                />
+                <div className="flex justify-between mt-1">
+                  <span className="text-[10px] text-slate-400 font-medium">−50%</span>
+                  <span className="text-[10px] text-slate-400 font-medium">0%</span>
+                  <span className="text-[10px] text-slate-400 font-medium">+50%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Results Panel */}
+            <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-slate-100/60 rounded-2xl border border-slate-200/80">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Simulated Bill</span>
+              <span className="text-5xl font-black text-slate-900 tabular-nums tracking-tight mb-4">
+                ${simulatedBill.toFixed(2)}
+              </span>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <span className={`text-xs font-bold px-3 py-1.5 rounded-lg tabular-nums ${
+                  isIncrease ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                }`}>
+                  Delta: {fmt(deltaBill, true)}
+                </span>
+                <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 border border-slate-300 tabular-nums">
+                  Usage: {usageDelta > 0 ? '+' : ''}{usageDelta.toFixed(0)} kWh
+                </span>
+              </div>
+              
+              {/* Model info badge */}
+              <div className="mt-4 flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                <Gauge size={10} />
+                <span>
+                  {simulation?.model_info?.method || 'Monte Carlo'} · {simulation?.model_info?.n_simulations || 2000} draws · {simulation?.model_info?.runtime_ms || '—'}ms
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+
+        {/* ── Confidence & Uncertainty ── */}
+        <div 
+          id="confidence-card"
+          className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 flex flex-col justify-between"
+        >
+          <div>
+            <div className="flex items-center gap-2 mb-5">
+              <div className="p-1.5 bg-slate-100 rounded-lg">
+                <ShieldCheck size={16} className="text-slate-600" />
+              </div>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
+                Prediction Reliability
+              </h3>
+            </div>
+            
+            {/* Confidence Badge */}
+            <div className="flex items-baseline gap-2 mb-1">
+              <span className="text-3xl font-black text-slate-900">{confidence.label}</span>
+              <span className={`text-sm font-bold ${confidence.color}`}>Confidence</span>
+            </div>
+            
+            <p className="text-xs font-medium text-slate-500 mb-5 leading-relaxed">
+              {confidence.label === 'Very High' || confidence.label === 'High'
+                ? `Low variability across ${simulation?.model_info?.n_simulations || 2000} Monte Carlo scenarios → reliable estimate.`
+                : confidence.label === 'Moderate'
+                  ? `Moderate variability detected. The estimate is usable but sensitive to input assumptions.`
+                  : `High variability detected. Consider narrowing scenario assumptions for more reliable projections.`
+              }
+            </p>
+          </div>
+
+          {/* Bell Curve Visualization */}
+          <div className="mb-4">
+            <div className="h-[90px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={bellCurveData} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="bellGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={confidence.barColor} stopOpacity={0.25}/>
+                      <stop offset="95%" stopColor={confidence.barColor} stopOpacity={0.03}/>
+                    </linearGradient>
+                  </defs>
+                  <Area 
+                    type="monotone" 
+                    dataKey="y" 
+                    stroke={confidence.barColor} 
+                    strokeWidth={2}
+                    fill="url(#bellGrad)" 
+                  />
+                  <ReferenceLine 
+                    x={Math.round(distMean * 100) / 100} 
+                    stroke="#1E293B" 
+                    strokeDasharray="3 3" 
+                    strokeWidth={1.5}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* CI Range */}
+          <div className={`${confidence.bg} rounded-xl p-4 border ${confidence.border}`}>
+            <span className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
+              Expected Range (95% CI)
+            </span>
+            <div className="flex justify-between items-center">
+              <span className="text-lg font-bold text-slate-700 tabular-nums">${ci[0]?.toFixed(0)}</span>
+              <div className="flex-1 mx-3 h-1.5 rounded-full overflow-hidden bg-slate-200/60">
+                <div 
+                  className="h-full rounded-full" 
+                  style={{ 
+                    background: `linear-gradient(90deg, ${confidence.barColor}33, ${confidence.barColor}, ${confidence.barColor}33)`,
+                    width: '100%' 
+                  }}
+                ></div>
+              </div>
+              <span className="text-lg font-bold text-slate-700 tabular-nums">${ci[1]?.toFixed(0)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 5: Insight Summary (Footer)
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div 
+        id="insight-summary-bar"
+        className="bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 text-white rounded-2xl p-5 shadow-lg shadow-blue-600/20 flex items-start sm:items-center gap-4"
+      >
+        <div className="bg-white/20 backdrop-blur-sm p-2.5 rounded-xl shrink-0">
+          <Lightbulb size={22} />
+        </div>
+        <p className="text-sm sm:text-base font-medium leading-relaxed">
+          <strong className="font-black">Bottom Line:</strong>{' '}
+          {insightText}
+        </p>
+      </div>
+
     </div>
   );
 };

@@ -223,7 +223,7 @@ class WhatIfResponse(BaseModel):
 # ===== /impact/what-if-v2 =====
 class WhatIfV2Request(BaseModel):
     changes: dict[str, float] = Field(
-        ..., description="Map of component -> change_pct, e.g. {'bgs_rate': 15, 'sbc_rate': -5}"
+        default_factory=dict, description="Map of component -> change_pct, e.g. {'bgs_rate': 15, 'sbc_rate': -5}"
     )
     kwh: Optional[float] = Field(None, ge=0, le=10000)
     scenario: Optional[str] = Field(
