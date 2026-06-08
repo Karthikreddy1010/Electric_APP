@@ -271,6 +271,65 @@ def simulate_v2(
     # ── Compute simulated bills (vectorized) ─────────────────────────────
     sim_bills = _compute_bills_vectorized(sim_rates, sim_kwh, fixed_charge)
 
+    # ── PJM Market Physics Stochastic Simulation ─────────────────────────
+    from models.pjm_market_physics import (
+        DEFAULT_PJM,
+        sample_market_parameters,
+        compute_bills_pjm_vectorized,
+    )
+    from api.state import app_state
+
+    pjm_defaults = app_state.get("pjm_defaults") or DEFAULT_PJM
+    market_params = sample_market_parameters(n_sim=n_sim, defaults=pjm_defaults, seed=seed)
+
+    # Apply bgs_rate modifier to LMP
+    bgs_mod_pct = modifications.get("bgs_rate", 0.0)
+    lmp_mwh = market_params["lmp"] * (1.0 + bgs_mod_pct / 100.0)
+
+    # Loss-adjusted usage
+    effective_kwh = sim_kwh * (1.0 + market_params["loss_factor"])
+
+    # Extract component rates
+    dist_rate = sim_rates[:, RATE_KEYS.index("distribution_rate")]
+    trans_rate = sim_rates[:, RATE_KEYS.index("transmission_rate")]
+    cong_per_kwh = market_params["congestion_price"] / 1000.0
+    pol_rate = sim_rates[:, RATE_KEYS.index("sbc_rate")]
+
+    sim_bills_pjm = compute_bills_pjm_vectorized(
+        lmp_mwh=lmp_mwh,
+        effective_kwh=effective_kwh,
+        distribution_rate=dist_rate,
+        base_transmission_rate=trans_rate,
+        congestion_per_kwh=cong_per_kwh,
+        policy_rate=pol_rate,
+        customer_charge=fixed_charge,
+        usage_kwh=sim_kwh,
+        tax_rate=NJ_TAX_RATE,
+    )
+
+    da_fraction = pjm_defaults.da_settlement_fraction
+    da_charge = (lmp_mwh / 1000.0) * effective_kwh * da_fraction
+    rt_charge = (lmp_mwh / 1000.0) * effective_kwh * (1.0 - da_fraction)
+
+    pjm_physics_data = {
+        "marginal_cost": round(float(np.mean(market_params["marginal_cost"])), 2),
+        "lmp": round(float(np.mean(market_params["lmp"])), 2),
+        "effective_kwh": round(float(np.mean(effective_kwh)), 2),
+        "da_charge": round(float(np.mean(da_charge)), 2),
+        "rt_charge": round(float(np.mean(rt_charge)), 2),
+        "loss_factor": round(float(np.mean(market_params["loss_factor"])), 4),
+        "simulated_bill_pjm": round(float(np.median(sim_bills_pjm)), 2),
+        "distribution_pjm": {
+            "mean": round(float(np.mean(sim_bills_pjm)), 2),
+            "std": round(float(np.std(sim_bills_pjm)), 2),
+            "p5": round(float(np.percentile(sim_bills_pjm, 5)), 2),
+            "p25": round(float(np.percentile(sim_bills_pjm, 25)), 2),
+            "p50": round(float(np.percentile(sim_bills_pjm, 50)), 2),
+            "p75": round(float(np.percentile(sim_bills_pjm, 75)), 2),
+            "p95": round(float(np.percentile(sim_bills_pjm, 95)), 2),
+        }
+    }
+
     # ── Compute decomposition ────────────────────────────────────────────
     median_bill = float(np.median(sim_bills))
     mean_kwh = float(np.mean(sim_kwh))
@@ -360,6 +419,7 @@ def simulate_v2(
             "p75": round(float(np.percentile(sim_bills, 75)), 2),
             "p95": round(float(np.percentile(sim_bills, 95)), 2),
         },
+        "pjm_physics": pjm_physics_data,
     }
 
 

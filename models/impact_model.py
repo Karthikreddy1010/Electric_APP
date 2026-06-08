@@ -100,13 +100,14 @@ class BillImpactModel:
                     if pd.isna(row["HDD"]):
                         merged.at[idx, "HDD"] = clim_hdd
                 
-                # 4. Solve Least-Squares Regression (usage_kwh = intercept + beta_cdd * CDD + beta_hdd * HDD)
+                # 4. Solve Least-Squares Regression (effective_kwh = intercept + beta_cdd * CDD + beta_hdd * HDD)
+                from models.pjm_market_physics import DEFAULT_PJM
                 X = np.column_stack([
                     np.ones(len(merged)),
                     merged["CDD"].values,
                     merged["HDD"].values
                 ])
-                y = merged["usage_kwh"].values
+                y = (merged["usage_kwh"] * (1.0 + DEFAULT_PJM.total_loss_factor)).values
                 
                 coefs, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
                 
@@ -114,7 +115,7 @@ class BillImpactModel:
                 self.beta_cdd = float(max(coefs[1], 0.05))
                 self.beta_hdd = float(max(coefs[2], 0.05))
                 self.calibrated = True
-                logger.info(f"Weather OLS Regression Calibrated: Int={self.intercept:.1f}, CDD={self.beta_cdd:.3f}, HDD={self.beta_hdd:.3f}")
+                logger.info(f"Weather OLS Regression Calibrated on Effective kWh: Int={self.intercept:.1f}, CDD={self.beta_cdd:.3f}, HDD={self.beta_hdd:.3f}")
         except Exception as e:
             logger.warning(f"Weather regression calibration failed, using baseline defaults: {e}")
 
@@ -173,15 +174,21 @@ class BillImpactModel:
             pass
 
         # Distinguish weather-driven usage vs discretionary behavioral usage
+        from models.pjm_market_physics import DEFAULT_PJM, compute_effective_kwh
+        lf = DEFAULT_PJM.total_loss_factor
+        
+        eff_usage = float(row.get("effective_kwh", compute_effective_kwh(usage, lf)))
+        eff_prev_usage = float(prev_row.get("effective_kwh", compute_effective_kwh(prev_usage, lf)))
+
         weather_usage_latest = self.beta_cdd * cdd_latest + self.beta_hdd * hdd_latest
         weather_usage_prev = self.beta_cdd * cdd_prev + self.beta_hdd * hdd_prev
         
-        # Keep weather caps safe
-        weather_usage_latest = min(weather_usage_latest, 0.9 * usage)
-        weather_usage_prev = min(weather_usage_prev, 0.9 * prev_usage)
+        # Keep weather caps safe using eff_usage
+        weather_usage_latest = min(weather_usage_latest, 0.9 * eff_usage)
+        weather_usage_prev = min(weather_usage_prev, 0.9 * eff_prev_usage)
         
         ΔWeatherUsage = weather_usage_latest - weather_usage_prev
-        ΔUsage = usage - prev_usage
+        ΔUsage = eff_usage - eff_prev_usage
         ΔNonWeatherUsage = ΔUsage - ΔWeatherUsage
 
         tax_mult = 1.06625  # NJ Sales Tax factor on utility charges
@@ -202,11 +209,12 @@ class BillImpactModel:
             latest_rate_total += float(row.get(rate_key, 0.0))
 
         avg_rate_total = (prev_rate_total + latest_rate_total) / 2.0
-        avg_usage = (prev_usage + usage) / 2.0
+        avg_raw_usage = (prev_usage + usage) / 2.0
+        avg_eff_usage = (eff_prev_usage + eff_usage) / 2.0
 
         contributions = {}
         
-        # A. Customer Charge (Fixed) - FIX: 2 Handle customer charge correctly as fixed
+        # A. Customer Charge (Fixed) - Handle customer charge correctly as fixed
         fixed_prev = float(prev_row.get("customer_charge", 8.24))
         fixed_latest = float(row.get("customer_charge", 8.24))
         ΔFixed = fixed_latest - fixed_prev
@@ -215,15 +223,17 @@ class BillImpactModel:
             "percent": round(((ΔFixed * tax_mult) / total_bill) * 100, 2) if total_bill else 0
         }
 
-        # B. Weather Impact attribution - FIX: 5 Deterministic Attribution
-        ΔBill_weather = ΔWeatherUsage * avg_rate_total * tax_mult
+        # B. Weather Impact attribution - Deterministic Attribution
+        avg_bgs_rate = (float(prev_row.get("bgs_rate", 0.0)) + float(row.get("bgs_rate", 0.0))) / 2.0
+        avg_other_rate_total = avg_rate_total - avg_bgs_rate
+        ΔBill_weather = (ΔWeatherUsage * avg_bgs_rate + (ΔWeatherUsage / (1.0 + lf)) * avg_other_rate_total) * tax_mult
         contributions["weather"] = {
             "value": round(ΔBill_weather, 2),
             "percent": round((ΔBill_weather / total_bill) * 100, 2) if total_bill else 0
         }
 
         # C. Behavioral Usage Impact (Discretionary usage shifts)
-        ΔBill_usage = ΔNonWeatherUsage * avg_rate_total * tax_mult
+        ΔBill_usage = (ΔNonWeatherUsage * avg_bgs_rate + (ΔNonWeatherUsage / (1.0 + lf)) * avg_other_rate_total) * tax_mult
         contributions["behavioral_usage"] = {
             "value": round(ΔBill_usage, 2),
             "percent": round((ΔBill_usage / total_bill) * 100, 2) if total_bill else 0
@@ -235,14 +245,27 @@ class BillImpactModel:
             rate_latest = float(row.get(rate_key, 0.0))
             ΔRate = rate_latest - rate_prev
             
-            # Midpoint causal price impact
-            comp_impact = ΔRate * avg_usage * tax_mult
+            # Midpoint causal price impact (bgs_rate uses effective usage)
+            if rate_key == "bgs_rate":
+                comp_impact = ΔRate * avg_eff_usage * tax_mult
+            else:
+                comp_impact = ΔRate * avg_raw_usage * tax_mult
             short_key = rate_key.replace("_rate", "")
             
             contributions[short_key] = {
                 "value": round(comp_impact, 2),
                 "percent": round((comp_impact / total_bill) * 100, 2) if total_bill else 0
             }
+
+        # E. PJM Wholesale LMP Impact
+        lmp_latest = float(row.get("avg_lmp", row.get("lmp", float(row.get("bgs_rate", 0.0)) * 1000.0)))
+        lmp_prev = float(prev_row.get("avg_lmp", prev_row.get("lmp", float(prev_row.get("bgs_rate", 0.0)) * 1000.0)))
+        ΔLmp = lmp_latest - lmp_prev
+        lmp_impact = (ΔLmp / 1000.0) * avg_eff_usage * tax_mult
+        contributions["lmp"] = {
+            "value": round(lmp_impact, 2),
+            "percent": round((lmp_impact / total_bill) * 100, 2) if total_bill else 0
+        }
 
         # 3. Sensitivity Analysis (Dynamic and Elasticity-Based) - FIX: 7 Dynamic Elasticity
         sensitivity = {}
@@ -256,7 +279,10 @@ class BillImpactModel:
             for pct in [10, -10]:
                 delta_rate = base_rate * (pct / 100.0)
                 # Rate impact
-                rate_impact = delta_rate * usage * tax_mult
+                if rate_key == "bgs_rate":
+                    rate_impact = delta_rate * eff_usage * tax_mult
+                else:
+                    rate_impact = delta_rate * usage * tax_mult
                 # Demand response (typical elasticity = -0.2)
                 usage_response = usage * (pct / 100.0) * -0.2
                 usage_impact = usage_response * prev_rate_total * tax_mult
@@ -311,7 +337,7 @@ class BillImpactModel:
             insights.append(f"🔌 **Energy efficiency**: Conservation efforts and reduced usage lowered your bill by **-${abs(usage_val):.2f}**.")
 
         # 3. Rate Adjustments Insight
-        rate_contribs = {k: v["value"] for k, v in contributions.items() if k not in ["weather", "behavioral_usage", "customer"]}
+        rate_contribs = {k: v["value"] for k, v in contributions.items() if k not in ["weather", "behavioral_usage", "customer", "lmp"]}
         if rate_contribs:
             sorted_rates = sorted(rate_contribs.items(), key=lambda x: abs(x[1]), reverse=True)
             top_rate_key, top_rate_val = sorted_rates[0]
@@ -325,6 +351,15 @@ class BillImpactModel:
             label = label_map.get(top_rate_key, top_rate_key.capitalize())
             direction = "added" if top_rate_val > 0 else "saved"
             insights.append(f"📈 **Tariff adjustment**: Rate shifts in **{label}** {direction} **${abs(top_rate_val):.2f}** on your bill.")
+
+        # 3b. LMP Market physics insight
+        lmp_val = contributions.get("lmp", {}).get("value", 0.0)
+        if abs(lmp_val) > 2.0:
+            direction = "spiked" if lmp_val > 0 else "declined"
+            insights.append(
+                f"🔌 **PJM wholesale LMP**: Wholesale energy prices {direction}, "
+                f"driving a **{'+' if lmp_val > 0 else ''}${lmp_val:.2f}** change on your bill after loss adjustment."
+            )
 
         # 4. Seasonality insight
         if season == "Summer":

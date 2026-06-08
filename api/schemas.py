@@ -237,6 +237,16 @@ class BillDecomposition(BaseModel):
     weather_effect: float
     interaction_effect: float
 
+class PJMMarketPhysicsData(BaseModel):
+    marginal_cost: float
+    lmp: float
+    effective_kwh: float
+    da_charge: float
+    rt_charge: float
+    loss_factor: float
+    simulated_bill_pjm: float
+    distribution_pjm: Optional[dict] = None
+
 class WhatIfV2Response(BaseModel):
     base_bill: float
     simulated_bill: float
@@ -248,6 +258,7 @@ class WhatIfV2Response(BaseModel):
     scenario_applied: Optional[str] = None
     model_info: dict
     distribution: Optional[dict] = None
+    pjm_physics: Optional[PJMMarketPhysicsData] = None
 
 # ===== /impact/rank =====
 class RankItem(BaseModel):

@@ -18,4 +18,5 @@ app_state: dict = {
     "demand_model": None,
     "causal_service": None,
     "rate_cov_matrix": None,
+    "pjm_defaults": None,
 }

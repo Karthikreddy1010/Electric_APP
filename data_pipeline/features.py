@@ -175,6 +175,7 @@ def merge_market_monthly(billing_df: pd.DataFrame,
         lmp_volatility=("lmp_da", "std"),
         avg_capacity_price=("capacity_price", "mean"),
         avg_congestion=("congestion", "mean"),
+        avg_lmp_rt=("lmp_rt", "mean"),
     ).reset_index()
     
     billing = billing_df.copy()
@@ -182,6 +183,42 @@ def merge_market_monthly(billing_df: pd.DataFrame,
     billing["year_month"] = billing["date"].dt.to_period("M")
     
     merged = billing.merge(monthly_market, on="year_month", how="left")
+    
+    # Add PJM Market Physics features
+    from models.pjm_market_physics import (
+        DEFAULT_PJM,
+        decompose_lmp,
+        compute_effective_kwh,
+        compute_energy_charge_two_settlement,
+    )
+    
+    loss_factor = DEFAULT_PJM.total_loss_factor
+    merged["loss_factor"] = loss_factor
+    merged["effective_kwh"] = compute_effective_kwh(merged["usage_kwh"], loss_factor)
+    
+    # Decompose avg_lmp
+    decomposed = decompose_lmp(
+        merged["avg_lmp"].values,
+        merged["avg_congestion"].values,
+        loss_factor
+    )
+    merged["lmp_energy"] = decomposed["energy"]
+    merged["lmp_congestion"] = decomposed["congestion"]
+    merged["lmp_loss"] = decomposed["loss"]
+    
+    # Marginal cost matches energy price in PJM energy market
+    merged["marginal_cost"] = merged["lmp_energy"]
+    
+    # Compute two-settlement components
+    settlement = compute_energy_charge_two_settlement(
+        effective_kwh=merged["effective_kwh"].values,
+        da_price_mwh=merged["avg_lmp"].values,
+        rt_price_mwh=merged["avg_lmp_rt"].values,
+        da_fraction=DEFAULT_PJM.da_settlement_fraction
+    )
+    merged["da_energy_charge"] = settlement["da_charge"]
+    merged["rt_deviation_charge"] = settlement["rt_charge"]
+    
     return merged.drop(columns=["year_month"])
 
 

@@ -62,6 +62,8 @@ async def lifespan(app: FastAPI):
             f"market={len(app_state['market_df'])}, "
             f"plans={len(app_state['plans_df'])} rows"
         )
+        from models.pjm_market_physics import DEFAULT_PJM
+        app_state["pjm_defaults"] = DEFAULT_PJM
     except Exception as e:
         logger.error(f"Data loading failed: {e}")
 

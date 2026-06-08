@@ -49,6 +49,7 @@ TREATMENT_COLS = [
     "distribution_rate",
     "transmission_rate",
     "sbc_rate",
+    "avg_lmp",
 ]
 
 OUTCOME_COL = "total_bill"
@@ -250,7 +251,19 @@ class CausalModelService:
 
         # Human-readable interpretation
         direction = "increase" if theta > 0 else "decrease"
-        label = treatment.replace("_rate", "").replace("_", " ").title()
+        if treatment == "avg_lmp":
+            interpretation = (
+                f"Controlling for {', '.join(self._available_confounders)}, "
+                f"a $1/MWh increase in Wholesale LMP causes an average "
+                f"${abs(theta):.2f} {direction} in the total bill."
+            )
+        else:
+            label = treatment.replace("_rate", "").replace("_", " ").title()
+            interpretation = (
+                f"Controlling for {', '.join(self._available_confounders)}, "
+                f"a $0.01/kWh increase in {label} Rate causes an average "
+                f"${abs(theta * 0.01):.2f} {direction} in the total bill."
+            )
 
         return {
             "treatment": treatment,
@@ -260,11 +273,7 @@ class CausalModelService:
             "ci_95": [round(ci_lower, 2), round(ci_upper, 2)],
             "confounders_controlled": self._available_confounders,
             "method": "EconML LinearDML (GBR nuisance)",
-            "interpretation": (
-                f"Controlling for {', '.join(self._available_confounders)}, "
-                f"a $0.01/kWh increase in {label} Rate causes an average "
-                f"${abs(theta * 0.01):.2f} {direction} in the total bill."
-            ),
+            "interpretation": interpretation,
             "caveat": (
                 "Estimated via Double Machine Learning on observational data. "
                 "Assumes no unobserved confounders beyond those controlled."
@@ -322,8 +331,21 @@ class CausalModelService:
         ci_lower = theta - 1.96 * se_robust
         ci_upper = theta + 1.96 * se_robust
 
+        # Human-readable interpretation
         direction = "increase" if theta > 0 else "decrease"
-        label = treatment.replace("_rate", "").replace("_", " ").title()
+        if treatment == "avg_lmp":
+            interpretation = (
+                f"Controlling for {', '.join(self._available_confounders)}, "
+                f"a $1/MWh increase in Wholesale LMP causes an average "
+                f"${abs(theta):.2f} {direction} in the total bill."
+            )
+        else:
+            label = treatment.replace("_rate", "").replace("_", " ").title()
+            interpretation = (
+                f"Controlling for {', '.join(self._available_confounders)}, "
+                f"a $0.01/kWh increase in {label} Rate causes an average "
+                f"${abs(theta * 0.01):.2f} {direction} in the total bill."
+            )
 
         return {
             "treatment": treatment,
@@ -333,11 +355,7 @@ class CausalModelService:
             "ci_95": [round(ci_lower, 2), round(ci_upper, 2)],
             "confounders_controlled": self._available_confounders,
             "method": "Manual Cross-Fitted DML (RidgeCV nuisance)",
-            "interpretation": (
-                f"Controlling for {', '.join(self._available_confounders)}, "
-                f"a $0.01/kWh increase in {label} Rate causes an average "
-                f"${abs(theta * 0.01):.2f} {direction} in the total bill."
-            ),
+            "interpretation": interpretation,
             "caveat": (
                 "Estimated via manual Double Machine Learning on observational data. "
                 "Assumes no unobserved confounders beyond those controlled."

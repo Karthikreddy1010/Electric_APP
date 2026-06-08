@@ -83,14 +83,22 @@ class BillImpactEngine:
         """
         DETERMINISTIC LAYER: Accounting Identity.
         Total_Bill = sum(fixed) + sum(variable * kwh)
+        Upgraded to use loss-adjusted consumption for the energy/supply (bgs_rate) component.
         """
+        from models.pjm_market_physics import DEFAULT_PJM, compute_effective_kwh
+
         line_items = {}
         subtotal = 0.0
 
         for key, meta in COMPONENT_TYPES.items():
             val = components.get(key, 0.0)
             if meta["type"] == "variable":
-                cost = round(val * kwh, 2)
+                if key == "bgs_rate":
+                    # Loss-adjusted consumption for energy supply
+                    eff_kwh = compute_effective_kwh(kwh, DEFAULT_PJM.total_loss_factor)
+                    cost = round(val * eff_kwh, 2)
+                else:
+                    cost = round(val * kwh, 2)
             else:
                 cost = round(val, 2)
             
@@ -107,6 +115,95 @@ class BillImpactEngine:
             "sales_tax": tax,
             "line_items": line_items,
             "usage_kwh": kwh
+        }
+
+    def calculate_total_bill_pjm(
+        self,
+        components: dict[str, float],
+        kwh: float,
+        lmp_da_mwh: Optional[float] = None,
+        lmp_rt_mwh: Optional[float] = None,
+        congestion_mwh: Optional[float] = None,
+        loss_factor: Optional[float] = None,
+    ) -> dict[str, Any]:
+        """
+        PJM M28/M15 Settlement Accounting Bill.
+        Uses two-settlement energy charge and loss-adjusted consumption.
+        """
+        from models.pjm_market_physics import (
+            DEFAULT_PJM,
+            compute_effective_kwh,
+            compute_energy_charge_two_settlement,
+            compute_transmission_rate,
+            compute_total_bill,
+        )
+
+        lf = loss_factor if loss_factor is not None else DEFAULT_PJM.total_loss_factor
+        effective_kwh = compute_effective_kwh(kwh, lf)
+
+        # Base rates from components dictionary
+        customer_charge = components.get("customer_charge", 0.0)
+        distribution_rate = components.get("distribution_rate", 0.0)
+        base_transmission = components.get("transmission_rate", 0.0)
+        sbc_rate = components.get("sbc_rate", 0.0)
+        transition_rate = components.get("transition_rate", 0.0)
+        
+        # Policy charges
+        policy_rate = sbc_rate + transition_rate
+        policy_charges = policy_rate * kwh
+
+        # LMP or bgs_rate as proxy (if no LMP provided)
+        bgs_rate = components.get("bgs_rate", 0.0)
+        da_price = lmp_da_mwh if lmp_da_mwh is not None else (bgs_rate * 1000.0)
+        rt_price = lmp_rt_mwh if lmp_rt_mwh is not None else da_price
+        
+        # Two-settlement energy charge
+        settlement = compute_energy_charge_two_settlement(
+            effective_kwh=effective_kwh,
+            da_price_mwh=da_price,
+            rt_price_mwh=rt_price,
+            da_fraction=DEFAULT_PJM.da_settlement_fraction
+        )
+        energy_charge = settlement["total_energy_charge"]
+
+        # Transmission with congestion pass-through
+        cong_component = (congestion_mwh / 1000.0) if congestion_mwh is not None else 0.0
+        transmission_rate = compute_transmission_rate(base_transmission, cong_component)
+        transmission_cost = transmission_rate * kwh
+
+        # Distribution cost
+        distribution_cost = distribution_rate * kwh
+
+        # Assemble the bill
+        bill_res = compute_total_bill(
+            customer_charge=customer_charge,
+            energy_charge=energy_charge,
+            distribution_cost=distribution_cost,
+            transmission_cost=transmission_cost,
+            policy_charges=policy_charges,
+            tax_rate=self.tax_rate
+        )
+
+        # Prepare line items matching expected shape in COMPONENT_TYPES
+        line_items = {
+            "customer_charge": round(customer_charge, 2),
+            "bgs_cost": round(energy_charge, 2),
+            "distribution_cost": round(distribution_cost, 2),
+            "transmission_cost": round(transmission_cost, 2),
+            "sbc_cost": round(sbc_rate * kwh, 2),
+            "transition_cost": round(transition_rate * kwh, 2),
+        }
+
+        return {
+            "total_bill": round(bill_res["total_bill"], 2),
+            "subtotal": round(bill_res["subtotal"], 2),
+            "sales_tax": round(bill_res["tax"], 2),
+            "line_items": line_items,
+            "usage_kwh": kwh,
+            "effective_kwh": round(effective_kwh, 2),
+            "da_energy_charge": round(settlement["da_charge"], 2),
+            "rt_deviation_charge": round(settlement["rt_charge"], 2),
+            "loss_factor": lf,
         }
 
     # ═══════════════════════════════════════════════════════════════════════════
@@ -223,11 +320,14 @@ class BillImpactEngine:
         """
         Estimate causal effect of a rate component on the total bill using Double ML.
         """
+        actual_treatment = "avg_lmp" if treatment == "lmp" else treatment
         causal_service = app_state.get("causal_service")
         
         # If DML service is available, use it
         if causal_service and causal_service.is_fitted:
-            return causal_service.get_causal_impact_legacy(treatment)
+            res = causal_service.get_causal_impact_legacy(actual_treatment)
+            res["treatment"] = treatment
+            return res
             
         # Fallback to older dowhy if DML is not available
         try:
@@ -237,12 +337,22 @@ class BillImpactEngine:
             if df is None or len(df) < 24:
                 return {"error": "Insufficient data for causal inference (min 24 months)"}
 
+            # If treatment is avg_lmp and not in df, try to merge market data
+            if actual_treatment == "avg_lmp" and "avg_lmp" not in df.columns:
+                market_df = app_state.get("market_df")
+                if market_df is not None:
+                    from data_pipeline.features import merge_market_monthly
+                    df = merge_market_monthly(df, market_df)
+
+            if actual_treatment not in df.columns:
+                return {"error": f"Treatment variable {treatment} not found in billing data"}
+
             if 'month' in df.columns:
                 df['month_num'] = pd.to_datetime(df['month']).dt.month if df['month'].dtype == 'object' else df['month']
             
             model = CausalModel(
                 data=df,
-                treatment=treatment,
+                treatment=actual_treatment,
                 outcome="total_bill",
                 common_causes=["usage_kwh", "month_num"] if 'month_num' in df.columns else ["usage_kwh"]
             )
@@ -271,9 +381,13 @@ class BillImpactEngine:
         """
         Get the full rich CausalV2Response from the DML causal model.
         """
+        actual_treatment = "avg_lmp" if treatment == "lmp" else treatment
         causal_service = app_state.get("causal_service")
         if causal_service and causal_service.is_fitted:
-            return causal_service.estimate(treatment)
+            res = causal_service.estimate(actual_treatment)
+            res = dict(res)
+            res["treatment"] = treatment
+            return res
         return {"error": "Causal model not fitted"}
 
 bill_impact_engine = BillImpactEngine()
