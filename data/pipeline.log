@@ -120,3 +120,89 @@
 2026-06-10 09:41:51,661 | INFO     | __main__ | Saved weather_monthly.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
 2026-06-10 09:41:51,664 | INFO     | __main__ | Saved final_master_dataset.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
 2026-06-10 09:41:51,664 | INFO     | __main__ | Pipeline completed successfully.
+2026-06-10 09:53:58,671 | INFO     | data_pipeline.config | Logging initialized. Log file: C:\Users\dukar\OneDrive\Desktop\Electric\data\pipeline.log
+2026-06-10 09:53:58,671 | INFO     | __main__ | Starting Data Pipeline
+2026-06-10 09:53:58,671 | INFO     | data_pipeline.loaders | ======================================================================
+2026-06-10 09:53:58,671 | INFO     | data_pipeline.loaders | STAGE 1: Loading all local datasets from data/raw/
+2026-06-10 09:53:58,671 | INFO     | data_pipeline.loaders | ======================================================================
+2026-06-10 09:53:58,840 | INFO     | data_pipeline.loaders | Loaded bgs_auction: 204 rows × 6 cols | columns: ['year', 'edc', 'auction_product_type', 'final_price_k_wh', 'sheet', 'final_price_m_wday']
+2026-06-10 09:53:59,117 | INFO     | data_pipeline.loaders | Loaded community_energy: 4,542 rows × 36 cols | columns: ['municipality', 'county', 'muni_county', 'year', 'electric_utility', 'residential_electricity', 'commercial_electricity', 'industrial_electricity']...
+2026-06-10 09:53:59,167 | INFO     | data_pipeline.loaders | Loaded municipal_energy: 30,498 rows × 11 cols | columns: ['objectid', 'municipality', 'county', 'gnis', 'utility', 'year', 'sector', 'electricity_k_wh']...
+2026-06-10 09:53:59,174 | INFO     | data_pipeline.loaders | Loaded nj_retail_prices: 303 rows × 5 cols | columns: ['month_str', 'price_cents_kwh', 'date', 'year', 'month']
+2026-06-10 09:53:59,189 | INFO     | data_pipeline.loaders | Loaded avg_price_electricity (raw): 51 rows × 6 cols | columns: [0, 1, 2, 3, 4, 5]
+2026-06-10 09:53:59,206 | INFO     | data_pipeline.loaders | Loaded sales_of_electricity (raw): 67 rows × 11 cols | columns: [0, 1, 2, 3, 4, 5, 6, 7]...
+2026-06-10 09:53:59,223 | INFO     | data_pipeline.loaders | Loaded eia_residential_prices: 13,260 rows × 6 cols | columns: ['date', 'state', 'state_name', 'price_cents_per_k_wh', 'year', 'month']
+2026-06-10 09:53:59,228 | INFO     | data_pipeline.loaders | Loaded weather: 2,557 rows × 7 cols | columns: ['date', 'station', 'avg_temp_f', 'hdd', 'cdd', 'precip_in', 'humidity_pct']
+2026-06-10 09:53:59,233 | INFO     | data_pipeline.loaders | Loaded air_temp: 1,231 rows × 6 cols | columns: ['station', 'name', 'date', 'tavg', 'tmax', 'tmin']
+2026-06-10 09:53:59,235 | INFO     | data_pipeline.loaders | Loaded cpi_monthly (cached): 120 rows × 3 cols | columns: ['year', 'month', 'cpi']
+2026-06-10 09:53:59,236 | INFO     | data_pipeline.loaders | Loaded cpi_yearly (cached): 10 rows × 4 cols | columns: ['year', 'cpi_annual_avg', 'deflator', 'inflation_pct']
+2026-06-10 09:53:59,239 | INFO     | data_pipeline.loaders | Loaded pseg_rate_history: 272 rows × 23 cols | columns: ['date', 'year', 'month', 'season', 'tier', 'distribution_rate', 'riders_adj_sbc_nug_etc', 'total_delivery_rate']...
+2026-06-10 09:53:59,369 | INFO     | data_pipeline.loaders | Loaded eia861/Sales_Ult_Cust_master.csv: 31,995 rows × 31 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'unnamed_6']...
+2026-06-10 09:53:59,478 | INFO     | data_pipeline.loaders | Loaded eia861/Operational_Data_master.csv: 21,134 rows × 38 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'demand']...
+2026-06-10 09:53:59,540 | INFO     | data_pipeline.loaders | Loaded eia861/Utility_Data_master.csv: 20,986 rows × 37 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'also_operating_in_other_nerc_regions']...
+2026-06-10 09:53:59,540 | INFO     | data_pipeline.loaders | Loading complete: 15 datasets loaded, 127,230 total rows
+2026-06-10 09:53:59,540 | INFO     | data_pipeline.api_fetchers | ======================================================================
+2026-06-10 09:53:59,540 | INFO     | data_pipeline.api_fetchers | STAGE 2: Fetching BLS CPI data
+2026-06-10 09:53:59,540 | INFO     | data_pipeline.api_fetchers | ======================================================================
+2026-06-10 09:53:59,541 | INFO     | data_pipeline.api_fetchers | Force mode: fetching all years 2015–2025
+2026-06-10 09:53:59,541 | INFO     | data_pipeline.api_fetchers | Missing years to fetch: [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2026-06-10 09:53:59,542 | INFO     | data_pipeline.api_fetchers | BLS API request: CUSR0000SA0 [2015–2025]
+2026-06-10 09:54:02,045 | ERROR    | data_pipeline.api_fetchers | Failed to fetch CPI for 2015–2025: could not convert string to float: '-'
+2026-06-10 09:54:02,045 | INFO     | data_pipeline.api_fetchers | Falling back to cached data if available.
+2026-06-10 09:54:02,046 | WARNING  | data_pipeline.api_fetchers | API fetch returned no data; using cached CPI data.
+2026-06-10 09:54:02,046 | INFO     | __main__ | ======================================================================
+2026-06-10 09:54:02,046 | INFO     | __main__ | STAGE 3: Preprocessing Datasets
+2026-06-10 09:54:02,046 | INFO     | __main__ | ======================================================================
+2026-06-10 09:54:02,089 | INFO     | data_pipeline.validators | ======================================================================
+2026-06-10 09:54:02,089 | INFO     | data_pipeline.validators | STAGE 4: Validating Datasets
+2026-06-10 09:54:02,089 | INFO     | data_pipeline.validators | ======================================================================
+2026-06-10 09:54:02,089 | INFO     | data_pipeline.validators | [bgs_auction] Coverage: 2002 - 2026
+2026-06-10 09:54:02,089 | INFO     | data_pipeline.validators | [municipal_energy] Coverage: 2015 - 2023
+2026-06-10 09:54:02,089 | INFO     | data_pipeline.validators | [community_energy] Coverage: 2016 - 2023
+2026-06-10 09:54:02,090 | INFO     | data_pipeline.validators | [nj_retail_prices] Coverage: 2001 - 2026
+2026-06-10 09:54:02,090 | INFO     | data_pipeline.validators | [eia_residential_prices] Coverage: 2005 - 2026
+2026-06-10 09:54:02,090 | INFO     | data_pipeline.validators | [weather_monthly] Coverage: 2019 - 2025
+2026-06-10 09:54:02,090 | INFO     | data_pipeline.validators | [cpi_monthly] Coverage: 2015 - 2024
+2026-06-10 09:54:02,090 | WARNING  | data_pipeline.validators | [bgs_auction] Columns exceeding 10.0% missing values:
+2026-06-10 09:54:02,090 | WARNING  | data_pipeline.validators |   - final_price_k_wh: 47.1%
+2026-06-10 09:54:02,090 | WARNING  | data_pipeline.validators |   - final_price_m_wday: 52.9%
+2026-06-10 09:54:02,097 | WARNING  | data_pipeline.validators | [community_energy] Columns exceeding 10.0% missing values:
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - aggregated_community_scale_utility_energy_data: 99.9%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_1: 99.8%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_2: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_3: 99.5%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_4: 99.8%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_5: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_6: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_7: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_8: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_9: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_10: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_11: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_12: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_13: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_14: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - may_2025: 100.0%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - all: 99.6%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - select_municipality_here: 99.6%
+2026-06-10 09:54:02,098 | WARNING  | data_pipeline.validators |   - unnamed_0: 100.0%
+2026-06-10 09:54:02,110 | INFO     | data_pipeline.validators | Validation complete.
+2026-06-10 09:54:02,110 | INFO     | data_pipeline.merger | ======================================================================
+2026-06-10 09:54:02,110 | INFO     | data_pipeline.merger | STAGE 5: Merging Datasets
+2026-06-10 09:54:02,110 | INFO     | data_pipeline.merger | ======================================================================
+2026-06-10 09:54:02,110 | INFO     | data_pipeline.merger | Spine initialized with 303 rows (NJ retail prices)
+2026-06-10 09:54:02,112 | INFO     | data_pipeline.merger | Joined CPI: 303 rows
+2026-06-10 09:54:02,113 | INFO     | data_pipeline.merger | Joined Weather: 303 rows
+2026-06-10 09:54:02,114 | INFO     | data_pipeline.merger | Computed real_price_cents_kwh (base year: 2024, base CPI: 313.70)
+2026-06-10 09:54:02,114 | INFO     | data_pipeline.merger | Master dataset built successfully: 303 rows, 11 columns
+2026-06-10 09:54:02,114 | INFO     | __main__ | ======================================================================
+2026-06-10 09:54:02,114 | INFO     | __main__ | STAGE 6: Saving Outputs
+2026-06-10 09:54:02,114 | INFO     | __main__ | ======================================================================
+2026-06-10 09:54:02,117 | INFO     | __main__ | Saved bgs_auction.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-10 09:54:02,151 | INFO     | __main__ | Saved community_energy.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-10 09:54:02,170 | INFO     | __main__ | Saved municipal_energy.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-10 09:54:02,172 | INFO     | __main__ | Saved nj_retail_prices.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-10 09:54:02,193 | INFO     | __main__ | Saved eia_residential_prices.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-10 09:54:02,194 | INFO     | __main__ | Saved weather_monthly.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-10 09:54:02,196 | INFO     | __main__ | Saved final_master_dataset.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-10 09:54:02,196 | INFO     | __main__ | Pipeline completed successfully.

@@ -49,10 +49,11 @@ def preprocess_bgs_auction(df: pd.DataFrame) -> pd.DataFrame:
     # The actual columns depend on raw format. We'll ensure year is present
     df = df.copy()
 
-    # Extract year from sheet name if it looks like a year
-    if "sheet" in df.columns:
-        df["year"] = df["sheet"].astype(str).str.extract(r'(\d{4})')[0]
-        df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    # Extract year from sheet name only if 'year' is not in columns or all are null
+    if "year" not in df.columns or df["year"].isna().all():
+        if "sheet" in df.columns:
+            df["year"] = df["sheet"].astype(str).str.extract(r'(\d{4})')[0]
+            df["year"] = pd.to_numeric(df["year"], errors="coerce")
 
     df = df.drop_duplicates()
     return df
