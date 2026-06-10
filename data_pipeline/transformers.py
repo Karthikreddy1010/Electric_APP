@@ -1,0 +1,192 @@
+"""
+Transformers — preprocess, standardize, and aggregate datasets.
+
+Takes raw DataFrames loaded by loaders.py and applies cleaning rules:
+- Standardize column names
+- Convert dates to datetime
+- Handle missing values
+- Remove duplicates
+- Aggregate monthly data to yearly if needed
+"""
+import logging
+import pandas as pd
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
+
+# ── Generic Aggregation ──────────────────────────────────────────────────────
+
+def aggregate_to_yearly(
+    df: pd.DataFrame,
+    value_col: str,
+    agg_func: str = "mean",
+    year_col: str = "year"
+) -> pd.DataFrame:
+    """
+    Generic helper to convert monthly (or daily) to yearly data.
+    """
+    if year_col not in df.columns:
+        if "date" in df.columns:
+            df[year_col] = df["date"].dt.year
+        else:
+            raise ValueError(f"No {year_col} or date column found to aggregate.")
+
+    agg_dict = {value_col: agg_func}
+    yearly = df.groupby(year_col).agg(agg_dict).reset_index()
+    return yearly
+
+
+# ── Dataset Specific Transformers ────────────────────────────────────────────
+
+def preprocess_bgs_auction(df: pd.DataFrame) -> pd.DataFrame:
+    """Preprocess BGS Auction historical rates."""
+    if df.empty:
+        return df
+
+    # Example: BGS file has 'sheet' (e.g. 2024, 2023) and columns
+    # We want a unified view: year, rate, etc.
+    # The actual columns depend on raw format. We'll ensure year is present
+    df = df.copy()
+
+    # Extract year from sheet name if it looks like a year
+    if "sheet" in df.columns:
+        df["year"] = df["sheet"].astype(str).str.extract(r'(\d{4})')[0]
+        df["year"] = pd.to_numeric(df["year"], errors="coerce")
+
+    df = df.drop_duplicates()
+    return df
+
+
+def preprocess_municipal_energy(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess Historic Municipal Energy Use.
+    Filters to Electricity and selects key columns.
+    """
+    if df.empty:
+        return df
+
+    df = df.copy()
+
+    # Filter to Electricity
+    if "energy_type" in df.columns:
+        df = df[df["energy_type"].str.lower() == "electricity"]
+
+    # Select standard columns if available
+    expected_cols = ["municipality", "county", "utility", "year", "sector", "electricity_kwh"]
+    available_cols = [c for c in expected_cols if c in df.columns]
+
+    if "electricity_kwh" in df.columns:
+        # Convert to numeric, handle missing
+        df["electricity_kwh"] = pd.to_numeric(df["electricity_kwh"], errors="coerce").fillna(0)
+
+    # Sometimes JCPL has reporting gaps (e.g., 0 values in 2016/2017). We'll leave them as 0
+    # but could optionally replace with NaN here.
+
+    if available_cols:
+        df = df[available_cols]
+
+    df = df.drop_duplicates()
+    return df
+
+
+def preprocess_community_energy(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    df = df.copy()
+    df = df.drop_duplicates()
+    return df
+
+
+def preprocess_nj_retail_prices(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess NJ Residential Retail Prices.
+    Outputs: date, year, month, price_cents_kwh.
+    """
+    if df.empty:
+        return df
+    
+    df = df.copy()
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+        df["year"] = df["date"].dt.year
+        df["month"] = df["date"].dt.month
+
+    # Ensure price is numeric
+    if "price_cents_kwh" in df.columns:
+        df["price_cents_kwh"] = pd.to_numeric(df["price_cents_kwh"], errors="coerce")
+
+    df = df.sort_values(["year", "month"]).reset_index(drop=True)
+    return df
+
+
+def preprocess_eia_residential_prices(df: pd.DataFrame) -> pd.DataFrame:
+    """Preprocess EIA multi-state residential prices."""
+    if df.empty:
+        return df
+    
+    df = df.copy()
+    if "price_cents_per_kwh" in df.columns:
+        df = df.rename(columns={"price_cents_per_kwh": "price_cents_kwh"})
+
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+        df["year"] = df["date"].dt.year
+        df["month"] = df["date"].dt.month
+
+    df = df.drop_duplicates()
+    return df
+
+
+def preprocess_weather(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess Weather Data.
+    Aggregates daily weather to monthly (year, month).
+    """
+    if df.empty:
+        return df
+
+    df = df.copy()
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"])
+        df["year"] = df["date"].dt.year
+        df["month"] = df["date"].dt.month
+
+    # Forward fill missing temps
+    if "avg_temp_f" in df.columns:
+        df["avg_temp_f"] = df["avg_temp_f"].interpolate(method="linear")
+        df["avg_temp_f"] = df["avg_temp_f"].clip(-30, 120)
+
+    # Recompute HDD/CDD for consistency if not present or to sanitize
+    if "avg_temp_f" in df.columns:
+        df["hdd"] = np.maximum(65 - df["avg_temp_f"], 0).round(1)
+        df["cdd"] = np.maximum(df["avg_temp_f"] - 65, 0).round(1)
+
+    # Aggregate to monthly
+    monthly = df.groupby(["year", "month"]).agg(
+        avg_temp_f=("avg_temp_f", "mean"),
+        total_hdd=("hdd", "sum"),
+        total_cdd=("cdd", "sum"),
+        avg_humidity=("humidity_pct", "mean") if "humidity_pct" in df.columns else ("hdd", "count")
+    ).reset_index()
+
+    # Drop dummy humidity if it was used as fallback
+    if "humidity_pct" not in df.columns and "avg_humidity" in monthly.columns:
+        monthly = monthly.drop(columns=["avg_humidity"])
+
+    return monthly
+
+
+def preprocess_cpi(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess CPI monthly.
+    Ensures year, month, cpi are present.
+    """
+    if df.empty:
+        return df
+    
+    df = df.copy()
+    df["cpi"] = pd.to_numeric(df["cpi"], errors="coerce")
+    df = df.dropna(subset=["cpi"])
+    df = df.sort_values(["year", "month"]).reset_index(drop=True)
+    return df
