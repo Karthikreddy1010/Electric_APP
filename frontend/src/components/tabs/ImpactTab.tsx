@@ -190,7 +190,7 @@ const ImpactTab = () => {
       return 'Loading insights...';
     }
     const primaryDriver = costDrivers[0];
-    const offset = costDrivers.find(d => d.impact < 0 && d.key !== primaryDriver.key);
+    const offset = costDrivers.find((d: any) => d.impact < 0 && d.key !== primaryDriver.key);
     
     if (Math.abs(deltaBill) < 0.5) {
       return 'Your bill is projected to remain roughly unchanged under this scenario.';
@@ -357,7 +357,7 @@ const ImpactTab = () => {
                 <Tooltip 
                   cursor={{ fill: '#F1F5F9' }} 
                   contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.12)', fontSize: '13px' }} 
-                  formatter={(value: number) => [`$${value.toFixed(2)}`, 'Amount']}
+                  formatter={(value: any) => [`$${value.toFixed(2)}`, 'Amount']}
                 />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={50}>
                   {waterfallData.map((entry, index) => (
@@ -412,7 +412,7 @@ const ImpactTab = () => {
           </div>
           
           <div className="flex-1 space-y-3">
-            {costDrivers.map((driver, idx) => {
+            {costDrivers.map((driver: any, idx: number) => {
               const levelConfig = {
                 high:   { color: 'text-red-600',     bg: 'bg-red-100',     border: 'border-red-100',     badge: 'bg-red-100 text-red-700',     dot: '🔴' },
                 medium: { color: 'text-amber-600',   bg: 'bg-amber-100',   border: 'border-amber-100',   badge: 'bg-amber-100 text-amber-700', dot: '🟡' },

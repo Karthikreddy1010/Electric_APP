@@ -7,6 +7,7 @@ client = TestClient(app)
 
 def test_overview_schema():
     with TestClient(app) as client:
+        # First call (Cache Miss)
         response = client.get("/overview")
         assert response.status_code == 200
         data = response.json()
@@ -14,6 +15,16 @@ def test_overview_schema():
         assert "breakdown" in data
         assert "trends" in data
         assert data["kpis"]["current_bill"] > 0
+
+        # Second call (Cache Hit)
+        response2 = client.get("/overview")
+        assert response2.status_code == 200
+        data2 = response2.json()
+        assert "kpis" in data2
+        assert "breakdown" in data2
+        assert "trends" in data2
+        assert data2["kpis"]["current_bill"] > 0
+        assert data == data2
 
 def test_forecast_horizon():
     with TestClient(app) as client:

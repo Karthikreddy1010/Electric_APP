@@ -299,7 +299,8 @@ def cached(ttl: int = 300, prefix: Optional[str] = None):
 
             # Cache the result
             try:
-                serialized = json.dumps(result, default=str)
+                from fastapi.encoders import jsonable_encoder
+                serialized = json.dumps(jsonable_encoder(result), default=str)
                 await cache.set(key, serialized, ttl)
             except (TypeError, ValueError) as e:
                 logger.debug(f"Could not cache result for {key}: {e}")

@@ -1,6 +1,8 @@
 import OverviewTab from './tabs/OverviewTab.tsx';
 import ForecastTab from './tabs/ForecastTab.tsx';
 import ImpactTab from './tabs/ImpactTab.tsx';
+import WhatIfTab from './tabs/WhatIfTab.tsx';
+import CausalTab from './tabs/CausalTab.tsx';
 import BenchmarkTab from './tabs/BenchmarkTab.tsx';
 import GeoTab from './tabs/GeoTab.tsx';
 import PlansTab from './tabs/PlansTab.tsx';
@@ -14,6 +16,8 @@ const Dashboard = ({ activeTab }: DashboardProps) => {
     case 'Overview': return <OverviewTab />;
     case 'Forecast': return <ForecastTab />;
     case 'Impact': return <ImpactTab />;
+    case 'What-If Scenario': return <WhatIfTab />;
+    case 'Causal Analysis': return <CausalTab />;
     case 'Benchmark': return <BenchmarkTab />;
     case 'Geo Insights': return <GeoTab />;
     case 'Plans': return <PlansTab />;

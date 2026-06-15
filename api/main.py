@@ -177,13 +177,79 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Forecast model training failed: {e}")
 
-    # ── Step 6: Build monthly geo data from benchmarks ────────────────────────
+    # ── Step 6: Build monthly geo data from benchmarks or StateMonthlyPrice ────────
     try:
-        from api.services.geo_insights_service import build_monthly_state_data
-        app_state["geo_monthly_df"] = build_monthly_state_data(app_state["benchmark_df"])
-        logger.info(f"Geo monthly data built: {len(app_state['geo_monthly_df'])} records")
+        from database.connection import get_sync_engine
+        engine = get_sync_engine()
+
+        # Load the new real datasets into app_state
+        app_state["bgs_auction_df"] = pd.read_sql("SELECT * FROM bgs_auction_rates", con=engine)
+        app_state["community_energy_df"] = pd.read_sql("SELECT * FROM community_energy", con=engine)
+        app_state["municipal_energy_df"] = pd.read_sql("SELECT * FROM municipal_energy", con=engine)
+        app_state["state_monthly_prices_df"] = pd.read_sql("SELECT * FROM state_monthly_prices", con=engine)
+
+        logger.info(
+            f"Loaded database tables: "
+            f"bgs_auction={len(app_state['bgs_auction_df'])}, "
+            f"community_energy={len(app_state['community_energy_df'])}, "
+            f"municipal_energy={len(app_state['municipal_energy_df'])}, "
+            f"state_monthly_prices={len(app_state['state_monthly_prices_df'])}"
+        )
+
+        # Build geo_monthly_df from state_monthly_prices directly
+        mo_df = app_state["state_monthly_prices_df"].copy()
+        
+        # Mapping of average monthly usage by state for bill estimates
+        STATE_AVG_MONTHLY_USAGE = {
+            "AL": 1200, "AK": 570, "AZ": 1060, "AR": 1120, "CA": 530,
+            "CO": 690, "CT": 730, "DE": 930, "DC": 710, "FL": 1100,
+            "GA": 1120, "HI": 510, "ID": 960, "IL": 720, "IN": 940,
+            "IA": 870, "KS": 930, "KY": 1130, "LA": 1220, "ME": 530,
+            "MD": 1000, "MA": 600, "MI": 630, "MN": 780, "MS": 1200,
+            "MO": 1060, "MT": 810, "NE": 960, "NV": 910, "NH": 590,
+            "NJ": 680, "NM": 640, "NY": 570, "NC": 1060, "ND": 1110,
+            "OH": 870, "OK": 1100, "OR": 910, "PA": 830, "RI": 570,
+            "SC": 1130, "SD": 1020, "TN": 1210, "TX": 1140, "UT": 790,
+            "VT": 540, "VA": 1120, "WA": 950, "WV": 1090, "WI": 680,
+            "WY": 860,
+        }
+
+        records = []
+        for _, row in mo_df.iterrows():
+            st = row["state"]
+            yr = int(row["year"])
+            mo = int(row["month"])
+            rate_cents = float(row["price_cents_kwh"])
+            rate_dollars = rate_cents / 100.0
+            usage = float(STATE_AVG_MONTHLY_USAGE.get(st, 750.0))
+            bill = usage * rate_dollars
+            
+            records.append({
+                "state": st,
+                "year": yr,
+                "month": mo,
+                "month_str": f"{yr}-{mo:02d}",
+                "avg_rate": rate_dollars,
+                "avg_bill": bill,
+                "usage_kwh": usage,
+            })
+            
+        geo_df = pd.DataFrame(records)
+        geo_df = geo_df.sort_values(["state", "year", "month"]).reset_index(drop=True)
+        geo_df["yoy_change"] = geo_df.groupby("state")["avg_bill"].pct_change(12) * 100
+        geo_df["yoy_change"] = geo_df["yoy_change"].round(1)
+        
+        app_state["geo_monthly_df"] = geo_df
+        logger.info(f"Geo monthly data built from real EIA monthly prices: {len(app_state['geo_monthly_df'])} records")
+
     except Exception as e:
-        logger.warning(f"Geo data build failed: {e}")
+        logger.warning(f"Failed to load database tables: {e}. Falling back to benchmark build.")
+        try:
+            from api.services.geo_insights_service import build_monthly_state_data
+            app_state["geo_monthly_df"] = build_monthly_state_data(app_state["benchmark_df"])
+            logger.info(f"Geo monthly data built (fallback): {len(app_state['geo_monthly_df'])} records")
+        except Exception as ex:
+            logger.error(f"Geo data build fallback failed: {ex}")
 
     logger.info("Initialization complete -- all systems ready")
     yield
@@ -240,6 +306,8 @@ from api.routes.bill_impact import router as bill_impact_router
 from api.routes.benchmark import router as benchmark_router
 from api.routes.forecast import router as forecast_router
 from api.routes.plans import router as plans_router
+from api.routes.bgs import router as bgs_router
+from api.routes.municipal import router as municipal_router
 
 app.include_router(health_router)
 app.include_router(dashboard_router)
@@ -250,6 +318,8 @@ app.include_router(bill_impact_router)
 app.include_router(benchmark_router)
 app.include_router(forecast_router)
 app.include_router(plans_router)
+app.include_router(bgs_router)
+app.include_router(municipal_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────

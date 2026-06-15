@@ -1,15 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  LineChart, Line, Legend
 } from 'recharts';
-import { ShieldCheck, Zap, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Zap, ArrowRight, TrendingUp } from 'lucide-react';
 
 const PlansTab = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['plans'],
     queryFn: async () => {
       const res = await axios.get('/plans');
+      return res.data;
+    }
+  });
+
+  const { data: bgsData } = useQuery({
+    queryKey: ['bgs-rates'],
+    queryFn: async () => {
+      const res = await axios.get('/bgs/rates');
       return res.data;
     }
   });
@@ -125,6 +134,38 @@ const PlansTab = () => {
           </div>
         </div>
       </div>
+
+      {/* ── BGS Auction Rates History Chart ── */}
+      {bgsData && bgsData.data && (
+        <div className="card p-8 bg-white shadow-2xl shadow-slate-200/50">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                <TrendingUp size={16} className="text-blue-600" /> NJ BGS Auction RSCP Rates History
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">Historical Basic Generation Service default supply rates (cents/kWh)</p>
+            </div>
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              2002 - 2026 Reference
+            </div>
+          </div>
+          <div className="h-[320px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={bgsData.data} margin={{ top: 10, right: 30, left: 10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                <XAxis dataKey="year" tick={{ fontSize: 11, fontWeight: 700 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}¢`} />
+                <Tooltip formatter={(v: any) => [`${Number(v).toFixed(3)}¢/kWh`]} />
+                <Legend />
+                <Line type="monotone" dataKey="PSE&G" stroke="#2563EB" strokeWidth={3} activeDot={{ r: 8 }} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="JCP&L" stroke="#8B5CF6" strokeWidth={3} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="ACE" stroke="#0D9488" strokeWidth={3} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="RECO" stroke="#EF4444" strokeWidth={3} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

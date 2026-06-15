@@ -17,7 +17,7 @@ async def state_benchmark_post(req: BenchmarkRequest):
 @router.get("/benchmark")
 @cached(ttl=600)
 async def state_benchmark(
-    year: int = Query(2025, ge=2019, le=2026),
+    year: int = Query(2025, ge=2005, le=2026),
     compare_state: str = Query("NJ"),
 ):
     """Compare residential electricity rates across all US states."""

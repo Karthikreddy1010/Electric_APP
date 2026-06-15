@@ -332,3 +332,98 @@ class ETLJobLog(Base):
     rows_updated = Column(Integer, default=0)
     error_message = Column(Text)
     metadata_json = Column(Text)                                 # JSON blob for extra info
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  NEW DATASETS (REAL UPLOADED DATASETS)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class BgsAuctionRate(Base):
+    """
+    New Jersey Basic Generation Service (BGS) historical auction rates.
+    Sources: Table 1 (RSCP supply cents/kWh) & Table 2 (CIEP supply $/MW-day).
+    """
+    __tablename__ = "bgs_auction_rates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    edc = Column(String(20), nullable=False, index=True)        # PSE&G, JCP&L, ACE, RECO
+    auction_product_type = Column(String(100))                 # RSCP, CIEP, default supply, etc.
+    final_price_kwh = Column(Float)                            # rate in cents/kWh (RSCP)
+    final_price_mw_day = Column(Float)                          # rate in $/MW-day (CIEP)
+    sheet_source = Column(String(100))
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "edc", "auction_product_type", name="uq_bgs_yr_edc_type"),
+    )
+
+
+class CommunityEnergy(Base):
+    """
+    Aggregated Community-Scale Utility Energy Data for NJ.
+    Tracks municipal electricity (kWh) and natural gas (therms) consumption.
+    """
+    __tablename__ = "community_energy"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    municipality = Column(String(100), nullable=False, index=True)
+    county = Column(String(50), nullable=False, index=True)
+    muni_county = Column(String(150))
+    year = Column(Integer, nullable=False, index=True)
+    electric_utility = Column(String(50))
+    residential_electricity = Column(Float)
+    commercial_electricity = Column(Float)
+    industrial_electricity = Column(Float)
+    street_lighting_electricity = Column(Float)
+    total_electricity_kwh = Column(Float)
+    natural_gas_utility = Column(String(50))
+    residential_natural_gas = Column(Float)
+    commercial_natural_gas = Column(Float)
+    industrial_natural_gas = Column(Float)
+    street_lighting_natural_gas = Column(Float)
+    total_natural_gas_therms = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("municipality", "county", "year", name="uq_comm_muni_co_yr"),
+    )
+
+
+class MunicipalEnergy(Base):
+    """
+    Historic Municipal Energy Use in New Jersey.
+    Tracks sector-level municipal electricity (kWh) and natural gas (therms).
+    """
+    __tablename__ = "municipal_energy"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    municipality = Column(String(100), nullable=False, index=True)
+    county = Column(String(50), nullable=False, index=True)
+    utility = Column(String(50))
+    year = Column(Integer, nullable=False, index=True)
+    sector = Column(String(50))                                  # Commercial, Residential, etc.
+    electricity_kwh = Column(Float)
+    natural_gas_therms = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+
+class StateMonthlyPrice(Base):
+    """
+    EIA monthly average residential electricity prices per state since 2005.
+    Source: eia_residential_Avg_electricity_prices.csv
+    """
+    __tablename__ = "state_monthly_prices"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    state_name = Column(String(100))
+    price_cents_kwh = Column(Float, nullable=False)
+    year = Column(Integer, nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("date", "state", name="uq_state_mo_date_st"),
+    )

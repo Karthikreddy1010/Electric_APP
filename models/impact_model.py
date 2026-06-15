@@ -226,54 +226,76 @@ class BillImpactModel:
 
         contributions = {}
         
-            "percent": round(((ΔFixed * tax_mult) / total_bill) * 100, 2) if total_bill else 0
-        }
-
-        # B. Weather Impact attribution - Deterministic Attribution
-        avg_bgs_rate = (float(prev_row.get("bgs_rate", 0.0)) + float(row.get("bgs_rate", 0.0))) / 2.0
-        avg_other_rate_total = avg_rate_total - avg_bgs_rate
-        ΔBill_weather = (ΔWeatherUsage * avg_bgs_rate + (ΔWeatherUsage / (1.0 + lf)) * avg_other_rate_total) * tax_mult
-        contributions["weather"] = {
-            "value": round(ΔBill_weather, 2),
-            "percent": round((ΔBill_weather / total_bill) * 100, 2) if total_bill else 0
-        }
-
-        # C. Behavioral Usage Impact (Discretionary usage shifts)
-        ΔBill_usage = (ΔNonWeatherUsage * avg_bgs_rate + (ΔNonWeatherUsage / (1.0 + lf)) * avg_other_rate_total) * tax_mult
-        contributions["behavioral_usage"] = {
-            "value": round(ΔBill_usage, 2),
-            "percent": round((ΔBill_usage / total_bill) * 100, 2) if total_bill else 0
-        }
-
-        # D. Component rate change impacts
-        for rate_key, label, driver in variable_keys:
-            rate_prev = float(prev_row.get(rate_key, 0.0))
-            rate_latest = float(row.get(rate_key, 0.0))
-            ΔRate = rate_latest - rate_prev
+        if is_absolute:
+            # Absolute bill contributions (single month cost analysis)
+            bgs_val = float(row.get("bgs_cost", 0.0))
+            dist_val = float(row.get("distribution_cost", 0.0))
+            trans_val = float(row.get("transmission_cost", 0.0))
+            sbc_val = float(row.get("sbc_cost", 0.0))
+            nug_val = float(row.get("nug_cost", 0.0))
+            fixed_val = float(row.get("customer_charge", 8.24))
+            tax_val = float(row.get("sales_tax", 0.0))
             
-            # Midpoint causal price impact (bgs_rate uses effective usage)
-            if rate_key == "bgs_rate":
-                comp_impact = ΔRate * avg_eff_usage * tax_mult
-            else:
-                comp_impact = ΔRate * avg_raw_usage * tax_mult
-            short_key = rate_key.replace("_rate", "")
-            
-            contributions[short_key] = {
-                "value": round(comp_impact, 2),
-                "percent": round((comp_impact / total_bill) * 100, 2) if total_bill else 0
+            contributions["bgs"] = {"value": round(bgs_val, 2), "percent": round((bgs_val / total_bill * 100), 2) if total_bill else 0}
+            contributions["distribution"] = {"value": round(dist_val, 2), "percent": round((dist_val / total_bill * 100), 2) if total_bill else 0}
+            contributions["transmission"] = {"value": round(trans_val, 2), "percent": round((trans_val / total_bill * 100), 2) if total_bill else 0}
+            contributions["sbc"] = {"value": round(sbc_val, 2), "percent": round((sbc_val / total_bill * 100), 2) if total_bill else 0}
+            contributions["nug"] = {"value": round(nug_val, 2), "percent": round((nug_val / total_bill * 100), 2) if total_bill else 0}
+            contributions["customer"] = {"value": round(fixed_val, 2), "percent": round((fixed_val / total_bill * 100), 2) if total_bill else 0}
+            contributions["tax"] = {"value": round(tax_val, 2), "percent": round((tax_val / total_bill * 100), 2) if total_bill else 0}
+            contributions["weather"] = {"value": 0.0, "percent": 0.0}
+            contributions["behavioral_usage"] = {"value": 0.0, "percent": 0.0}
+            contributions["lmp"] = {"value": 0.0, "percent": 0.0}
+        else:
+            # Change/Delta contributions
+            fixed_prev = float(prev_row.get("customer_charge", 8.24))
+            fixed_latest = float(row.get("customer_charge", 8.24))
+            ΔFixed = fixed_latest - fixed_prev
+            contributions["customer"] = {
+                "value": round(ΔFixed * tax_mult, 2),
+                "percent": round(((ΔFixed * tax_mult) / total_bill) * 100, 2) if total_bill else 0
             }
 
-        # E. PJM Wholesale LMP Impact
-        lmp_latest = float(row.get("avg_lmp", row.get("lmp", float(row.get("bgs_rate", 0.0)) * 1000.0)))
-        lmp_prev = float(prev_row.get("avg_lmp", prev_row.get("lmp", float(prev_row.get("bgs_rate", 0.0)) * 1000.0)))
-        ΔLmp = lmp_latest - lmp_prev
-        lmp_impact = (ΔLmp / 1000.0) * avg_eff_usage * tax_mult
-        contributions["lmp"] = {
-            "value": round(lmp_impact, 2),
-            "percent": round((lmp_impact / total_bill) * 100, 2) if total_bill else 0
-        }
+            avg_bgs_rate = (float(prev_row.get("bgs_rate", 0.0)) + float(row.get("bgs_rate", 0.0))) / 2.0
+            avg_other_rate_total = avg_rate_total - avg_bgs_rate
+            ΔBill_weather = (ΔWeatherUsage * avg_bgs_rate + (ΔWeatherUsage / (1.0 + lf)) * avg_other_rate_total) * tax_mult
+            contributions["weather"] = {
+                "value": round(ΔBill_weather, 2),
+                "percent": round((ΔBill_weather / total_bill) * 100, 2) if total_bill else 0
+            }
 
-        # 3. Sensitivity Analysis (Dynamic and Elasticity-Based) - FIX: 7 Dynamic Elasticity
+            ΔBill_usage = (ΔNonWeatherUsage * avg_bgs_rate + (ΔNonWeatherUsage / (1.0 + lf)) * avg_other_rate_total) * tax_mult
+            contributions["behavioral_usage"] = {
+                "value": round(ΔBill_usage, 2),
+                "percent": round((ΔBill_usage / total_bill) * 100, 2) if total_bill else 0
+            }
+
+            for rate_key, label, driver in variable_keys:
+                rate_prev = float(prev_row.get(rate_key, 0.0))
+                rate_latest = float(row.get(rate_key, 0.0))
+                ΔRate = rate_latest - rate_prev
+                
+                if rate_key == "bgs_rate":
+                    comp_impact = ΔRate * avg_eff_usage * tax_mult
+                else:
+                    comp_impact = ΔRate * avg_raw_usage * tax_mult
+                short_key = rate_key.replace("_rate", "")
+                
+                contributions[short_key] = {
+                    "value": round(comp_impact, 2),
+                    "percent": round((comp_impact / total_bill) * 100, 2) if total_bill else 0
+                }
+
+            lmp_latest = float(row.get("avg_lmp", row.get("lmp", float(row.get("bgs_rate", 0.0)) * 1000.0)))
+            lmp_prev = float(prev_row.get("avg_lmp", prev_row.get("lmp", float(prev_row.get("bgs_rate", 0.0)) * 1000.0)))
+            ΔLmp = lmp_latest - lmp_prev
+            lmp_impact = (ΔLmp / 1000.0) * avg_eff_usage * tax_mult
+            contributions["lmp"] = {
+                "value": round(lmp_impact, 2),
+                "percent": round((lmp_impact / total_bill) * 100, 2) if total_bill else 0
+            }
+
+        # 3. Sensitivity Analysis (Direct Rate Sensitivity)
         sensitivity = {}
         for rate_key, label, driver in variable_keys:
             short_key = rate_key.replace("_rate", "")
@@ -284,20 +306,14 @@ class BillImpactModel:
             impacts = {}
             for pct in [10, -10]:
                 delta_rate = base_rate * (pct / 100.0)
-                # Rate impact
                 if rate_key == "bgs_rate":
                     rate_impact = delta_rate * eff_usage * tax_mult
                 else:
                     rate_impact = delta_rate * usage * tax_mult
-                # Demand response (typical elasticity = -0.2)
-                usage_response = usage * (pct / 100.0) * -0.2
-                usage_impact = usage_response * prev_rate_total * tax_mult
-                total_delta = rate_impact + usage_impact
-                impacts[f"{'+' if pct > 0 else ''}{pct}%"] = round(total_delta, 2)
+                impacts[f"{'+' if pct > 0 else ''}{pct}%"] = round(rate_impact, 2)
                 
             sensitivity[short_key] = impacts
 
-        # Weather sensitivity CDD/HDD scaling
         weather_sens = {}
         for pct in [10, -10]:
             cdd_shift = cdd_latest * (pct / 100.0)
@@ -308,7 +324,7 @@ class BillImpactModel:
         sensitivity["weather"] = weather_sens
 
         # FIX: 8 - Add Time Awareness & Seasonal Insight Generation
-        insights = self._generate_insights_causal(contributions, sensitivity, cdd_latest, hdd_latest, latest_date.month)
+        insights = self._generate_insights_causal(contributions, sensitivity, cdd_latest, hdd_latest, latest_date.month, is_absolute)
 
         return {
             "total_bill": round(total_bill, 2),

@@ -27,6 +27,10 @@ from database.models import (
     StateBenchmark,
     Tariff,
     WeatherIndex,
+    BgsAuctionRate,
+    CommunityEnergy,
+    MunicipalEnergy,
+    StateMonthlyPrice,
 )
 
 logger = logging.getLogger(__name__)
@@ -254,14 +258,188 @@ def run_seed(force: bool = False) -> dict:
     engine = get_sync_engine()
     Base.metadata.create_all(engine)
 
+    if force:
+        logger.info("force=True, clearing existing tables before seeding...")
+        with get_sync_session() as session:
+            try:
+                session.query(BillingData).delete()
+                session.query(RawWeather).delete()
+                session.query(WeatherIndex).delete()
+                session.query(StateBenchmark).delete()
+                session.query(Tariff).delete()
+                session.query(BgsAuctionRate).delete()
+                session.query(CommunityEnergy).delete()
+                session.query(MunicipalEnergy).delete()
+                session.query(StateMonthlyPrice).delete()
+                session.commit()
+                logger.info("Cleared all existing tables successfully.")
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to clear database tables: {e}")
+
     results = {}
     results["billing"] = seed_billing_data(force)
     results["weather"] = seed_weather_data(force)
     results["benchmarks"] = seed_benchmarks(force)
     results["plans"] = seed_retail_plans(force)
+    results["bgs_auction"] = seed_bgs_auction_rates(force)
+    results["community_energy"] = seed_community_energy(force)
+    results["municipal_energy"] = seed_municipal_energy(force)
+    results["state_monthly"] = seed_state_monthly_prices(force)
 
     logger.info(f"Seed complete: {results}")
     return results
+
+
+def seed_bgs_auction_rates(force: bool = False) -> int:
+    """Load bgs_auction.csv into bgs_auction_rates table."""
+    csv_path = PROCESSED_DIR / "bgs_auction.csv"
+    if not csv_path.exists():
+        logger.warning("No bgs_auction.csv found — skipping BGS seed")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(BgsAuctionRate.id)).scalar()
+            if count > 0:
+                logger.info(f"bgs_auction_rates already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            kwh = float(row["final_price_k_wh"]) if pd.notna(row.get("final_price_k_wh")) else None
+            mwd = float(row["final_price_m_wday"]) if pd.notna(row.get("final_price_m_wday")) else None
+            
+            # Skip if both are None
+            if kwh is None and mwd is None:
+                continue
+
+            record = BgsAuctionRate(
+                year=int(row["year"]),
+                edc=str(row["edc"]),
+                auction_product_type=str(row["auction_product_type"]),
+                final_price_kwh=kwh,
+                final_price_mw_day=mwd,
+                sheet_source=str(row.get("sheet")),
+            )
+            records.append(record)
+
+        session.add_all(records)
+        session.commit()
+    logger.info(f"Seeded {len(records)} BGS Auction rates")
+    return len(records)
+
+
+def seed_community_energy(force: bool = False) -> int:
+    """Load community_energy.csv into community_energy table."""
+    csv_path = PROCESSED_DIR / "community_energy.csv"
+    if not csv_path.exists():
+        logger.warning("No community_energy.csv found — skipping Community Energy seed")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(CommunityEnergy.id)).scalar()
+            if count > 0:
+                logger.info(f"community_energy already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            # Convert values safely
+            record = CommunityEnergy(
+                municipality=str(row["municipality"]),
+                county=str(row["county"]),
+                muni_county=str(row.get("muni_county", "")),
+                year=int(row["year"]),
+                electric_utility=str(row.get("electric_utility", "")),
+                residential_electricity=float(row.get("residential_electricity", 0)),
+                commercial_electricity=float(row.get("commercial_electricity", 0)),
+                industrial_electricity=float(row.get("industrial_electricity", 0)),
+                street_lighting_electricity=float(row.get("street_lighting_electricity", 0)),
+                total_electricity_kwh=float(row.get("total_electricity_kwh", 0)),
+                natural_gas_utility=str(row.get("natural_gas_utility", "")),
+                residential_natural_gas=float(row.get("residential_natural_gas", 0)),
+                commercial_natural_gas=float(row.get("commercial_natural_gas", 0)),
+                industrial_natural_gas=float(row.get("industrial_natural_gas", 0)),
+                street_lighting_natural_gas=float(row.get("street_lighting_natural_gas", 0)),
+                total_natural_gas_therms=float(row.get("total_natural_gas_therms", 0)),
+            )
+            records.append(record)
+
+        session.add_all(records)
+        session.commit()
+    logger.info(f"Seeded {len(records)} Community Energy records")
+    return len(records)
+
+
+def seed_municipal_energy(force: bool = False) -> int:
+    """Load municipal_energy.csv into municipal_energy table."""
+    csv_path = PROCESSED_DIR / "municipal_energy.csv"
+    if not csv_path.exists():
+        logger.warning("No municipal_energy.csv found — skipping Municipal Energy seed")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(MunicipalEnergy.id)).scalar()
+            if count > 0:
+                logger.info(f"municipal_energy already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            record = MunicipalEnergy(
+                municipality=str(row["municipality"]),
+                county=str(row["county"]),
+                utility=str(row.get("utility", "")),
+                year=int(row["year"]),
+                sector=str(row.get("sector", "")),
+                electricity_kwh=float(row.get("electricity_kwh", 0)),
+                natural_gas_therms=float(row.get("natural_gas_therms", 0)),
+            )
+            records.append(record)
+
+        session.add_all(records)
+        session.commit()
+    logger.info(f"Seeded {len(records)} Municipal Energy records")
+    return len(records)
+
+
+def seed_state_monthly_prices(force: bool = False) -> int:
+    """Load eia_residential_prices.csv into state_monthly_prices table."""
+    csv_path = PROCESSED_DIR / "eia_residential_prices.csv"
+    if not csv_path.exists():
+        logger.warning("No eia_residential_prices.csv found — skipping State Monthly Prices seed")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(StateMonthlyPrice.id)).scalar()
+            if count > 0:
+                logger.info(f"state_monthly_prices already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            record = StateMonthlyPrice(
+                date=pd.to_datetime(row["date"]).date(),
+                state=str(row["state"]),
+                state_name=str(row["state_name"]),
+                price_cents_kwh=float(row["price_cents_kwh"]),
+                year=int(row["year"]),
+                month=int(row["month"]),
+            )
+            records.append(record)
+
+        session.add_all(records)
+        session.commit()
+    logger.info(f"Seeded {len(records)} State Monthly Price records")
+    return len(records)
 
 
 if __name__ == "__main__":

@@ -73,16 +73,17 @@ def preprocess_municipal_energy(df: pd.DataFrame) -> pd.DataFrame:
     if "energy_type" in df.columns:
         df = df[df["energy_type"].str.lower() == "electricity"]
 
-    # Select standard columns if available
-    expected_cols = ["municipality", "county", "utility", "year", "sector", "electricity_kwh"]
+    # Select standard columns if available (standardize names)
+    if "electricity_k_wh" in df.columns:
+        df = df.rename(columns={"electricity_k_wh": "electricity_kwh"})
+    if "natural_gas_therms" in df.columns:
+        df["natural_gas_therms"] = pd.to_numeric(df["natural_gas_therms"], errors="coerce").fillna(0)
+
+    expected_cols = ["municipality", "county", "utility", "year", "sector", "electricity_kwh", "natural_gas_therms"]
     available_cols = [c for c in expected_cols if c in df.columns]
 
     if "electricity_kwh" in df.columns:
-        # Convert to numeric, handle missing
         df["electricity_kwh"] = pd.to_numeric(df["electricity_kwh"], errors="coerce").fillna(0)
-
-    # Sometimes JCPL has reporting gaps (e.g., 0 values in 2016/2017). We'll leave them as 0
-    # but could optionally replace with NaN here.
 
     if available_cols:
         df = df[available_cols]
@@ -92,9 +93,44 @@ def preprocess_municipal_energy(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def preprocess_community_energy(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess Aggregated Community Scale Utility Energy Data.
+    Cleans up the municipality dataset, removes unnamed columns, and standardizes numbers.
+    """
     if df.empty:
         return df
     df = df.copy()
+
+    # Rename total columns if needed
+    if "total_electricity_k_wh" in df.columns:
+        df = df.rename(columns={"total_electricity_k_wh": "total_electricity_kwh"})
+
+    # Select standard columns
+    expected_cols = [
+        "municipality", "county", "muni_county", "year", "electric_utility",
+        "residential_electricity", "commercial_electricity", "industrial_electricity",
+        "street_lighting_electricity", "total_electricity_kwh", "natural_gas_utility",
+        "residential_natural_gas", "commercial_natural_gas", "industrial_natural_gas",
+        "street_lighting_natural_gas", "total_natural_gas_therms"
+    ]
+    available_cols = [c for c in expected_cols if c in df.columns]
+    
+    if available_cols:
+        df = df[available_cols]
+
+    # Convert non-numeric values like 'NDA' and 'CWC' to NaN or 0
+    numeric_cols = [
+        "residential_electricity", "commercial_electricity", "industrial_electricity",
+        "street_lighting_electricity", "total_electricity_kwh",
+        "residential_natural_gas", "commercial_natural_gas", "industrial_natural_gas",
+        "street_lighting_natural_gas", "total_natural_gas_therms"
+    ]
+    for c in numeric_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+
+    df = df.dropna(subset=["municipality", "year"])
+    df["year"] = df["year"].astype(int)
     df = df.drop_duplicates()
     return df
 
@@ -127,13 +163,20 @@ def preprocess_eia_residential_prices(df: pd.DataFrame) -> pd.DataFrame:
         return df
     
     df = df.copy()
-    if "price_cents_per_kwh" in df.columns:
+    if "price_cents_per_k_wh" in df.columns:
+        df = df.rename(columns={"price_cents_per_k_wh": "price_cents_kwh"})
+    elif "price_cents_per_kwh" in df.columns:
         df = df.rename(columns={"price_cents_per_kwh": "price_cents_kwh"})
 
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"])
         df["year"] = df["date"].dt.year
         df["month"] = df["date"].dt.month
+
+    # Ensure clean price column
+    if "price_cents_kwh" in df.columns:
+        df["price_cents_kwh"] = pd.to_numeric(df["price_cents_kwh"], errors="coerce")
+        df = df.dropna(subset=["price_cents_kwh"])
 
     df = df.drop_duplicates()
     return df
