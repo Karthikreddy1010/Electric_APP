@@ -6,6 +6,7 @@ import CausalTab from './tabs/CausalTab.tsx';
 import BenchmarkTab from './tabs/BenchmarkTab.tsx';
 import GeoTab from './tabs/GeoTab.tsx';
 import PlansTab from './tabs/PlansTab.tsx';
+import UtilityTab from './tabs/UtilityTab.tsx';
 
 interface DashboardProps {
   activeTab: string;
@@ -21,6 +22,7 @@ const Dashboard = ({ activeTab }: DashboardProps) => {
     case 'Benchmark': return <BenchmarkTab />;
     case 'Geo Insights': return <GeoTab />;
     case 'Plans': return <PlansTab />;
+    case 'Utility Intelligence': return <UtilityTab />;
     default: return <OverviewTab />;
   }
 };

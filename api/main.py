@@ -310,6 +310,7 @@ from api.routes.forecast import router as forecast_router
 from api.routes.plans import router as plans_router
 from api.routes.bgs import router as bgs_router
 from api.routes.municipal import router as municipal_router
+from api.routes.eia861 import router as eia861_router
 
 app.include_router(health_router)
 app.include_router(dashboard_router)
@@ -322,6 +323,7 @@ app.include_router(forecast_router)
 app.include_router(plans_router)
 app.include_router(bgs_router)
 app.include_router(municipal_router)
+app.include_router(eia861_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────
