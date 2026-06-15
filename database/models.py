@@ -427,3 +427,34 @@ class StateMonthlyPrice(Base):
     __table_args__ = (
         UniqueConstraint("date", "state", name="uq_state_mo_date_st"),
     )
+
+
+class EIA861Master(Base):
+    """
+    Cleaned and merged EIA-861 utility/state-level dataset.
+    Aggregates sales, net metering, demand response, dynamic pricing, and operational data.
+    """
+    __tablename__ = "eia861_master"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    utility_id = Column(Integer, nullable=False, index=True)
+    utility_name = Column(String(200))
+    state = Column(String(2), nullable=False, index=True)
+    total_revenue = Column(Float)
+    total_sales_mwh = Column(Float)
+    total_customers = Column(Float)
+    avg_price = Column(Float)
+    nm_customers = Column(Float)
+    nm_energy_mwh = Column(Float)
+    peak_demand = Column(Float)
+    total_load = Column(Float)
+    demand_response_flag = Column(Integer, default=0)
+    dynamic_pricing_flag = Column(Integer, default=0)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "utility_id", "state", name="uq_eia861_yr_util_st"),
+        Index("ix_eia861_util_year", "utility_id", "year"),
+    )
+

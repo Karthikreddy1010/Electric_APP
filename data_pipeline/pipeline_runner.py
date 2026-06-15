@@ -95,6 +95,13 @@ def run_pipeline(force: bool = False) -> dict:
     if "cpi_monthly" in datasets:
         processed["cpi_monthly"] = preprocess_cpi(datasets["cpi_monthly"])
 
+    # Run EIA-861 processor
+    try:
+        from data_pipeline.eia861_processor import process_all
+        process_all(force=force)
+    except Exception as e:
+        logger.warning(f"Failed to process EIA-861 datasets: {e}")
+
     # 4. Validate
     run_all_validations(processed)
     

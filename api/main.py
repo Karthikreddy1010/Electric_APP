@@ -187,13 +187,15 @@ async def lifespan(app: FastAPI):
         app_state["community_energy_df"] = pd.read_sql("SELECT * FROM community_energy", con=engine)
         app_state["municipal_energy_df"] = pd.read_sql("SELECT * FROM municipal_energy", con=engine)
         app_state["state_monthly_prices_df"] = pd.read_sql("SELECT * FROM state_monthly_prices", con=engine)
+        app_state["eia861_master_df"] = pd.read_sql("SELECT * FROM eia861_master", con=engine)
 
         logger.info(
             f"Loaded database tables: "
             f"bgs_auction={len(app_state['bgs_auction_df'])}, "
             f"community_energy={len(app_state['community_energy_df'])}, "
             f"municipal_energy={len(app_state['municipal_energy_df'])}, "
-            f"state_monthly_prices={len(app_state['state_monthly_prices_df'])}"
+            f"state_monthly_prices={len(app_state['state_monthly_prices_df'])}, "
+            f"eia861_master={len(app_state['eia861_master_df'])}"
         )
 
         # Build geo_monthly_df from state_monthly_prices directly

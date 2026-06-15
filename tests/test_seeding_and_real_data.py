@@ -69,3 +69,23 @@ def test_municipal_benchmark_not_found():
 
         response = client.get("/municipal/benchmark?name=InvalidTownNameXYZ123")
         assert response.status_code == 404
+
+
+def test_eia861_master_loaded():
+    """Verify EIA-861 master dataset is loaded into app_state and has valid records."""
+    # Since lifespan context loads the app_state, we make a call or use a TestClient
+    with TestClient(app) as client:
+        df = app_state.get("eia861_master_df")
+        assert df is not None, "EIA-861 master dataset is not loaded in app_state"
+        assert len(df) > 0, "EIA-861 master dataset is empty"
+        
+        # Check that required columns exist
+        required_cols = [
+            "year", "utility_id", "utility_name", "state",
+            "total_revenue", "total_sales_mwh", "total_customers", "avg_price",
+            "nm_customers", "nm_energy_mwh", "peak_demand", "total_load",
+            "demand_response_flag", "dynamic_pricing_flag"
+        ]
+        for col in required_cols:
+            assert col in df.columns, f"Missing column: {col}"
+

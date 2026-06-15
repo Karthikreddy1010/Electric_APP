@@ -31,6 +31,7 @@ from database.models import (
     CommunityEnergy,
     MunicipalEnergy,
     StateMonthlyPrice,
+    EIA861Master,
 )
 
 logger = logging.getLogger(__name__)
@@ -271,6 +272,7 @@ def run_seed(force: bool = False) -> dict:
                 session.query(CommunityEnergy).delete()
                 session.query(MunicipalEnergy).delete()
                 session.query(StateMonthlyPrice).delete()
+                session.query(EIA861Master).delete()
                 session.commit()
                 logger.info("Cleared all existing tables successfully.")
             except Exception as e:
@@ -286,6 +288,7 @@ def run_seed(force: bool = False) -> dict:
     results["community_energy"] = seed_community_energy(force)
     results["municipal_energy"] = seed_municipal_energy(force)
     results["state_monthly"] = seed_state_monthly_prices(force)
+    results["eia861"] = seed_eia861_master(force)
 
     logger.info(f"Seed complete: {results}")
     return results
@@ -439,6 +442,47 @@ def seed_state_monthly_prices(force: bool = False) -> int:
         session.add_all(records)
         session.commit()
     logger.info(f"Seeded {len(records)} State Monthly Price records")
+    return len(records)
+
+
+def seed_eia861_master(force: bool = False) -> int:
+    """Load eia861_master_clean.csv into eia861_master table."""
+    csv_path = PROCESSED_DIR / "eia861" / "eia861_master_clean.csv"
+    if not csv_path.exists():
+        logger.warning("No eia861_master_clean.csv found — skipping EIA-861 seed")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(EIA861Master.id)).scalar()
+            if count > 0:
+                logger.info(f"eia861_master already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            record = EIA861Master(
+                year=int(row["year"]),
+                utility_id=int(row["utility_id"]),
+                utility_name=str(row["utility_name"]) if pd.notna(row["utility_name"]) else None,
+                state=str(row["state"]),
+                total_revenue=float(row["total_revenue"]) if pd.notna(row["total_revenue"]) else None,
+                total_sales_mwh=float(row["total_sales_mwh"]) if pd.notna(row["total_sales_mwh"]) else None,
+                total_customers=float(row["total_customers"]) if pd.notna(row["total_customers"]) else None,
+                avg_price=float(row["avg_price"]) if pd.notna(row["avg_price"]) else None,
+                nm_customers=float(row["nm_customers"]) if pd.notna(row["nm_customers"]) else None,
+                nm_energy_mwh=float(row["nm_energy_mwh"]) if pd.notna(row["nm_energy_mwh"]) else None,
+                peak_demand=float(row["peak_demand"]) if pd.notna(row["peak_demand"]) else None,
+                total_load=float(row["total_load"]) if pd.notna(row["total_load"]) else None,
+                demand_response_flag=int(row["demand_response_flag"]) if pd.notna(row["demand_response_flag"]) else 0,
+                dynamic_pricing_flag=int(row["dynamic_pricing_flag"]) if pd.notna(row["dynamic_pricing_flag"]) else 0,
+            )
+            records.append(record)
+
+        session.add_all(records)
+        session.commit()
+    logger.info(f"Seeded {len(records)} EIA-861 master records")
     return len(records)
 
 
