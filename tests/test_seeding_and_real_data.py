@@ -89,3 +89,36 @@ def test_eia861_master_loaded():
         for col in required_cols:
             assert col in df.columns, f"Missing column: {col}"
 
+
+def test_billing_analyze_ocr_endpoint():
+    """Verify the /analyze-ocr endpoint parses raw text correctly using fallback parser."""
+    bill_txt = (
+        "PSE&G Billing Statement\n"
+        "Billing Period: 12/01/2025 - 12/31/2025\n"
+        "Total Amount Due: $150.00\n"
+        "Electricity Used: 800 kWh\n"
+        "Supply Charges: $60.00\n"
+        "Delivery Charges: $70.00\n"
+        "Customer Charge: $15.00\n"
+        "Sales Tax: $5.00\n"
+    )
+    with TestClient(app) as client:
+        response = client.post("/analyze-ocr", json={"bill_text": bill_txt})
+        assert response.status_code == 200
+        data = response.json()
+        assert "PSE&G" in data["utility_name"]
+        assert "12/01/2025 - 12/31/2025" in data["billing_period"]
+        assert data["kwh_used"] == 800.0
+        assert data["total_amount"] == 150.0
+        assert data["charges"]["supply"] == 60.0
+        assert data["charges"]["delivery"] == 70.0
+        assert data["charges"]["fixed"] == 15.0
+        assert data["charges"]["tax"] == 5.0
+        assert data["percentages"]["supply_pct"] == 40.0
+        assert data["percentages"]["delivery_pct"] == 46.7
+        assert data["percentages"]["fixed_pct"] == 10.0
+        assert data["percentages"]["tax_pct"] == 3.3
+        assert data["driver"] == "usage"
+        assert "primary driver" in data["insight"].lower()
+
+

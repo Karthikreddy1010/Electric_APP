@@ -7,7 +7,8 @@ import {
 } from 'recharts';
 import { 
   ArrowUpRight, ArrowDownRight, Zap, TrendingUp, DollarSign, 
-  AlertTriangle, Lightbulb, Activity, Award, Calendar, MapPin, Building2
+  AlertTriangle, Lightbulb, Activity, Award, Calendar, MapPin, Building2,
+  FileText, Sparkles, PieChart
 } from 'lucide-react';
 
 const COLORS = {
@@ -116,6 +117,25 @@ const OverviewTab = () => {
   const [breakdownRange, setBreakdownRange] = useState(12);
   const [trendRange, setTrendRange] = useState(36);
   const [selectedMuni, setSelectedMuni] = useState('Newark City');
+  const [billText, setBillText] = useState('');
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const handleAnalyzeBill = async () => {
+    if (!billText.trim()) return;
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+    try {
+      const res = await axios.post('/analyze-ocr', { bill_text: billText });
+      setAnalysisResult(res.data);
+    } catch (err) {
+      console.error(err);
+      setAnalysisError('Failed to analyze the bill text. Please check the format and try again.');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['overview'],
@@ -504,6 +524,122 @@ const OverviewTab = () => {
             <p className="text-sm font-bold text-slate-400">Loading benchmark data...</p>
           </div>
         )}
+      </div>
+
+      {/* 🔹 8. BILL OCR STATEMENT ANALYZER */}
+      <div className="card p-6 border border-slate-100 hover:shadow-md transition-shadow">
+        <div className="flex items-center gap-2 mb-2">
+          <FileText className="text-blue-600" size={20} />
+          <h3 className="text-lg font-bold text-slate-950">Bill Statement Extraction & Analysis</h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-6">Paste raw OCR text from your electricity bill statement to parse components and identify cost drivers.</p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Input Area */}
+          <div className="lg:col-span-1 space-y-4">
+            <textarea
+              placeholder="Paste raw bill text here... (e.g. Total Due: $145.20, Electricity Used: 780 kWh, Supply: $55.00, Customer charge: $12.00...)"
+              value={billText}
+              onChange={(e) => setBillText(e.target.value)}
+              rows={10}
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs font-medium text-slate-700 outline-none focus:border-blue-500 resize-none"
+            />
+            {analysisError && (
+              <p className="text-xs font-bold text-red-500">{analysisError}</p>
+            )}
+            <button
+              onClick={handleAnalyzeBill}
+              disabled={isAnalyzing || !billText.trim()}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2"
+            >
+              {isAnalyzing ? (
+                <>
+                  <div className="animate-spin h-4 w-4 border-b-2 border-slate-500" />
+                  Analyzing Statement...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  Analyze Bill Statement
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Result Dashboard */}
+          <div className="lg:col-span-2 flex flex-col justify-center">
+            {analysisResult ? (
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-6 space-y-6">
+                {/* Header info */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/60 pb-4">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">
+                      Utility Match
+                    </span>
+                    <h4 className="text-lg font-black text-slate-900 mt-2">
+                      {analysisResult.utility_name || "Unknown Utility"}
+                    </h4>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Period: {analysisResult.billing_period || "Unknown Billing Period"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`inline-block px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider border ${
+                      analysisResult.driver === 'usage' 
+                        ? 'bg-amber-50 text-amber-600 border-amber-200' 
+                        : analysisResult.driver === 'rate'
+                        ? 'bg-red-50 text-red-600 border-red-200'
+                        : 'bg-indigo-50 text-indigo-600 border-indigo-200'
+                    }`}>
+                      Driver: {analysisResult.driver}
+                    </span>
+                    <div className="text-2xl font-black text-slate-900 mt-1.5">
+                      ${analysisResult.total_amount?.toFixed(2) || "0.00"}
+                    </div>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">
+                      {analysisResult.kwh_used?.toLocaleString() || "0"} kWh used
+                    </p>
+                  </div>
+                </div>
+
+                {/* Grid breakdown */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white rounded-xl p-4 border border-slate-100/80 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-400 mb-1">Supply Cost</p>
+                    <h5 className="text-sm font-black text-slate-900">${analysisResult.charges.supply?.toFixed(2)}</h5>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{analysisResult.percentages.supply_pct?.toFixed(1)}%</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-slate-100/80 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-400 mb-1">Delivery Cost</p>
+                    <h5 className="text-sm font-black text-slate-900">${analysisResult.charges.delivery?.toFixed(2)}</h5>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{analysisResult.percentages.delivery_pct?.toFixed(1)}%</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-slate-100/80 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-400 mb-1">Fixed Cost</p>
+                    <h5 className="text-sm font-black text-slate-900">${analysisResult.charges.fixed?.toFixed(2)}</h5>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{analysisResult.percentages.fixed_pct?.toFixed(1)}%</p>
+                  </div>
+                  <div className="bg-white rounded-xl p-4 border border-slate-100/80 shadow-sm">
+                    <p className="text-[10px] font-bold text-slate-400 mb-1">Taxes</p>
+                    <h5 className="text-sm font-black text-slate-900">${analysisResult.charges.tax?.toFixed(2)}</h5>
+                    <p className="text-[10px] text-slate-500 font-bold mt-0.5">{analysisResult.percentages.tax_pct?.toFixed(1)}%</p>
+                  </div>
+                </div>
+
+                {/* Insight Text */}
+                <div className="bg-blue-50/50 border border-blue-100/50 rounded-xl p-4 flex gap-3 text-xs leading-relaxed text-slate-700">
+                  <Lightbulb size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                  <p className="font-medium">{analysisResult.insight}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="h-[260px] flex flex-col items-center justify-center bg-slate-50 rounded-2xl border border-slate-200 border-dashed text-slate-400 gap-2">
+                <PieChart size={36} className="text-slate-300" />
+                <p className="text-xs font-bold">Analysis results will appear here once parsed</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

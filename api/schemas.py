@@ -295,3 +295,31 @@ class CausalV2Response(BaseModel):
     method: str
     interpretation: str
     caveat: str
+
+
+# ===== Bill OCR Extraction & Analysis =====
+class BillAnalysisRequest(BaseModel):
+    bill_text: str = Field(..., description="Raw OCR text extracted from the electricity bill")
+
+class BillAnalysisCharges(BaseModel):
+    supply: Optional[float] = None
+    delivery: Optional[float] = None
+    fixed: Optional[float] = None
+    tax: Optional[float] = None
+
+class BillAnalysisPercentages(BaseModel):
+    supply_pct: Optional[float] = None
+    delivery_pct: Optional[float] = None
+    fixed_pct: Optional[float] = None
+    tax_pct: Optional[float] = None
+
+class BillAnalysisResponse(BaseModel):
+    utility_name: Optional[str] = None
+    billing_period: Optional[str] = None
+    kwh_used: Optional[float] = None
+    total_amount: Optional[float] = None
+    charges: BillAnalysisCharges
+    percentages: BillAnalysisPercentages
+    driver: Optional[str] = None  # "usage", "rate", "fixed"
+    insight: Optional[str] = None
+
