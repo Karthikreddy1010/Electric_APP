@@ -13,15 +13,18 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 import pandas as pd
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from api.middleware.rate_limiter import RateLimiterMiddleware
 
 # Ensure project root is importable
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from api.state import app_state
+from database.connection import init_db, close_db
+from api.cache import init_cache, close_cache
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +37,26 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Load data and train models on startup. Never retrain per-request."""
     logger.info("Starting data + model initialization...")
+
+    # Initialize DB connection pool
+    try:
+        await init_db()
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
+    # Initialize cache backend
+    try:
+        await init_cache()
+    except Exception as e:
+        logger.error(f"Failed to initialize cache: {e}")
+
+    # Start background scheduler
+    try:
+        from orchestration.scheduler import start_scheduler
+        start_scheduler()
+    except Exception as e:
+        logger.error(f"Failed to start scheduler: {e}")
+
     data_dir = PROJECT_ROOT / "data" / "raw"
 
     # ── Step 1: Generate synthetic data if missing ───────────────────────────
@@ -165,6 +188,14 @@ async def lifespan(app: FastAPI):
     logger.info("Initialization complete -- all systems ready")
     yield
     logger.info("Shutting down...")
+    try:
+        await close_cache()
+    except Exception as e:
+        logger.error(f"Failed to close cache: {e}")
+    try:
+        await close_db()
+    except Exception as e:
+        logger.error(f"Failed to close database: {e}")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -178,6 +209,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RateLimiterMiddleware, requests_limit=100, window_seconds=60)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -185,6 +218,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 # ── Register modular routers ────────────────────────────────────────────────
@@ -196,6 +239,7 @@ from api.routes.impact import router as impact_router
 from api.routes.bill_impact import router as bill_impact_router
 from api.routes.benchmark import router as benchmark_router
 from api.routes.forecast import router as forecast_router
+from api.routes.plans import router as plans_router
 
 app.include_router(health_router)
 app.include_router(dashboard_router)
@@ -205,6 +249,7 @@ app.include_router(impact_router)
 app.include_router(bill_impact_router)
 app.include_router(benchmark_router)
 app.include_router(forecast_router)
+app.include_router(plans_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────

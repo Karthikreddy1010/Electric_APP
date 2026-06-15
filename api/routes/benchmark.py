@@ -2,12 +2,20 @@
 import logging
 from fastapi import APIRouter, HTTPException, Query
 from api.state import app_state
+from api.cache import cached
+from api.schemas import BenchmarkRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["benchmark"])
 
 
+@router.post("/benchmark")
+async def state_benchmark_post(req: BenchmarkRequest):
+    return await state_benchmark(year=req.year, compare_state=req.compare_state)
+
+
 @router.get("/benchmark")
+@cached(ttl=600)
 async def state_benchmark(
     year: int = Query(2025, ge=2019, le=2026),
     compare_state: str = Query("NJ"),

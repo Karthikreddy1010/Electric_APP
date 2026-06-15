@@ -184,6 +184,8 @@ class HealthResponse(BaseModel):
     version: str
     models_loaded: dict[str, bool]
     data_freshness: Optional[str] = None
+    database: Optional[dict[str, Any]] = None
+    cache: Optional[dict[str, Any]] = None
 
 
 # ===== /impact/sensitivity =====

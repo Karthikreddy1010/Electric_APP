@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from api.state import app_state
+from api.cache import cached
 from api.schemas import (
     OverviewResponse, ForecastResponse, ImpactResponse, SimulateRequest, 
     SimulateResult, BenchmarkResponse, GeoResponse, PlanSimResponse,
@@ -15,6 +16,7 @@ import numpy as np
 router = APIRouter(tags=["dashboard"])
 
 @router.get("/overview", response_model=OverviewResponse)
+@cached(ttl=300)
 async def get_overview():
     billing = app_state.get("billing_df")
     if billing is None:
@@ -337,6 +339,7 @@ def compute_bill_analysis():
     }
 
 @router.get("/impact/top-features")
+@cached(ttl=300)
 async def get_top_features(n: int = Query(10, ge=1, le=50)):
     analysis = compute_bill_analysis()
     top_n = analysis["all_features"][:n]
@@ -348,6 +351,7 @@ async def get_top_features(n: int = Query(10, ge=1, le=50)):
     }
 
 @router.get("/impact/full-analysis")
+@cached(ttl=300)
 async def get_full_analysis():
     return compute_bill_analysis()
 
@@ -541,6 +545,7 @@ async def simulate_impact(req: SimulateRequest):
 
 
 @router.get("/geo", response_model=GeoResponse)
+@cached(ttl=300)
 async def get_geo(month: Optional[str] = None, view_mode: str = "bill"):
     from api.services.geo_insights_service import get_map_data, get_available_months
     
@@ -578,6 +583,7 @@ async def get_geo(month: Optional[str] = None, view_mode: str = "bill"):
 
 
 @router.get("/plans", response_model=PlanSimResponse)
+@cached(ttl=300)
 async def get_plans():
     # Mocking or running simulation with default values
     from api.services.simulation_service import run_plan_simulation

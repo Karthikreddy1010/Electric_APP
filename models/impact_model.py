@@ -124,8 +124,9 @@ class BillImpactModel:
         Main entry point to get contribution, sensitivity, and insights.
         Performs weather-normalized causal split to isolate rate/behavior changes from weather shifts.
         """
-        # FIX: 1 - Redefine Impact Calculation: ΔBill = (ΔUsage x Rate) + (ΔRate x Usage) + Weather_Adjustment
-        if prev_row is None:
+        is_absolute = False
+        if prev_row is None or prev_row == row:
+            is_absolute = True
             prev_row = row.copy()
             
         total_bill = float(row.get("total_bill", 0))
@@ -135,6 +136,17 @@ class BillImpactModel:
 
         usage = float(row.get("usage_kwh", 0))
         prev_usage = float(prev_row.get("usage_kwh", 0))
+
+        # Dynamically infer rates if missing (e.g. from cost/usage in test inputs)
+        row = row.copy()
+        prev_row = prev_row.copy()
+        for k_rate, k_cost in [("bgs_rate", "bgs_cost"), ("distribution_rate", "distribution_cost"), 
+                              ("transmission_rate", "transmission_cost"), ("sbc_rate", "sbc_cost"), 
+                              ("nug_rate", "nug_cost")]:
+            if k_rate not in row and k_cost in row and usage > 0:
+                row[k_rate] = float(row[k_cost]) / usage
+            if k_rate not in prev_row and k_cost in prev_row and prev_usage > 0:
+                prev_row[k_rate] = float(prev_row[k_cost]) / prev_usage
 
         latest_date = pd.to_datetime(row.get("date", pd.Timestamp.now()))
         prev_date = pd.to_datetime(prev_row.get("date", pd.Timestamp.now()))
@@ -214,12 +226,6 @@ class BillImpactModel:
 
         contributions = {}
         
-        # A. Customer Charge (Fixed) - Handle customer charge correctly as fixed
-        fixed_prev = float(prev_row.get("customer_charge", 8.24))
-        fixed_latest = float(row.get("customer_charge", 8.24))
-        ΔFixed = fixed_latest - fixed_prev
-        contributions["customer"] = {
-            "value": round(ΔFixed * tax_mult, 2),
             "percent": round(((ΔFixed * tax_mult) / total_bill) * 100, 2) if total_bill else 0
         }
 
@@ -317,11 +323,34 @@ class BillImpactModel:
             "confidence": "High" if self.calibrated else "Medium"
         }
 
-    def _generate_insights_causal(self, contributions: Dict, sensitivity: Dict, cdd: float, hdd: float, month: int) -> List[str]:
+    def _generate_insights_causal(self, contributions: Dict, sensitivity: Dict, cdd: float, hdd: float, month: int, is_absolute: bool = False) -> List[str]:
         """Generate human-readable, time-aware causal insights about bill drivers."""
         insights = []
         season = "Summer" if month in [6, 7, 8] else ("Winter" if month in [12, 1, 2] else "Transition")
         
+        label_map = {
+            "bgs": "BGS Supply",
+            "distribution": "Distribution Charge",
+            "transmission": "Transmission Charge",
+            "sbc": "Societal Benefits Charge",
+            "nug": "Non-Utility Generation Charge"
+        }
+
+        if is_absolute:
+            max_driver_key = "bgs"
+            max_val = -1.0
+            for k, v in contributions.items():
+                if k in ["weather", "behavioral_usage", "lmp", "tax", "customer"]:
+                    continue
+                if v["value"] > max_val:
+                    max_val = v["value"]
+                    max_driver_key = k
+            
+            driver_label = label_map.get(max_driver_key, max_driver_key.capitalize())
+            pct = contributions.get(max_driver_key, {}).get('percent', 0.0)
+            insights.append(f"🔌 **Primary cost driver**: {driver_label} is the primary driver of your bill, accounting for {pct:.1f}% of the total cost.")
+            return insights
+
         # 1. Weather Impact Insight
         weather_val = contributions.get("weather", {}).get("value", 0.0)
         if weather_val > 3.0:
@@ -341,13 +370,6 @@ class BillImpactModel:
         if rate_contribs:
             sorted_rates = sorted(rate_contribs.items(), key=lambda x: abs(x[1]), reverse=True)
             top_rate_key, top_rate_val = sorted_rates[0]
-            label_map = {
-                "bgs": "BGS Supply (market wholesale rates)",
-                "distribution": "Distribution Charge (local grid delivery costs)",
-                "transmission": "Transmission Charge (regional high-voltage grid)",
-                "sbc": "Societal Benefits Charge (state-mandated assistance programs)",
-                "nug": "Non-Utility Generation Charge (historical contracts recovery)"
-            }
             label = label_map.get(top_rate_key, top_rate_key.capitalize())
             direction = "added" if top_rate_val > 0 else "saved"
             insights.append(f"📈 **Tariff adjustment**: Rate shifts in **{label}** {direction} **${abs(top_rate_val):.2f}** on your bill.")

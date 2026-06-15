@@ -43,6 +43,18 @@ def get_bls_api_key() -> Optional[str]:
     return get_api_key("BLS_API_KEY")
 
 
+def get_noaa_token() -> Optional[str]:
+    return get_api_key("NOAA_TOKEN")
+
+
+def get_census_api_key() -> Optional[str]:
+    return get_api_key("CENSUS_API_KEY")
+
+
+def get_pjm_api_key() -> Optional[str]:
+    return get_api_key("PJM_API_KEY")
+
+
 # ── CPI Configuration ───────────────────────────────────────────────────────
 CPI_BASE_YEAR = 2024
 CPI_SERIES_ID = "CUSR0000SA0"  # CPI-U All Items, Seasonally Adjusted

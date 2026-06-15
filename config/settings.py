@@ -11,7 +11,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class DatabaseSettings(BaseSettings):
-    """Snowflake / local SQLite settings."""
+    """Database connection settings supporting PostgreSQL, Snowflake, and SQLite."""
+    postgres_host: str = ""
+    postgres_port: str = "5432"
+    postgres_user: str = "electric"
+    postgres_password: str = "electric"
+    postgres_db: str = "electricity_dw"
+    database_url: str = ""
+    
     snowflake_account: str = ""
     snowflake_user: str = ""
     snowflake_password: str = ""

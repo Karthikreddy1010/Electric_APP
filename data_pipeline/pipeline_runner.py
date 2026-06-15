@@ -46,6 +46,27 @@ def run_pipeline(force: bool = False) -> dict:
     cpi_df = fetch_bls_cpi(force=force)
     datasets["cpi_monthly"] = cpi_df
     
+    # Fetch NOAA Weather
+    try:
+        from data_pipeline.noaa_fetcher import fetch_noaa_weather
+        datasets["weather_noaa"] = fetch_noaa_weather(force=force)
+    except Exception as e:
+        logger.warning(f"Failed to fetch NOAA weather: {e}")
+
+    # Fetch Census Demographics
+    try:
+        from data_pipeline.census_fetcher import fetch_census_demographics
+        datasets["census_demographics"] = fetch_census_demographics(force=force)
+    except Exception as e:
+        logger.warning(f"Failed to fetch Census demographics: {e}")
+
+    # Fetch PJM Market Data
+    try:
+        from data_pipeline.pjm_realtime_fetcher import fetch_pjm_market_data
+        datasets["pjm_market_api"] = fetch_pjm_market_data(force=force)
+    except Exception as e:
+        logger.warning(f"Failed to fetch PJM market data: {e}")
+    
     # 3. Preprocess / Transform
     logger.info("=" * 70)
     logger.info("STAGE 3: Preprocessing Datasets")
@@ -100,6 +121,14 @@ def run_pipeline(force: bool = False) -> dict:
                 logger.info(f"Saved {filename} to {PROCESSED_DIR}")
                 output_paths[key] = str(out_path)
     
+    # 7. Database Load Target
+    try:
+        from database.seed import run_seed
+        run_seed(force=force)
+        logger.info("Successfully loaded processed data into PostgreSQL database")
+    except Exception as e:
+        logger.warning(f"Failed to load data to PostgreSQL database: {e}")
+
     logger.info("Pipeline completed successfully.")
     return output_paths
 
