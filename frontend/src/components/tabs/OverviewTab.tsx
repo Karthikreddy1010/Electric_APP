@@ -3,11 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  Line, ComposedChart, Legend, Area, Cell
+  Line, ComposedChart, Legend, Area, Cell, LineChart
 } from 'recharts';
 import { 
   ArrowUpRight, ArrowDownRight, Zap, TrendingUp, DollarSign, 
-  AlertTriangle, Lightbulb, Activity, Award, Calendar
+  AlertTriangle, Lightbulb, Activity, Award, Calendar, MapPin, Building2
 } from 'lucide-react';
 
 const COLORS = {
@@ -115,6 +115,7 @@ const CustomTrendTooltip = ({ active, payload, label }: any) => {
 const OverviewTab = () => {
   const [breakdownRange, setBreakdownRange] = useState(12);
   const [trendRange, setTrendRange] = useState(36);
+  const [selectedMuni, setSelectedMuni] = useState('Newark City');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['overview'],
@@ -122,6 +123,23 @@ const OverviewTab = () => {
       const res = await axios.get('/overview');
       return res.data;
     }
+  });
+
+  const { data: muniList } = useQuery({
+    queryKey: ['municipal-list'],
+    queryFn: async () => {
+      const res = await axios.get('/municipal/list');
+      return res.data;
+    }
+  });
+
+  const { data: muniBenchmark } = useQuery({
+    queryKey: ['municipal-benchmark', selectedMuni],
+    queryFn: async () => {
+      const res = await axios.get(`/municipal/benchmark?name=${encodeURIComponent(selectedMuni)}`);
+      return res.data;
+    },
+    enabled: !!selectedMuni
   });
 
   if (isLoading) return <div className="animate-spin h-8 w-8 border-b-2 border-primary mx-auto mt-20" />;
@@ -416,6 +434,76 @@ const OverviewTab = () => {
             )}
           </div>
         </div>
+      </div>
+
+      {/* 🔹 7. NJ MUNICIPAL BENCHMARKING (NEW) */}
+      <div className="card p-6 border border-slate-100 hover:shadow-md transition-shadow">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-950 flex items-center gap-2">
+              <Building2 className="text-blue-600" size={20} /> NJ Municipal Benchmarking
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">Compare your usage against community-scale averages</p>
+          </div>
+          {muniList?.municipalities && (
+            <div className="relative">
+              <MapPin size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <select
+                value={selectedMuni}
+                onChange={(e) => setSelectedMuni(e.target.value)}
+                className="pl-8 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-blue-500 appearance-none min-w-[200px]"
+              >
+                {muniList.municipalities.map((m: string) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {muniBenchmark ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={muniBenchmark.history}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                  <XAxis dataKey="year" tick={{fill: '#94A3B8', fontSize: 10, fontWeight: 500}} axisLine={false} tickLine={false} />
+                  <YAxis tick={{fill: '#94A3B8', fontSize: 10, fontWeight: 500}} axisLine={false} tickLine={false} tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`} />
+                  <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                  <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: '11px', fontWeight: 600 }} />
+                  <Line type="monotone" dataKey="residential_electricity_kwh" name="Residential (kWh)" stroke="#2563EB" strokeWidth={3} dot={{r: 4}} />
+                  <Line type="monotone" dataKey="commercial_electricity_kwh" name="Commercial (kWh)" stroke="#8B5CF6" strokeWidth={3} dot={{r: 4}} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Residential Usage</p>
+                <h4 className="text-2xl font-black text-slate-900 mb-1">
+                  {muniBenchmark.history[muniBenchmark.history.length - 1]?.residential_electricity_kwh?.toLocaleString() || 0} <span className="text-sm font-medium text-slate-400">kWh</span>
+                </h4>
+                <p className="text-xs text-slate-500">In {muniBenchmark.history[muniBenchmark.history.length - 1]?.year}</p>
+              </div>
+
+              <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Your Monthly Usage vs Muni Avg</p>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <h4 className="text-xl font-black text-blue-600">{data.kpis.usage_kwh.toLocaleString()}</h4>
+                  <span className="text-sm font-bold text-slate-400">vs</span>
+                  <h4 className="text-lg font-black text-slate-700">
+                    {Math.round((muniBenchmark.history[muniBenchmark.history.length - 1]?.residential_electricity_kwh || 0) / 12 / 5000).toLocaleString()} <span className="text-xs font-medium">kWh/hh</span>
+                  </h4>
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 italic">*Muni avg assumes ~5000 households</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="h-[200px] flex items-center justify-center bg-slate-50 rounded-xl border border-slate-100 border-dashed">
+            <p className="text-sm font-bold text-slate-400">Loading benchmark data...</p>
+          </div>
+        )}
       </div>
     </div>
   );

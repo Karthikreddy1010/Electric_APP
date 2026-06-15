@@ -92,12 +92,16 @@ const BenchmarkTab = () => {
       {/* ── Map + Year Toggle + Insights ────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 card p-0 relative min-h-[500px]">
-          <div className="absolute top-6 left-6 z-10 flex gap-2 bg-white/90 backdrop-blur p-2 rounded-xl shadow-sm">
-            {(data.available_years || [2023, 2024, 2025]).map((y: number) => (
-              <button key={y} onClick={() => setSelectedYear(String(y))}
-                className={`px-4 py-2 rounded-lg text-xs font-black transition-all ${selectedYear === String(y) ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-100'}`}
-              >{y}</button>
-            ))}
+          <div className="absolute top-6 left-6 z-10 bg-white/90 backdrop-blur p-2 rounded-xl shadow-sm">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="bg-transparent border-none text-sm font-black text-slate-900 outline-none cursor-pointer pr-2"
+            >
+              {(data.available_years || Array.from({length: 22}, (_, i) => 2005 + i)).map((y: number) => (
+                <option key={y} value={y}>{y} Benchmark</option>
+              ))}
+            </select>
           </div>
           <USMap
             data={mapData}
