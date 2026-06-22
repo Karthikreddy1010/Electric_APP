@@ -53,7 +53,7 @@ check("GET /geo-lookup", lambda: get("/geo-lookup?zip_code=07302"))
 check("GET /geo-all-counties", lambda: get("/geo-all-counties"))
 
 # POST endpoints
-check("POST /forecast", lambda: post("/forecast", {"months_ahead": 3, "model_type": "ensemble", "include_ci": True}))
+check("GET /forecast?horizon=30&model=ensemble", lambda: get("/forecast?horizon=30&model=ensemble"))
 check("POST /impact", lambda: post("/impact", {"top_n": 5}))
 check("POST /benchmark", lambda: post("/benchmark", {"year": 2025, "compare_state": "NJ"}))
 check("POST /plan-simulation", lambda: post("/plan-simulation", {"monthly_usage_kwh": 750, "n_simulations": 1000, "horizon_months": 12}))

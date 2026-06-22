@@ -356,7 +356,10 @@ async def generate_geo_insights(req: GeoInsightsRequest):
         parsed = json.loads(content)
         logger.info("Geo insights generated via LLM")
         return parsed
+    except (asyncio.TimeoutError, TimeoutError):
+        logger.warning("LLM unavailable (request timed out), using deterministic fallback")
+        return _compute_deterministic_insights(req)
     except Exception as e:
-        logger.warning(f"LLM unavailable ({e}), using deterministic fallback")
+        logger.warning(f"LLM unavailable ({e or type(e).__name__}), using deterministic fallback")
         return _compute_deterministic_insights(req)
 

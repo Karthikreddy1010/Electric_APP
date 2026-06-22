@@ -279,6 +279,9 @@ async def analyze_ocr(req: BillAnalysisRequest):
             "insight": parsed.get("insight")
         }
         return output
+    except (asyncio.TimeoutError, TimeoutError):
+        logger.warning("Ollama parsing timed out (limit: 3.0s). Running deterministic fallback.")
+        return parse_deterministic_bill(req.bill_text)
     except Exception as e:
-        logger.warning(f"Ollama parsing failed: {e}. Running deterministic fallback.")
+        logger.warning(f"Ollama parsing failed: {e or type(e).__name__}. Running deterministic fallback.")
         return parse_deterministic_bill(req.bill_text)

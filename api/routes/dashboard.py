@@ -12,6 +12,9 @@ from api.services.bill_impact_engine import bill_impact_engine, COMPONENT_TYPES
 from typing import Optional
 import pandas as pd
 import numpy as np
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["dashboard"])
 
@@ -444,6 +447,7 @@ async def generate_report():
                     break
         except Exception as e:
             # Transparently return fallback if AI is offline, slow, or times out
+            logger.warning(f"Ollama streaming report generation failed: {e or type(e).__name__}. Using deterministic fallback.")
             yield f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
             
     return StreamingResponse(generate_stream(), media_type="text/plain")
@@ -487,6 +491,7 @@ async def generate_pdf():
         response = await asyncio.wait_for(fetch_chat(), timeout=1.5)
         text = response['message']['content']
     except Exception as e:
+        logger.warning(f"Ollama PDF report generation failed: {e or type(e).__name__}. Using deterministic fallback.")
         text = f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
     
     buffer = io.BytesIO()
