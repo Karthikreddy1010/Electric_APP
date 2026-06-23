@@ -32,6 +32,8 @@ from database.models import (
     MunicipalEnergy,
     StateMonthlyPrice,
     EIA861Master,
+    WeatherOpenMeteo,
+    DailySubBaDemand,
 )
 
 logger = logging.getLogger(__name__)
@@ -273,6 +275,8 @@ def run_seed(force: bool = False) -> dict:
                 session.query(MunicipalEnergy).delete()
                 session.query(StateMonthlyPrice).delete()
                 session.query(EIA861Master).delete()
+                session.query(WeatherOpenMeteo).delete()
+                session.query(DailySubBaDemand).delete()
                 session.commit()
                 logger.info("Cleared all existing tables successfully.")
             except Exception as e:
@@ -289,9 +293,75 @@ def run_seed(force: bool = False) -> dict:
     results["municipal_energy"] = seed_municipal_energy(force)
     results["state_monthly"] = seed_state_monthly_prices(force)
     results["eia861"] = seed_eia861_master(force)
+    results["weather_openmeteo"] = seed_weather_openmeteo(force)
+    results["daily_subba_demand"] = seed_daily_subba_demand(force)
 
     logger.info(f"Seed complete: {results}")
     return results
+
+
+def seed_weather_openmeteo(force: bool = False) -> int:
+    """Load weather_openmeteo.csv into weather_openmeteo table."""
+    csv_path = RAW_DIR / "weather_openmeteo.csv"
+    if not csv_path.exists():
+        logger.warning("No weather_openmeteo.csv found — skipping openmeteo seed")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(WeatherOpenMeteo.id)).scalar()
+            if count > 0:
+                logger.info(f"weather_openmeteo already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            record = WeatherOpenMeteo(
+                date=pd.to_datetime(row["date"]).date(),
+                temp_max=float(row["temp_max"]) if pd.notna(row.get("temp_max")) else None,
+                temp_min=float(row["temp_min"]) if pd.notna(row.get("temp_min")) else None,
+                temp_avg=float(row["temp_avg"]) if pd.notna(row.get("temp_avg")) else None,
+                hdd=float(row["hdd"]) if pd.notna(row.get("hdd")) else None,
+                cdd=float(row["cdd"]) if pd.notna(row.get("cdd")) else None,
+            )
+            records.append(record)
+
+        session.add_all(records)
+        session.commit()
+    logger.info(f"Seeded {len(records)} weather_openmeteo records")
+    return len(records)
+
+
+def seed_daily_subba_demand(force: bool = False) -> int:
+    """Load eia_pjm_daily_demand.csv into daily_subba_demand table."""
+    csv_path = RAW_DIR / "eia_pjm_daily_demand.csv"
+    if not csv_path.exists():
+        logger.warning("No eia_pjm_daily_demand.csv found — skipping daily subba demand seed")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(DailySubBaDemand.id)).scalar()
+            if count > 0:
+                logger.info(f"daily_subba_demand already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            record = DailySubBaDemand(
+                period=pd.to_datetime(row["period"]).date(),
+                subba=str(row["subba"]),
+                value=float(row["value"]) if pd.notna(row.get("value")) else None,
+                parent=str(row.get("parent", "PJM")),
+            )
+            records.append(record)
+
+        session.add_all(records)
+        session.commit()
+    logger.info(f"Seeded {len(records)} daily_subba_demand records")
+    return len(records)
 
 
 def seed_bgs_auction_rates(force: bool = False) -> int:

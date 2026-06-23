@@ -70,6 +70,21 @@ async def forecast_costs(
         
         return output
 
+    except RuntimeError as exc:
+        # Weather API or forecast service failure — fail loud
+        logger.critical(f"Forecast RuntimeError (weather/API failure): {exc}")
+        raise HTTPException(
+            503,
+            f"Forecast service unavailable: {exc}. "
+            f"Weather API may be down — retry later."
+        )
+    except ValueError as exc:
+        # Data quality issue (missing weather, broken ingestion)
+        logger.error(f"Forecast ValueError (data quality): {exc}")
+        raise HTTPException(
+            422,
+            f"Forecast data quality error: {exc}"
+        )
     except Exception as exc:
         logger.exception("Forecast error")
         raise HTTPException(500, f"Forecast error: {exc}")

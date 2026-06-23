@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -88,6 +89,120 @@ class TestForecastModel:
     def test_sarima_evaluate(self, monthly_series):
         from models.forecast_model import safe_mape
         assert safe_mape([100], [90]) == 10.0
+
+    def test_simulate_forecast_weather(self):
+        """Noise simulation should change temp values and recompute HDD/CDD."""
+        from models.forecast_model import ElectricityDemandForecaster
+
+        forecaster = ElectricityDemandForecaster()
+        weather_df = pd.DataFrame({
+            "temp_avg": [20.0, 25.0, 10.0],
+            "temp_max": [25.0, 30.0, 15.0],
+            "temp_min": [15.0, 20.0, 5.0],
+            "hdd": [0.0, 0.0, 8.0],
+            "cdd": [2.0, 7.0, 0.0],
+        })
+        noisy = forecaster._simulate_forecast_weather(weather_df)
+
+        # Values should be different (noise applied)
+        assert not np.allclose(
+            noisy["temp_avg"].values, weather_df["temp_avg"].values
+        ), "Noise was not applied to temp_avg"
+
+        # HDD/CDD should be recomputed, not the original values
+        assert not np.allclose(
+            noisy["hdd"].values, weather_df["hdd"].values
+        ), "HDD was not recomputed from noisy temps"
+
+    def test_forecast_weather_fail_loud(self):
+        """fetch_forecast_weather should raise RuntimeError on API failure."""
+        from unittest.mock import patch
+        from data_pipeline.weather_service import fetch_forecast_weather
+
+        with patch("data_pipeline.weather_service.requests.get") as mock_get:
+            mock_get.side_effect = ConnectionError("API unreachable")
+            with pytest.raises(RuntimeError, match="Open-Meteo forecast API failed"):
+                fetch_forecast_weather(days=7)
+
+    def test_missing_weather_raises_error(self):
+        """If >5% of weather data is missing, prepare_data should raise ValueError."""
+        from models.forecast_model import ElectricityDemandForecaster
+
+        forecaster = ElectricityDemandForecaster()
+        # Point to a non-existent path so CSV fallback fails
+        forecaster.data_path = Path("C:/nonexistent/path/demand.csv")
+
+        # Create a minimal demand DF with no matching weather
+        dates = pd.date_range("2023-01-01", periods=60, freq="D")
+        demand_rows = []
+        for d in dates:
+            for subba in ["AE", "JC", "PS", "RECO"]:
+                demand_rows.append({
+                    "period": d.strftime("%Y-%m-%d"),
+                    "subba": subba,
+                    "value": 5000 + np.random.randn() * 100,
+                })
+        demand_df = pd.DataFrame(demand_rows)
+
+        # Mock DB to return demand but NO weather, and block API fetch fallback
+        with patch.object(forecaster, "_load_demand_from_db", return_value=demand_df):
+            with patch.object(forecaster, "_load_weather_from_db", return_value=pd.DataFrame()):
+                with patch(
+                    "data_pipeline.weather_service.fetch_historical_weather",
+                    side_effect=ConnectionError("Mocked: no API available"),
+                ):
+                    with pytest.raises(ValueError, match="[Ww]eather"):
+                        forecaster.prepare_data()
+
+    def test_weather_gaps_are_dropped(self):
+        """Gaps in weather > 3 days (not interpolated) should be dropped, not zero-filled."""
+        from models.forecast_model import ElectricityDemandForecaster
+
+        forecaster = ElectricityDemandForecaster()
+        forecaster.data_path = Path("C:/nonexistent/path/demand.csv")
+
+        # 100 days of demand
+        dates = pd.date_range("2023-01-01", periods=100, freq="D")
+        demand_rows = []
+        for d in dates:
+            for subba in ["AE", "JC", "PS", "RECO"]:
+                demand_rows.append({
+                    "period": d.strftime("%Y-%m-%d"),
+                    "subba": subba,
+                    "value": 5000.0,
+                    "parent": "PJM",
+                })
+        demand_df = pd.DataFrame(demand_rows)
+
+        # 100 days of weather, missing 4 consecutive days
+        # limit=3 interpolation fills 3, 1 day left as NaN.
+        # 1 NaN out of 100 is 1% (< 5%), so it should drop the row, not raise error or fill with 0.
+        weather_rows = []
+        for d in dates:
+            if "2023-02-01" <= d.strftime("%Y-%m-%d") <= "2023-02-04":
+                continue
+            weather_rows.append({
+                "date": d,
+                "temp_max": 25.0,
+                "temp_min": 15.0,
+                "temp_avg": 20.0,
+                "hdd": 0.0,
+                "cdd": 2.0,
+            })
+        weather_df = pd.DataFrame(weather_rows)
+
+        with patch.object(forecaster, "_load_demand_from_db", return_value=demand_df):
+            with patch.object(forecaster, "_load_weather_from_db", return_value=weather_df):
+                with patch(
+                    "data_pipeline.weather_service.fetch_historical_weather",
+                    side_effect=ConnectionError("Mocked: no API available")
+                ):
+                    clean_df = forecaster.prepare_data()
+
+        # 1 day dropped (2023-02-04)
+        assert len(clean_df) == 99
+        assert not clean_df["temp_avg"].isnull().any()
+        assert pd.Timestamp("2023-02-04") not in clean_df.index
 
 
 class TestSimulationModel:

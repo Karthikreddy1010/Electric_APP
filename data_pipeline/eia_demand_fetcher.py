@@ -4,6 +4,9 @@ EIA PJM Daily Demand Data Fetcher
 Fetches PJM sub-BA daily demand data (AE, JC, PS, RECO) from the EIA API.
 Supports both full download and incremental append modes.
 
+Storage: All demand data is persisted to the `daily_subba_demand` database
+table.  CSV is retained as a secondary backup only.
+
 Usage:
     # As a module (called by scheduler):
     from data_pipeline.eia_demand_fetcher import fetch_and_update_daily_demand
@@ -17,11 +20,13 @@ import os
 import csv
 import time
 import logging
+from datetime import date, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta
+from typing import Optional
 
 import requests
 import pandas as pd
+from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
@@ -124,69 +129,176 @@ def _download_records(start_date: str, end_date: str) -> list[dict]:
     return all_records
 
 
+# ── Database helpers ──────────────────────────────────────────────────────────
+
+def _upsert_demand_to_db(df: pd.DataFrame) -> int:
+    """Insert or update demand records into the daily_subba_demand table.
+
+    Uses merge semantics: if a (period, subba) pair already exists, update;
+    otherwise insert.  Returns the number of rows written.
+    """
+    from database.connection import get_sync_session
+    from database.models import DailySubBaDemand
+
+    if df is None or df.empty:
+        return 0
+
+    rows_written = 0
+    with get_sync_session() as session:
+        for _, row in df.iterrows():
+            row_date = pd.to_datetime(row["period"]).date()
+            subba = str(row.get("subba", ""))
+            value = float(row["value"]) if pd.notna(row.get("value")) else None
+            parent = str(row.get("parent", row.get("parent-name", "PJM")))
+
+            existing = session.query(DailySubBaDemand).filter(
+                DailySubBaDemand.period == row_date,
+                DailySubBaDemand.subba == subba,
+            ).first()
+
+            if existing:
+                existing.value = value
+                existing.parent = parent
+            else:
+                record = DailySubBaDemand(
+                    period=row_date,
+                    subba=subba,
+                    value=value,
+                    parent=parent,
+                )
+                session.add(record)
+            rows_written += 1
+        session.commit()
+    logger.info(f"Upserted {rows_written} demand records to database")
+    return rows_written
+
+
+def _load_demand_from_db() -> pd.DataFrame:
+    """Load all demand records from the database into a DataFrame."""
+    from database.connection import get_sync_session
+    from database.models import DailySubBaDemand
+
+    with get_sync_session() as session:
+        rows = (
+            session.query(DailySubBaDemand)
+            .order_by(DailySubBaDemand.period.asc(), DailySubBaDemand.subba.asc())
+            .all()
+        )
+        records = []
+        for r in rows:
+            records.append({
+                "period": str(r.period),
+                "subba": r.subba,
+                "value": r.value,
+                "parent": r.parent,
+            })
+
+    if not records:
+        return pd.DataFrame()
+
+    return pd.DataFrame(records)
+
+
+def _get_last_db_demand_date() -> Optional[date]:
+    """Return the latest period in the daily_subba_demand table, or None."""
+    from database.connection import get_sync_session
+    from database.models import DailySubBaDemand
+
+    with get_sync_session() as session:
+        result = session.query(func.max(DailySubBaDemand.period)).scalar()
+    return result
+
+
 # ── Core public API ───────────────────────────────────────────────────────────
 
 def fetch_and_update_daily_demand(output_path: str | Path | None = None) -> Path:
     """
-    Fetch the latest PJM daily demand data from EIA and update the local CSV.
+    Fetch the latest PJM daily demand data from EIA and persist to the database.
 
-    - If the CSV exists: reads the last date, fetches only newer data, and appends.
-    - If the CSV doesn't exist: downloads the full history from 2019-01-01.
+    - If the DB has data: reads the last date, fetches only newer data, and upserts.
+    - If the DB is empty but a CSV exists: migrates CSV to DB first, then fetches new.
+    - If neither exists: downloads the full history from 2019-01-01.
 
-    Returns the path to the updated CSV file.
+    Also writes a CSV backup.  Returns the path to the CSV file.
     """
     output_path = Path(output_path) if output_path else DEFAULT_OUTPUT
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     today_str = datetime.now().strftime("%Y-%m-%d")
 
-    # Determine start date based on existing data
+    # ── Try database first ────────────────────────────────────────────────
+    last_db_date = _get_last_db_demand_date()
+
+    if last_db_date is not None:
+        start_date = (last_db_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        logger.info(
+            f"Incremental mode (DB): existing data through {last_db_date}, "
+            f"fetching from {start_date}"
+        )
+
+        if start_date > today_str:
+            logger.info("Data is already up to date — nothing to fetch.")
+            return output_path
+
+        new_records = _download_records(start_date, today_str)
+        if new_records:
+            new_df = pd.DataFrame(new_records)
+            _upsert_demand_to_db(new_df)
+            logger.info(f"Appended {len(new_records):,} new records to database.")
+        else:
+            logger.info("No new records returned by EIA API.")
+
+        # Update CSV backup
+        full_df = _load_demand_from_db()
+        if not full_df.empty:
+            full_df.to_csv(output_path, index=False)
+        return output_path
+
+    # ── Fallback: check CSV (migration path) ──────────────────────────────
     if output_path.exists() and output_path.stat().st_size > 0:
+        logger.info("No DB demand data found. Migrating from CSV to database...")
         try:
             existing_df = pd.read_csv(output_path)
+            _upsert_demand_to_db(existing_df)
+
             last_date = pd.to_datetime(existing_df["period"]).max()
-            # Start from the day after the last date we have
             start_date = (last_date + timedelta(days=1)).strftime("%Y-%m-%d")
-            logger.info(f"Incremental mode: existing data through {last_date.date()}, "
-                        f"fetching from {start_date}")
 
-            if start_date > today_str:
-                logger.info("Data is already up to date — nothing to fetch.")
-                return output_path
+            if start_date <= today_str:
+                new_records = _download_records(start_date, today_str)
+                if new_records:
+                    _upsert_demand_to_db(pd.DataFrame(new_records))
+
         except Exception as e:
-            logger.warning(f"Could not read existing CSV ({e}), doing full download")
-            start_date = FULL_START_DATE
-            existing_df = None
-    else:
-        logger.info("No existing CSV found — performing full download")
-        start_date = FULL_START_DATE
-        existing_df = None
+            logger.warning(f"CSV migration failed ({e}), doing full download")
+            return _full_download(output_path, today_str)
 
-    # Fetch new records from EIA
-    new_records = _download_records(start_date, today_str)
+        return output_path
+
+    # ── No existing data — full download ──────────────────────────────────
+    return _full_download(output_path, today_str)
+
+
+def _full_download(output_path: Path, today_str: str) -> Path:
+    """Perform a full download from FULL_START_DATE."""
+    logger.info("No existing data found — performing full download")
+
+    new_records = _download_records(FULL_START_DATE, today_str)
 
     if not new_records:
-        logger.info("No new records returned by EIA API.")
+        logger.info("No records returned by EIA API.")
         return output_path
 
     new_df = pd.DataFrame(new_records)
 
-    # Merge with existing data if incremental
-    if existing_df is not None:
-        combined_df = pd.concat([existing_df, new_df], ignore_index=True)
-        # Drop any duplicates (same period + subba)
-        combined_df = combined_df.drop_duplicates(subset=["period", "subba"], keep="last")
-    else:
-        combined_df = new_df
+    # Persist to database
+    _upsert_demand_to_db(new_df)
 
-    # Sort chronologically
-    combined_df = combined_df.sort_values(["period", "subba"]).reset_index(drop=True)
-
-    # Save
-    combined_df.to_csv(output_path, index=False)
-    logger.info(f"Saved {len(combined_df):,} total records to {output_path}")
-    logger.info(f"  Date range: {combined_df['period'].min()} → {combined_df['period'].max()}")
-    logger.info(f"  New records appended: {len(new_records):,}")
+    # Sort and save CSV backup
+    new_df = new_df.sort_values(["period", "subba"]).reset_index(drop=True)
+    new_df.to_csv(output_path, index=False)
+    logger.info(f"Saved {len(new_df):,} total records to {output_path}")
+    logger.info(f"  Date range: {new_df['period'].min()} → {new_df['period'].max()}")
 
     return output_path
 

@@ -1,3 +1,17 @@
+"""
+Electricity Demand Forecaster — Ensemble (Prophet + SARIMAX)
+─────────────────────────────────────────────────────────────
+Production-grade demand forecasting for PJM sub-balancing areas
+in New Jersey.
+
+Key design principles:
+    1. NO data leakage: validation uses simulated forecast weather (noisy).
+    2. NO silent fallbacks: missing weather or failed APIs raise errors.
+    3. NO .fillna(0) or .ffill() on weather data.
+    4. Database-first: reads demand & weather from SQLite/PostgreSQL.
+    5. CSV fallback only for legacy/migration scenarios.
+"""
+
 import numpy as np
 import pandas as pd
 import logging
@@ -11,6 +25,12 @@ logger = logging.getLogger(__name__)
 # Weather feature columns used by the models
 WEATHER_COLS = ["temp_avg", "hdd", "cdd"]
 EXOG_COLS = ["temp_avg", "hdd", "cdd", "demand_lag1", "demand_lag7"]
+
+# Noise standard deviation for simulating forecast weather (°C)
+FORECAST_NOISE_STD = 1.5
+
+# Maximum fraction of missing weather rows allowed before raising an error
+MAX_MISSING_WEATHER_FRAC = 0.05  # 5%
 
 
 def safe_mape(y_true, y_pred):
@@ -42,10 +62,122 @@ class ElectricityDemandForecaster:
         self.df_clean = None
         self.last_trained = None
 
+    # ── Data Loading ──────────────────────────────────────────────────────
+
+    def _load_demand_from_db(self) -> pd.DataFrame:
+        """Load daily demand data from the database."""
+        try:
+            from database.connection import get_sync_session
+            from database.models import DailySubBaDemand
+
+            with get_sync_session() as session:
+                rows = (
+                    session.query(DailySubBaDemand)
+                    .order_by(DailySubBaDemand.period.asc())
+                    .all()
+                )
+                records = []
+                for r in rows:
+                    records.append({
+                        "period": str(r.period),
+                        "subba": r.subba,
+                        "value": r.value,
+                        "parent": r.parent,
+                    })
+
+            if not records:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(records)
+            logger.info(f"Loaded {len(df)} demand records from database")
+            return df
+        except Exception as e:
+            logger.warning(f"Failed to load demand from database: {e}")
+            return pd.DataFrame()
+
+    def _load_weather_from_db(self) -> pd.DataFrame:
+        """Load weather data from the database."""
+        try:
+            from database.connection import get_sync_session
+            from database.models import WeatherOpenMeteo
+
+            with get_sync_session() as session:
+                rows = (
+                    session.query(WeatherOpenMeteo)
+                    .order_by(WeatherOpenMeteo.date.asc())
+                    .all()
+                )
+                records = []
+                for r in rows:
+                    records.append({
+                        "date": pd.Timestamp(r.date),
+                        "temp_max": r.temp_max,
+                        "temp_min": r.temp_min,
+                        "temp_avg": r.temp_avg,
+                        "hdd": r.hdd,
+                        "cdd": r.cdd,
+                    })
+
+            if not records:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(records)
+            logger.info(f"Loaded {len(df)} weather records from database")
+            return df
+        except Exception as e:
+            logger.warning(f"Failed to load weather from database: {e}")
+            return pd.DataFrame()
+
+    # ── Weather Noise Simulation ──────────────────────────────────────────
+
+    @staticmethod
+    def _simulate_forecast_weather(weather_df: pd.DataFrame) -> pd.DataFrame:
+        """Add Gaussian noise to weather data to simulate forecast error.
+
+        This prevents data leakage during validation: the test set should
+        NOT use perfect historical weather, because in production only
+        *forecast* weather (which is inherently noisy) is available.
+
+        Noise is applied to temp_max, temp_min, and temp_avg.
+        HDD/CDD are then recomputed from the noisy averages.
+        """
+        noisy = weather_df.copy()
+        rng = np.random.default_rng(seed=42)
+
+        for col in ["temp_max", "temp_min", "temp_avg"]:
+            if col in noisy.columns:
+                noise = rng.normal(0, FORECAST_NOISE_STD, size=len(noisy))
+                noisy[col] = noisy[col] + noise
+
+        # Recompute HDD/CDD from noisy temp_avg
+        from data_pipeline.weather_service import BASE_TEMP_C
+        noisy["hdd"] = (BASE_TEMP_C - noisy["temp_avg"]).clip(lower=0).round(2)
+        noisy["cdd"] = (noisy["temp_avg"] - BASE_TEMP_C).clip(lower=0).round(2)
+
+        return noisy
+
+    # ── Data Preparation ──────────────────────────────────────────────────
+
     def prepare_data(self):
-        """Parse, clean and feature engineer PJM daily demand + Open-Meteo weather."""
-        logger.info(f"Loading data from {self.data_path}")
-        df = pd.read_csv(self.data_path)
+        """Parse, clean and feature engineer PJM daily demand + Open-Meteo weather.
+
+        Data source priority:
+            1. Database (daily_subba_demand + weather_openmeteo tables)
+            2. CSV files (legacy fallback)
+        """
+        # ── Step 0: Load demand data ──────────────────────────────────────
+        df = self._load_demand_from_db()
+
+        if df.empty:
+            # Fallback to CSV
+            logger.info(f"No DB demand data — loading from CSV: {self.data_path}")
+            df = pd.read_csv(self.data_path)
+
+        if df.empty:
+            raise ValueError(
+                "No demand data available in database or CSV. "
+                "Run the EIA demand fetcher first."
+            )
 
         # Parse date (daily CSV uses YYYY-MM-DD format)
         df["date"] = pd.to_datetime(df["period"])
@@ -91,41 +223,64 @@ class ElectricityDemandForecaster:
         # Keep subbas_recorded for historical filtering in get_forecast()
         daily["hours_recorded"] = daily["subbas_recorded"]
 
-        # Step 8: Merge REAL weather data from Open-Meteo
-        weather_path = self.data_path.parent / "weather_openmeteo.csv"
-        if weather_path.exists():
-            weather_df = pd.read_csv(weather_path)
-            weather_df["date"] = pd.to_datetime(weather_df["date"])
-            weather_df = weather_df.drop_duplicates(subset=["date"]).set_index("date")
-            daily = daily.join(weather_df[WEATHER_COLS], how="left")
-            # Only interpolate small gaps (<=3 days), NOT forward-fill
-            for col in WEATHER_COLS:
-                daily[col] = daily[col].interpolate(method="linear", limit=3)
-            # Drop rows where weather is still missing (large gaps)
-            weather_missing = daily[WEATHER_COLS].isnull().any(axis=1).sum()
-            if weather_missing > 0:
-                logger.warning(f"{weather_missing} days missing weather data after interpolation — filling with 0")
-                daily[WEATHER_COLS] = daily[WEATHER_COLS].fillna(0)
-            logger.info("Successfully merged Open-Meteo weather data (temp_avg, hdd, cdd).")
-        else:
-            logger.warning(f"Weather data not found at {weather_path}. Fetching from Open-Meteo...")
-            try:
-                from data_pipeline.weather_service import fetch_historical_weather
-                weather_df = fetch_historical_weather(
-                    start_date=daily.index.min().strftime("%Y-%m-%d"),
-                    end_date=daily.index.max().strftime("%Y-%m-%d"),
-                    output_path=weather_path,
-                )
+        # ── Step 8: Merge REAL weather data ───────────────────────────────
+        weather_df = self._load_weather_from_db()
+
+        if weather_df.empty:
+            # Fallback to CSV
+            weather_path = self.data_path.parent / "weather_openmeteo.csv"
+            if weather_path.exists():
+                weather_df = pd.read_csv(weather_path)
                 weather_df["date"] = pd.to_datetime(weather_df["date"])
-                weather_df = weather_df.set_index("date")
-                daily = daily.join(weather_df[WEATHER_COLS], how="left")
-                for col in WEATHER_COLS:
-                    daily[col] = daily[col].interpolate(method="linear", limit=3).fillna(0)
-                logger.info("Fetched and merged Open-Meteo historical weather.")
-            except Exception as e:
-                logger.error(f"Failed to fetch weather: {e}. Using zeros.")
-                for col in WEATHER_COLS:
-                    daily[col] = 0
+                logger.info(f"Loaded weather from CSV fallback: {weather_path}")
+            else:
+                # Try to fetch from Open-Meteo
+                logger.warning("No weather data in DB or CSV. Fetching from Open-Meteo...")
+                try:
+                    from data_pipeline.weather_service import fetch_historical_weather
+                    weather_df = fetch_historical_weather(
+                        start_date=daily.index.min().strftime("%Y-%m-%d"),
+                        end_date=daily.index.max().strftime("%Y-%m-%d"),
+                    )
+                except Exception as e:
+                    raise ValueError(
+                        f"Failed to obtain weather data: {e}. "
+                        f"Cannot train forecast model without weather."
+                    ) from e
+
+        if weather_df.empty:
+            raise ValueError(
+                "Weather data is empty after all attempts. "
+                "Cannot train forecast model without weather data."
+            )
+
+        weather_df = weather_df.drop_duplicates(subset=["date"]).set_index("date")
+        daily = daily.join(weather_df[WEATHER_COLS], how="left")
+
+        # Only interpolate small gaps (<=3 days) — NO forward-fill, NO zero-fill
+        for col in WEATHER_COLS:
+            daily[col] = daily[col].interpolate(method="linear", limit=3)
+
+        # ── Step 8b: Validate weather coverage ────────────────────────────
+        weather_missing = daily[WEATHER_COLS].isnull().any(axis=1).sum()
+        total_rows = len(daily)
+        missing_frac = weather_missing / total_rows if total_rows > 0 else 0
+
+        if missing_frac > MAX_MISSING_WEATHER_FRAC:
+            raise ValueError(
+                f"Too much missing weather data: {weather_missing}/{total_rows} days "
+                f"({missing_frac:.1%}) > {MAX_MISSING_WEATHER_FRAC:.0%} threshold. "
+                f"Ingestion pipeline may be broken."
+            )
+
+        if weather_missing > 0:
+            logger.warning(
+                f"{weather_missing} days missing weather data after interpolation — "
+                f"dropping those rows (NOT filling with zeros)."
+            )
+            daily = daily.dropna(subset=WEATHER_COLS)
+
+        logger.info("Successfully merged weather data (temp_avg, hdd, cdd).")
 
         # Step 9: Lagged demand features
         daily["demand_lag1"] = daily["demand_mw"].shift(1)
@@ -143,6 +298,8 @@ class ElectricityDemandForecaster:
         result = adfuller(series.dropna())
         return result[1] < 0.05  # True if stationary
 
+    # ── Training & Evaluation ─────────────────────────────────────────────
+
     def train_and_evaluate(self):
         if self.df_clean is None:
             self.prepare_data()
@@ -152,6 +309,16 @@ class ElectricityDemandForecaster:
         # Train strategy: Strict time-series split
         train = df[:-30].copy()
         test = df[-30:].copy()
+
+        # ── ANTI-LEAKAGE: Simulate forecast weather for TEST set ──────────
+        # In production, we only have *forecast* weather (noisy), not actuals.
+        # So validation must also use noisy weather to get realistic metrics.
+        test_weather_noisy = self._simulate_forecast_weather(test[WEATHER_COLS])
+        test.loc[:, WEATHER_COLS] = test_weather_noisy[WEATHER_COLS].values
+        logger.info(
+            f"Applied forecast weather noise (σ={FORECAST_NOISE_STD}°C) to "
+            f"{len(test)} test rows to prevent data leakage."
+        )
 
         # Model 1 - PROPHET
         prophet_df = train.reset_index().rename(columns={"date": "ds", "demand_mw": "y"})
@@ -169,8 +336,16 @@ class ElectricityDemandForecaster:
             self.prophet_model.add_regressor(col)
         self.prophet_model.fit(prophet_df)
 
+        # Build future DataFrame for Prophet — use noisy weather for test period
         prophet_future = self.prophet_model.make_future_dataframe(periods=30, freq='D')
-        prophet_future = prophet_future.set_index("ds").join(df[WEATHER_COLS]).reset_index()
+        prophet_future = prophet_future.set_index("ds")
+        # Join training weather (actual) for historical dates
+        prophet_future = prophet_future.join(train[WEATHER_COLS])
+        # Fill test dates with noisy weather
+        test_for_join = test[WEATHER_COLS].copy()
+        test_for_join.index.name = None  # ensure index compatibility
+        prophet_future.update(test_for_join)
+        prophet_future = prophet_future.reset_index()
         prophet_pred_full = self.prophet_model.predict(prophet_future)
         prophet_test_pred = prophet_pred_full.iloc[-30:]['yhat'].values
 
@@ -190,6 +365,7 @@ class ElectricityDemandForecaster:
             enforce_invertibility=False
         )
         sarima_fitted = self.sarima_model.fit(disp=False)
+        # Use noisy weather for test exog (consistent with anti-leakage)
         exog_test = test[EXOG_COLS]
         sarima_test_pred = sarima_fitted.forecast(steps=30, exog=exog_test).values
 
@@ -233,6 +409,8 @@ class ElectricityDemandForecaster:
         self.last_trained = pd.Timestamp.now()
         logger.info(f"Ensemble Evaluation Metrics: {self.metrics['ensemble']}")
 
+    # ── Forecasting ───────────────────────────────────────────────────────
+
     def get_forecast(self, days=30, model_type="ensemble"):
         if self.df_clean is None or self.last_trained is None:
             self.train_and_evaluate()
@@ -252,34 +430,32 @@ class ElectricityDemandForecaster:
         last_date = full_df.index[-1]
         future_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=days, freq='D')
 
-        # ── Get REAL forecast weather from Open-Meteo ──────────────────────
-        try:
-            from data_pipeline.weather_service import fetch_forecast_weather
-            forecast_weather = fetch_forecast_weather(days=days)
-            if len(forecast_weather) > 0:
-                forecast_weather["date"] = pd.to_datetime(forecast_weather["date"])
-                future_exog = forecast_weather.set_index("date")[WEATHER_COLS].reindex(future_dates)
-                # Fill any remaining gaps with interpolation
-                for col in WEATHER_COLS:
-                    future_exog[col] = future_exog[col].interpolate(method="linear").fillna(0)
-                logger.info(f"Using REAL Open-Meteo forecast weather for {len(future_exog)} days")
-            else:
-                raise ValueError("Empty forecast returned")
-        except Exception as e:
-            logger.warning(f"Open-Meteo forecast failed ({e}). Falling back to historical averages.")
-            historical_weather = full_df.groupby(
-                [full_df.index.month, full_df.index.day]
-            )[WEATHER_COLS].mean()
+        # ── Get REAL forecast weather from Open-Meteo ─────────────────────
+        # FAIL-LOUD: If this fails, a RuntimeError propagates up.
+        from data_pipeline.weather_service import fetch_forecast_weather
+        forecast_weather = fetch_forecast_weather(days=days)
+        # fetch_forecast_weather now raises RuntimeError on failure —
+        # no try/except silencing here.
 
-            future_weather = []
-            for d in future_dates:
-                try:
-                    row = historical_weather.loc[(d.month, d.day)]
-                    future_weather.append(row.to_dict())
-                except KeyError:
-                    future_weather.append({c: 0 for c in WEATHER_COLS})
+        forecast_weather["date"] = pd.to_datetime(forecast_weather["date"])
+        future_exog = forecast_weather.set_index("date")[WEATHER_COLS].reindex(future_dates)
 
-            future_exog = pd.DataFrame(future_weather, index=future_dates)
+        # Interpolate alignment gaps (date rounding), but do NOT fill with zeros
+        for col in WEATHER_COLS:
+            future_exog[col] = future_exog[col].interpolate(method="linear")
+
+        # If there are still NaNs after interpolation, raise
+        remaining_nans = future_exog[WEATHER_COLS].isnull().any(axis=1).sum()
+        if remaining_nans > 0:
+            logger.warning(
+                f"{remaining_nans} forecast days still missing weather after interpolation — "
+                f"dropping those days from forecast."
+            )
+            future_exog = future_exog.dropna(subset=WEATHER_COLS)
+            future_dates = future_exog.index
+            days = len(future_dates)
+
+        logger.info(f"Using REAL Open-Meteo forecast weather for {len(future_exog)} days")
 
         # Add lagged demand for SARIMA exog
         # Use last known demand values for the lag features

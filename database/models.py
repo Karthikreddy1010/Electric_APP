@@ -458,3 +458,34 @@ class EIA861Master(Base):
         Index("ix_eia861_util_year", "utility_id", "year"),
     )
 
+
+class WeatherOpenMeteo(Base):
+    """Real daily weather data from Open-Meteo for New Jersey."""
+    __tablename__ = "weather_openmeteo"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    date = Column(Date, nullable=False, unique=True, index=True)
+    temp_max = Column(Float)
+    temp_min = Column(Float)
+    temp_avg = Column(Float)
+    hdd = Column(Float)
+    cdd = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+
+class DailySubBaDemand(Base):
+    """Daily demand data from EIA for PJM sub-BAs (AE, JC, PS, RECO)."""
+    __tablename__ = "daily_subba_demand"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period = Column(Date, nullable=False, index=True)
+    subba = Column(String(10), nullable=False, index=True)
+    value = Column(Float)
+    parent = Column(String(20), default="PJM")
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("period", "subba", name="uq_daily_subba_period_subba"),
+    )
+
+
