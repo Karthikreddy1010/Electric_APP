@@ -138,15 +138,20 @@ class ElectricityDemandForecaster:
         NOT use perfect historical weather, because in production only
         *forecast* weather (which is inherently noisy) is available.
 
+        Noise scales with the forecast horizon index t: std = 0.5 + 0.1 * t
         Noise is applied to temp_max, temp_min, and temp_avg.
         HDD/CDD are then recomputed from the noisy averages.
         """
         noisy = weather_df.copy()
         rng = np.random.default_rng(seed=42)
 
+        # Dynamic noise standard deviation: grows over time
+        t_steps = np.arange(len(noisy))
+        horizon_noise_std = 0.5 + 0.1 * t_steps
+
         for col in ["temp_max", "temp_min", "temp_avg"]:
             if col in noisy.columns:
-                noise = rng.normal(0, FORECAST_NOISE_STD, size=len(noisy))
+                noise = rng.normal(0, horizon_noise_std)
                 noisy[col] = noisy[col] + noise
 
         # Recompute HDD/CDD from noisy temp_avg
@@ -365,9 +370,35 @@ class ElectricityDemandForecaster:
             enforce_invertibility=False
         )
         sarima_fitted = self.sarima_model.fit(disp=False)
-        # Use noisy weather for test exog (consistent with anti-leakage)
-        exog_test = test[EXOG_COLS]
-        sarima_test_pred = sarima_fitted.forecast(steps=30, exog=exog_test).values
+
+        # ── RECURSIVE OUT-OF-SAMPLE LAG PROPAGATION FOR VALIDATION ──
+        # Resolves lag feature data leakage during test set validation.
+        exog_test_recursive = test[EXOG_COLS].copy()
+        sarima_preds_list = []
+        last_train_demand = train["demand_mw"].iloc[-1]
+
+        for t in range(30):
+            # Compute autoregressive lags recursively
+            if t == 0:
+                lag1 = last_train_demand
+            else:
+                lag1 = sarima_preds_list[-1]
+
+            if t < 7:
+                lag7 = train["demand_mw"].iloc[-(7 - t)]
+            else:
+                lag7 = sarima_preds_list[t - 7]
+
+            # Inject the recursive lag features into the exogenous variables
+            exog_test_recursive.iloc[t, exog_test_recursive.columns.get_loc("demand_lag1")] = lag1
+            exog_test_recursive.iloc[t, exog_test_recursive.columns.get_loc("demand_lag7")] = lag7
+
+            # Forecast step t using exog up to step t
+            exog_so_far = exog_test_recursive.iloc[:t+1]
+            preds = sarima_fitted.forecast(steps=t+1, exog=exog_so_far)
+            sarima_preds_list.append(float(preds.values[-1]))
+
+        sarima_test_pred = np.array(sarima_preds_list)
 
         # ENSEMBLE EVALUATION
         y_test = test["demand_mw"].values
@@ -458,28 +489,36 @@ class ElectricityDemandForecaster:
         logger.info(f"Using REAL Open-Meteo forecast weather for {len(future_exog)} days")
 
         # Add lagged demand for SARIMA exog
-        # Use last known demand values for the lag features
+        # Build lag features recursively for the forecast horizon
         last_demand = full_df["demand_mw"].iloc[-1]
         last_demand_7 = full_df["demand_mw"].iloc[-7] if len(full_df) >= 7 else last_demand
 
         future_exog_sarima = future_exog.copy()
-        # Build lag features iteratively for the forecast horizon
-        lag1_values = [last_demand]
-        lag7_values = []
-        for i in range(days):
-            if i >= 7:
-                lag7_values.append(lag1_values[i - 7])
-            elif len(full_df) >= (7 - i):
-                lag7_values.append(full_df["demand_mw"].iloc[-(7 - i)])
-            else:
-                lag7_values.append(last_demand_7)
-            if i > 0:
-                # Use the previous day's predicted demand as lag1
-                # For simplicity, use the last known demand (conservative estimate)
-                lag1_values.append(last_demand)
+        future_exog_sarima["demand_lag1"] = 0.0
+        future_exog_sarima["demand_lag7"] = 0.0
 
-        future_exog_sarima["demand_lag1"] = lag1_values[:days]
-        future_exog_sarima["demand_lag7"] = lag7_values[:days]
+        sarima_preds_list = []
+
+        for t in range(days):
+            # Compute autoregressive lags recursively
+            if t == 0:
+                lag1 = last_demand
+            else:
+                lag1 = sarima_preds_list[-1]
+
+            if t < 7:
+                lag7 = full_df["demand_mw"].iloc[-(7 - t)] if len(full_df) >= (7 - t) else last_demand_7
+            else:
+                lag7 = sarima_preds_list[t - 7]
+
+            # Inject the recursive lag features into the exogenous variables
+            future_exog_sarima.iloc[t, future_exog_sarima.columns.get_loc("demand_lag1")] = lag1
+            future_exog_sarima.iloc[t, future_exog_sarima.columns.get_loc("demand_lag7")] = lag7
+
+            # Forecast step t using exog up to step t
+            exog_so_far = future_exog_sarima.iloc[:t+1]
+            preds = final_sarima_result.forecast(steps=t+1, exog=exog_so_far[EXOG_COLS])
+            sarima_preds_list.append(float(preds.values[-1]))
 
         # Prophet forecast — needs weather columns on the full future dataframe
         future = final_prophet.make_future_dataframe(periods=days, freq='D')
@@ -495,13 +534,11 @@ class ElectricityDemandForecaster:
         prophet_lower = prophet_forecast.iloc[-days:]['yhat_lower'].values
         prophet_upper = prophet_forecast.iloc[-days:]['yhat_upper'].values
 
-        # SARIMA forecast using stored fitted result + real exog
-        sarima_future_pred = final_sarima_result.forecast(
-            steps=days, exog=future_exog_sarima[EXOG_COLS]
-        ).values
+        # SARIMA forecast using the recursively populated exog matrix
         sarima_forecast_obj = final_sarima_result.get_forecast(
             steps=days, exog=future_exog_sarima[EXOG_COLS]
         )
+        sarima_future_pred = sarima_forecast_obj.predicted_mean.values
         sarima_ci = sarima_forecast_obj.conf_int(alpha=0.20)
         sarima_lower = sarima_ci.iloc[:, 0].values
         sarima_upper = sarima_ci.iloc[:, 1].values

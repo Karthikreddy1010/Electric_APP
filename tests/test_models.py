@@ -204,6 +204,65 @@ class TestForecastModel:
         assert not clean_df["temp_avg"].isnull().any()
         assert pd.Timestamp("2023-02-04") not in clean_df.index
 
+    def test_dynamic_weather_noise_grows(self):
+        """Noise simulation standard deviation should grow over the forecast horizon."""
+        from models.forecast_model import ElectricityDemandForecaster
+        forecaster = ElectricityDemandForecaster()
+        weather_df = pd.DataFrame({
+            "temp_avg": [20.0] * 30,
+            "temp_max": [25.0] * 30,
+            "temp_min": [15.0] * 30,
+            "hdd": [0.0] * 30,
+            "cdd": [2.0] * 30,
+        })
+        
+        # Patch default_rng to bypass the fixed seed so we can check variance
+        original_default_rng = np.random.default_rng
+        with patch("numpy.random.default_rng", side_effect=lambda seed=None: original_default_rng()):
+            diffs = []
+            for _ in range(300):
+                noisy = forecaster._simulate_forecast_weather(weather_df)
+                diffs.append(noisy["temp_avg"].values - weather_df["temp_avg"].values)
+        
+        stds = np.std(diffs, axis=0)
+        # Verify that noise standard deviation on day 29 is larger than day 0
+        assert stds[29] > stds[0] + 1.5, f"Noise did not grow: std[0]={stds[0]:.2f}, std[29]={stds[29]:.2f}"
+
+    def test_recursive_lags_validation(self):
+        """Validation loop should recursively set lag1 to the previous prediction and lag7 to prediction at t-7."""
+        from models.forecast_model import ElectricityDemandForecaster
+        forecaster = ElectricityDemandForecaster()
+        
+        dates = pd.date_range("2023-01-01", periods=100, freq="D")
+        np.random.seed(42)
+        df_clean = pd.DataFrame({
+            "demand_mw": 5000.0 + np.sin(np.arange(100)) * 500.0,
+            "peak_mw": [6000.0] * 100,
+            "trough_mw": [4000.0] * 100,
+            "subbas_recorded": [4] * 100,
+            "hours_recorded": [4] * 100,
+            "dayofweek": dates.dayofweek,
+            "month": dates.month,
+            "is_weekend": (dates.dayofweek >= 5).astype(int),
+            "load_factor": [0.66] * 100,
+            "temp_avg": 20.0 + np.random.randn(100) * 5,
+            "hdd": [0.0] * 100,
+            "cdd": [2.0] * 100,
+            "demand_lag1": [5000.0] * 100,
+            "demand_lag7": [5000.0] * 100,
+        }, index=dates)
+        
+        # Enforce pandas index name so reset_index() renames to "date" and matches Prophet requirements
+        df_clean.index.name = "date"
+        
+        forecaster.df_clean = df_clean
+        forecaster.train_and_evaluate()
+        
+        assert forecaster.last_trained is not None
+        assert forecaster.metrics["ensemble"]["MAPE"] is not None
+        # Verify weights sum to 1
+        assert np.isclose(forecaster.weights["prophet"] + forecaster.weights["sarima"], 1.0)
+
 
 class TestSimulationModel:
     """Tests for Monte Carlo plan simulator."""
@@ -255,6 +314,24 @@ class TestSimulationModel:
         variable = comparison[comparison["plan_type"] == "variable"].iloc[0]
         # Fixed plan should have lower std dev (less risk)
         assert fixed["std_annual_cost"] < variable["std_annual_cost"]
+
+
+class TestMonitoringEndpoint:
+    """Tests for the enterprise monitoring health check endpoint."""
+
+    def test_monitoring_health_endpoint(self):
+        import asyncio
+        from api.routes.monitoring import get_monitoring_health
+        health = asyncio.run(get_monitoring_health())
+        
+        assert "status" in health
+        assert "database" in health
+        assert "weather_api" in health
+        assert "data_drift" in health
+        
+        assert health["database"]["status"] in ["ok", "empty", "error"]
+        assert "latency_ms" in health["weather_api"]
+        assert "score" in health["data_drift"]
 
 
 if __name__ == "__main__":
