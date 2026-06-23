@@ -70,22 +70,27 @@ def update_elasticity_model_task():
 
 
 def fetch_eia_demand_task():
-    """Fetches latest PJM daily demand data from EIA API, then retrains forecast models."""
+    """Fetches latest PJM demand + NJ weather data, then retrains forecast models."""
     logger.info("Executing scheduled job: fetch_eia_demand_task")
     t0 = time.time()
     try:
         from data_pipeline.eia_demand_fetcher import fetch_and_update_daily_demand
+        from data_pipeline.weather_service import update_daily_weather
 
-        # Step 1: Fetch new data from EIA and append to CSV
+        # Step 1: Fetch new demand data from EIA
         output_path = fetch_and_update_daily_demand()
-        fetch_duration = time.time() - t0
-        logger.info(f"EIA demand data updated in {fetch_duration:.1f}s → {output_path}")
+        logger.info(f"EIA demand data updated in {time.time() - t0:.1f}s")
 
-        # Step 2: Retrain forecast models with the expanded dataset
+        # Step 2: Fetch new weather data from Open-Meteo
+        t1 = time.time()
+        update_daily_weather()
+        logger.info(f"Open-Meteo weather updated in {time.time() - t1:.1f}s")
+
+        # Step 3: Retrain forecast models with fresh demand + weather
         retrain_forecast_models_task()
 
         total_duration = time.time() - t0
-        logger.info(f"EIA fetch + retrain completed in {total_duration:.1f}s")
+        logger.info(f"Full pipeline (demand + weather + retrain) completed in {total_duration:.1f}s")
     except Exception as e:
         logger.error(f"EIA demand fetch+retrain failed: {e}", exc_info=True)
 
