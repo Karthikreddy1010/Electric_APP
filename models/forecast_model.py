@@ -16,13 +16,15 @@ def safe_mape(y_true, y_pred):
     return float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
 
 class ElectricityDemandForecaster:
-    def __init__(self, data_path="data/raw/eia_pjm_hourly_demand.csv"):
+    def __init__(self, data_path="data/raw/eia_pjm_daily_demand.csv", weather_path="data/raw/weather_noaa_cache.csv"):
         # Resolve the full path based on project root if relative
         if not Path(data_path).is_absolute():
             project_root = Path(__file__).resolve().parent.parent
             self.data_path = project_root / data_path
+            self.weather_path = project_root / weather_path
         else:
             self.data_path = Path(data_path)
+            self.weather_path = Path(weather_path)
             
         self.weights = {"prophet": 0.7, "sarima": 0.3}
         self.metrics = {
@@ -37,14 +39,14 @@ class ElectricityDemandForecaster:
         self.last_trained = None
         
     def prepare_data(self):
-        """Parse, clean and feature engineer PJM hourly/daily demand data."""
+        """Parse, clean and feature engineer PJM daily demand data."""
         logger.info(f"Loading data from {self.data_path}")
         df = pd.read_csv(self.data_path)
         
-        # Parse datetime
-        df["datetime"] = pd.to_datetime(df["period"], format="%Y-%m-%dT%H")
+        # Parse date (daily CSV uses YYYY-MM-DD format)
+        df["date"] = pd.to_datetime(df["period"])
         
-        # Step 1: Clean raw hourly anomalies (unphysical zeros/negatives and extreme spikes)
+        # Step 1: Clean anomalies (unphysical zeros/negatives and extreme spikes)
         df.loc[df["value"] <= 0, "value"] = np.nan
         df.loc[df["value"] > 100000, "value"] = np.nan
         
@@ -53,40 +55,52 @@ class ElectricityDemandForecaster:
             lambda x: x.interpolate(method="linear", limit_direction="both")
         )
         
-        # Step 3: Aggregate all sub-balancing areas per hour → PJM total per hour
-        hourly_total = df.groupby("datetime")["value"].sum().reset_index()
-        hourly_total.rename(columns={"value": "demand_mw"}, inplace=True)
-        hourly_total["date"] = hourly_total["datetime"].dt.date
-        
-        # Step 4: Aggregate hourly → daily
-        daily = hourly_total.groupby("date").agg(
-            demand_mw=("demand_mw", "sum"),
-            peak_mw=("demand_mw", "max"),
-            trough_mw=("demand_mw", "min"),
-            hours_recorded=("demand_mw", "count"),
+        # Step 3: Aggregate all sub-balancing areas per day → PJM total per day
+        daily = df.groupby("date").agg(
+            demand_mw=("value", "sum"),
+            peak_mw=("value", "max"),
+            trough_mw=("value", "min"),
+            subbas_recorded=("value", "count"),
         ).reset_index()
         
-        daily["date"] = pd.to_datetime(daily["date"])
         daily = daily.sort_values("date").set_index("date")
         
-        # Step 5: Strictly drop partial days to avoid artificial dropouts at the end of the series
-        partial_days = daily["hours_recorded"] < 24
+        # Step 4: Drop days with incomplete sub-BA coverage (expect 4 sub-BAs)
+        partial_days = daily["subbas_recorded"] < len(["AE", "JC", "PS", "RECO"])
         if partial_days.any():
-            logger.info(f"Dropping {partial_days.sum()} partial days (< 24 hours)")
+            logger.info(f"Dropping {partial_days.sum()} partial days (< 4 sub-BAs)")
             daily = daily[~partial_days]
         
-        # Step 6: Ensure daily continuity
+        # Step 5: Ensure daily continuity
         daily = daily.asfreq("D")
         
-        # Step 7: Handle any remaining missing values via time interpolation
+        # Step 6: Handle any remaining missing values via time interpolation
         for col in ["demand_mw", "peak_mw", "trough_mw"]:
             daily[col] = daily[col].interpolate(method="time")
         
-        # Step 8: Feature engineering
+        # Step 7: Feature engineering
         daily["dayofweek"] = daily.index.dayofweek
         daily["month"] = daily.index.month
         daily["is_weekend"] = (daily["dayofweek"] >= 5).astype(int)
         daily["load_factor"] = daily["trough_mw"] / daily["peak_mw"]
+        
+        # Keep subbas_recorded for historical filtering in get_forecast()
+        daily["hours_recorded"] = daily["subbas_recorded"]
+        
+        # Merge weather data
+        if self.weather_path.exists():
+            weather_df = pd.read_csv(self.weather_path)
+            weather_df["date"] = pd.to_datetime(weather_df["date"])
+            weather_df = weather_df.drop_duplicates(subset=["date"]).set_index("date")
+            daily = daily.join(weather_df[["hdd", "cdd"]], how="left")
+            # Forward fill missing weather data, then fillna with 0
+            daily["hdd"] = daily["hdd"].ffill().fillna(0)
+            daily["cdd"] = daily["cdd"].ffill().fillna(0)
+            logger.info("Successfully merged NOAA weather data (hdd, cdd).")
+        else:
+            logger.warning(f"Weather data not found at {self.weather_path}. Using 0 for hdd/cdd.")
+            daily["hdd"] = 0
+            daily["cdd"] = 0
         
         self.df_clean = daily
         logger.info(f"Prepared {len(daily)} days of PJM demand data "
@@ -118,27 +132,33 @@ class ElectricityDemandForecaster:
             seasonality_prior_scale=10.0
         )
         self.prophet_model.add_country_holidays(country_name='US')
+        self.prophet_model.add_regressor('hdd')
+        self.prophet_model.add_regressor('cdd')
         self.prophet_model.fit(prophet_df)
         
         prophet_future = self.prophet_model.make_future_dataframe(periods=30, freq='D')
+        prophet_future = prophet_future.set_index("ds").join(df[["hdd", "cdd"]]).reset_index()
         prophet_pred_full = self.prophet_model.predict(prophet_future)
         prophet_test_pred = prophet_pred_full.iloc[-30:]['yhat'].values
         
         # Model 2 - SARIMA
         y_train = train["demand_mw"]
+        exog_train = train[["hdd", "cdd"]]
         is_stationary = self._check_stationarity(y_train)
         d = 0 if is_stationary else 1
         
         # Seasonal SARIMA (weekly seasonality = 7)
         self.sarima_model = SARIMAX(
             y_train, 
+            exog=exog_train,
             order=(1, d, 1), 
             seasonal_order=(1, 0, 1, 7),
             enforce_stationarity=False, 
             enforce_invertibility=False
         )
         sarima_fitted = self.sarima_model.fit(disp=False)
-        sarima_test_pred = sarima_fitted.forecast(steps=30).values
+        exog_test = test[["hdd", "cdd"]]
+        sarima_test_pred = sarima_fitted.forecast(steps=30, exog=exog_test).values
         
         # ENSEMBLE EVALUATION
         y_test = test["demand_mw"].values
@@ -197,16 +217,39 @@ class ElectricityDemandForecaster:
         final_prophet = self.fitted_prophet # FIX: 6
         final_sarima_result = self.fitted_sarima_result # FIX: 6
         
+        last_date = full_df.index[-1]
+        future_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=days, freq='D')
+        
+        # Calculate normal weather (historical average) for future dates
+        historical_weather = full_df.groupby([full_df.index.month, full_df.index.day])[["hdd", "cdd"]].mean()
+        
+        future_weather = []
+        for d in future_dates:
+            try:
+                avg_hdd, avg_cdd = historical_weather.loc[(d.month, d.day)]
+            except KeyError:
+                avg_hdd, avg_cdd = 0, 0
+            future_weather.append({"hdd": avg_hdd, "cdd": avg_cdd})
+            
+        future_exog = pd.DataFrame(future_weather, index=future_dates)
+        
         # Prophet forecast (no refit needed — extend future dataframe only)
         future = final_prophet.make_future_dataframe(periods=days, freq='D') # FIX: 6
+        future = future.set_index("ds")
+        # Join historical weather for past dates
+        future = future.join(full_df[["hdd", "cdd"]])
+        # Fill future dates with expected future weather
+        future.update(future_exog)
+        future = future.reset_index()
+        
         prophet_forecast = final_prophet.predict(future) # FIX: 6
         prophet_future_pred = prophet_forecast.iloc[-days:]['yhat'].values # FIX: 6
         prophet_lower = prophet_forecast.iloc[-days:]['yhat_lower'].values # FIX: 6
         prophet_upper = prophet_forecast.iloc[-days:]['yhat_upper'].values # FIX: 6
         
         # SARIMA forecast using stored fitted result
-        sarima_future_pred = final_sarima_result.forecast(steps=days).values # FIX: 6
-        sarima_forecast_obj = final_sarima_result.get_forecast(steps=days) # FIX: 2
+        sarima_future_pred = final_sarima_result.forecast(steps=days, exog=future_exog).values # FIX: 6
+        sarima_forecast_obj = final_sarima_result.get_forecast(steps=days, exog=future_exog) # FIX: 2
         sarima_ci = sarima_forecast_obj.conf_int(alpha=0.20) # FIX: 2
         sarima_lower = sarima_ci.iloc[:, 0].values # FIX: 2
         sarima_upper = sarima_ci.iloc[:, 1].values # FIX: 2
@@ -241,7 +284,7 @@ class ElectricityDemandForecaster:
         
         # Add last 30 days of historical data
         # FIX: 1 - Filter partial days from historical display
-        hist_df = full_df[full_df["hours_recorded"] >= 24].tail(30) # FIX: 1
+        hist_df = full_df[full_df["hours_recorded"] >= 4].tail(30) # FIX: 1 (4 sub-BAs expected)
         # FIX: 1 - Guard against anomalous low values
         floor = full_df["demand_mw"].quantile(0.05) # FIX: 1
         hist_df = hist_df[hist_df["demand_mw"] >= floor] # FIX: 1

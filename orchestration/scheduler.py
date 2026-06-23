@@ -10,12 +10,13 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Callable, NamedTuple
+from typing import Callable, NamedTuple, Optional
 
 from orchestration.tasks import (
     run_etl_pipeline_task,
     retrain_forecast_models_task,
     update_elasticity_model_task,
+    fetch_eia_demand_task,
 )
 
 logger = logging.getLogger(__name__)
@@ -112,11 +113,11 @@ _scheduler.add_job(
     interval_seconds=86400,
 )
 
-# 2. Retrain forecasting models weekly (604800 seconds)
+# 2. Fetch fresh EIA demand data + retrain forecast models daily (86400 seconds)
 _scheduler.add_job(
-    name="Retrain Forecasting Models",
-    target=retrain_forecast_models_task,
-    interval_seconds=604800,
+    name="Fetch EIA Demand + Retrain Forecast",
+    target=fetch_eia_demand_task,
+    interval_seconds=86400,
 )
 
 # 3. Update demand response elasticity coefficients weekly

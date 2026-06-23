@@ -67,3 +67,25 @@ def update_elasticity_model_task():
             logger.warning("Missing datasets in app_state; skipping elasticity model update")
     except Exception as e:
         logger.error(f"Failed to update elasticity model: {e}", exc_info=True)
+
+
+def fetch_eia_demand_task():
+    """Fetches latest PJM daily demand data from EIA API, then retrains forecast models."""
+    logger.info("Executing scheduled job: fetch_eia_demand_task")
+    t0 = time.time()
+    try:
+        from data_pipeline.eia_demand_fetcher import fetch_and_update_daily_demand
+
+        # Step 1: Fetch new data from EIA and append to CSV
+        output_path = fetch_and_update_daily_demand()
+        fetch_duration = time.time() - t0
+        logger.info(f"EIA demand data updated in {fetch_duration:.1f}s → {output_path}")
+
+        # Step 2: Retrain forecast models with the expanded dataset
+        retrain_forecast_models_task()
+
+        total_duration = time.time() - t0
+        logger.info(f"EIA fetch + retrain completed in {total_duration:.1f}s")
+    except Exception as e:
+        logger.error(f"EIA demand fetch+retrain failed: {e}", exc_info=True)
+
