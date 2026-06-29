@@ -6,7 +6,7 @@ interface HeaderProps {
 }
 
 const Header = ({ activeTab, setActiveTab }: HeaderProps) => {
-  const tabs = ['Overview', 'Forecast', 'Impact', 'What-If Scenario', 'Causal Analysis', 'Benchmark', 'Geo Insights', 'Plans', 'Utility Intelligence'];
+  const tabs = ['Overview', 'Forecast', 'Impact', 'What-If Scenario', 'Benchmark', 'Geo Insights', 'Plans', 'Utility Intelligence'];
 
   return (
     <header className="bg-white border-b border-border sticky top-0 z-50">

@@ -8,7 +8,8 @@ import {
 import { 
   Calculator, Activity, TrendingUp, TrendingDown, 
   ThermometerSun, Zap, ShieldCheck, ArrowRight, Lightbulb,
-  CloudRain, DollarSign, Gauge, BarChart3, Info
+  CloudRain, DollarSign, Gauge, BarChart3, Info,
+  Brain, CheckCircle, AlertCircle
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -57,6 +58,18 @@ const getConfidenceLevel = (std: number, mean: number) => {
   return { label: 'Low', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', barColor: '#EF4444' };
 };
 
+const getPValueColor = (p: number) => {
+  if (p < 0.01) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+  if (p < 0.05) return 'text-blue-600 bg-blue-50 border-blue-200';
+  return 'text-slate-500 bg-slate-50 border-slate-200';
+};
+
+const getSignificanceLabel = (p: number) => {
+  if (p < 0.01) return 'Highly Significant (p < 0.01)';
+  if (p < 0.05) return 'Statistically Significant (p < 0.05)';
+  return 'Not Statistically Significant (p >= 0.05)';
+};
+
 /** Build bell curve data for distribution visualization */
 const buildBellCurve = (mean: number, std: number, p5: number, p95: number) => {
   const points = [];
@@ -101,6 +114,15 @@ const ImpactTab = () => {
       return (await axios.post('/impact/what-if-v2', payload)).data;
     },
     placeholderData: (prev) => prev
+  });
+
+  const { data: causalData, isLoading: isCausalLoading, isError: isCausalError, error: causalError } = useQuery({
+    queryKey: ['causal-impact', debouncedComp],
+    queryFn: async () => {
+      const res = await axios.post('/impact/causal-v2', { treatment: debouncedComp });
+      return res.data;
+    },
+    enabled: !!debouncedComp,
   });
 
   // ── Derived Values ──
@@ -713,6 +735,150 @@ const ImpactTab = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          SECTION 4.5: Causal AI Verification
+          ═══════════════════════════════════════════════════════════════════ */}
+      <div className="space-y-6" id="causal-verification">
+        <div className="flex justify-between items-end border-b border-slate-200 pb-4">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <Brain className="text-indigo-600" size={24} /> Causal AI Verification
+            </h3>
+            <p className="text-slate-500 text-xs mt-1">
+              Double Machine Learning (DML) isolates the true causal impact of <strong>{selectedMeta?.label}</strong> changes by controlling for weather, seasonality, and usage history.
+            </p>
+          </div>
+          <div className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-100">
+            Double ML (DML) Model
+          </div>
+        </div>
+
+        {isCausalLoading ? (
+          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[300px] space-y-4">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+            <p className="text-slate-500 text-sm font-medium animate-pulse">Fitting Double Machine Learning Estimator...</p>
+          </div>
+        ) : isCausalError ? (
+          <div className="rounded-2xl bg-rose-50/50 border border-rose-100 p-8 min-h-[200px] flex flex-col items-center justify-center text-center">
+            <AlertCircle className="text-rose-600 mb-3" size={36} />
+            <h4 className="text-base font-bold text-slate-900 mb-1">Causal Fit Failed</h4>
+            <p className="text-xs text-slate-500 max-w-md">
+              {(causalError as any)?.response?.data?.detail || "Make sure the causal model is successfully trained at backend startup."}
+            </p>
+          </div>
+        ) : causalData ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* Stat Cards Column */}
+            <div className="space-y-4">
+              
+              {/* Causal Effect */}
+              <div className="rounded-2xl p-5 bg-gradient-to-br from-indigo-900 to-slate-900 text-white shadow-sm">
+                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Causal Impact</span>
+                <div className="text-3xl font-black mt-1.5">
+                  ${causalData.causal_effect_estimate.toFixed(2)}
+                </div>
+                <span className="text-xs text-indigo-200 block mt-1">
+                  change in total bill per unit rate change
+                </span>
+              </div>
+              
+              {/* Standard Error */}
+              <div className="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Statistical Error</span>
+                <div className="text-2xl font-black mt-1.5 text-slate-900">
+                  ±{causalData.std_error.toFixed(4)}
+                </div>
+                <span className="text-xs text-slate-500 block mt-1">
+                  standard error of estimate
+                </span>
+              </div>
+
+              {/* Significance */}
+              <div className={`rounded-2xl p-5 border shadow-sm ${getPValueColor(causalData.p_value)}`}>
+                <span className="text-[10px] font-bold uppercase tracking-widest block opacity-75">Significance Check</span>
+                <div className="text-base font-black mt-1.5 truncate">
+                  {getSignificanceLabel(causalData.p_value)}
+                </div>
+                <span className="text-xs block mt-1 opacity-90">
+                  p-value: {causalData.p_value.toFixed(5)}
+                </span>
+              </div>
+
+            </div>
+
+            {/* Confidence Interval Chart & Interpretations (2 cols) */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* CI Chart */}
+              <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
+                <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-4">
+                  95% Confidence Interval Bounds
+                </h4>
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[
+                        {
+                          name: 'Lower Bound (2.5%)',
+                          value: causalData.ci_95[0],
+                        },
+                        {
+                          name: 'DML Estimate',
+                          value: causalData.causal_effect_estimate,
+                        },
+                        {
+                          name: 'Upper Bound (97.5%)',
+                          value: causalData.ci_95[1],
+                        }
+                      ]}
+                      layout="vertical"
+                      margin={{ left: 10, right: 30, top: 10, bottom: 10 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
+                      <XAxis type="number" stroke="#94A3B8" tick={{ fontSize: 10 }} />
+                      <YAxis 
+                        dataKey="name" 
+                        type="category" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{ fill: '#475569', fontSize: 11, fontWeight: 700 }} 
+                        width={130}
+                      />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.12)', fontSize: '12px' }}
+                        formatter={(v: any) => [`$${v.toFixed(4)}`, 'Value']}
+                      />
+                      <ReferenceLine x={0} stroke="#EF4444" strokeDasharray="3 3" />
+                      <Bar dataKey="value" fill="#4F46E5" radius={6} barSize={20} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Text Interpretations */}
+              <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <CheckCircle className="text-emerald-500" size={18} />
+                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Causal Interpretation</h4>
+                </div>
+                <p className="text-sm text-slate-600 leading-relaxed font-medium">
+                  {causalData.interpretation}
+                </p>
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] text-slate-500 leading-relaxed">
+                  <strong>Model Detail & Controls:</strong> Adjusted for confounders: <strong>{causalData.confounders_controlled.join(', ')}</strong>. Method: {causalData.method}.
+                </div>
+                <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 text-[11px] text-amber-700 leading-relaxed">
+                  ⚠️ <strong>Model Caveat:</strong> {causalData.caveat}
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        ) : null}
       </div>
 
       {/* ═══════════════════════════════════════════════════════════════════

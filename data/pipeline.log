@@ -15499,3 +15499,401 @@ sqlalchemy.orm.exc.DetachedInstanceError: Instance <WeatherOpenMeteo at 0x23f001
 2026-06-23 14:57:00,186 | INFO     | models.forecast_model | Using REAL Open-Meteo forecast weather for 29 days
 2026-06-23 15:02:50,332 | INFO     | api.main | Shutting down...
 2026-06-23 15:02:50,378 | INFO     | database.connection | Database connection pool closed
+2026-06-29 03:33:34,427 | INFO     | data_pipeline.config | Logging initialized. Log file: C:\Users\dukar\OneDrive\Desktop\Electric\data\pipeline.log
+2026-06-29 03:33:34,429 | INFO     | data_pipeline.pipeline_runner | Starting Data Pipeline
+2026-06-29 03:33:34,429 | INFO     | data_pipeline.loaders | ======================================================================
+2026-06-29 03:33:34,429 | INFO     | data_pipeline.loaders | STAGE 1: Loading all local datasets from data/raw/
+2026-06-29 03:33:34,436 | INFO     | data_pipeline.loaders | ======================================================================
+2026-06-29 03:33:34,529 | INFO     | data_pipeline.loaders | Loaded bgs_auction: 204 rows × 6 cols | columns: ['year', 'edc', 'auction_product_type', 'final_price_k_wh', 'sheet', 'final_price_m_wday']
+2026-06-29 03:33:35,751 | INFO     | data_pipeline.loaders | Loaded community_energy: 4,542 rows × 36 cols | columns: ['municipality', 'county', 'muni_county', 'year', 'electric_utility', 'residential_electricity', 'commercial_electricity', 'industrial_electricity']...
+2026-06-29 03:33:35,947 | INFO     | data_pipeline.loaders | Loaded municipal_energy: 30,498 rows × 11 cols | columns: ['objectid', 'municipality', 'county', 'gnis', 'utility', 'year', 'sector', 'electricity_k_wh']...
+2026-06-29 03:33:35,999 | INFO     | data_pipeline.loaders | Loaded nj_retail_prices: 303 rows × 5 cols | columns: ['month_str', 'price_cents_kwh', 'date', 'year', 'month']
+2026-06-29 03:33:36,147 | INFO     | data_pipeline.loaders | Loaded avg_price_electricity (raw): 51 rows × 6 cols | columns: [0, 1, 2, 3, 4, 5]
+2026-06-29 03:33:36,233 | INFO     | data_pipeline.loaders | Loaded sales_of_electricity (raw): 67 rows × 11 cols | columns: [0, 1, 2, 3, 4, 5, 6, 7]...
+2026-06-29 03:33:36,488 | INFO     | data_pipeline.loaders | Loaded eia_residential_prices: 13,260 rows × 6 cols | columns: ['date', 'state', 'state_name', 'price_cents_per_k_wh', 'year', 'month']
+2026-06-29 03:33:36,676 | INFO     | data_pipeline.loaders | Loaded weather: 2,557 rows × 7 cols | columns: ['date', 'station', 'avg_temp_f', 'hdd', 'cdd', 'precip_in', 'humidity_pct']
+2026-06-29 03:33:36,697 | INFO     | data_pipeline.loaders | Loaded air_temp: 1,231 rows × 6 cols | columns: ['station', 'name', 'date', 'tavg', 'tmax', 'tmin']
+2026-06-29 03:33:36,729 | INFO     | data_pipeline.loaders | Loaded cpi_monthly (cached): 120 rows × 3 cols | columns: ['year', 'month', 'cpi']
+2026-06-29 03:33:36,747 | INFO     | data_pipeline.loaders | Loaded cpi_yearly (cached): 10 rows × 4 cols | columns: ['year', 'cpi_annual_avg', 'deflator', 'inflation_pct']
+2026-06-29 03:33:36,764 | INFO     | data_pipeline.loaders | Loaded pseg_rate_history: 272 rows × 23 cols | columns: ['date', 'year', 'month', 'season', 'tier', 'distribution_rate', 'riders_adj_sbc_nug_etc', 'total_delivery_rate']...
+2026-06-29 03:33:37,215 | INFO     | data_pipeline.loaders | Loaded eia861/Sales_Ult_Cust_master.csv: 31,995 rows × 31 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'unnamed_6']...
+2026-06-29 03:33:37,516 | INFO     | data_pipeline.loaders | Loaded eia861/Operational_Data_master.csv: 21,134 rows × 38 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'demand']...
+2026-06-29 03:33:37,708 | INFO     | data_pipeline.loaders | Loaded eia861/Utility_Data_master.csv: 20,986 rows × 37 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'also_operating_in_other_nerc_regions']...
+2026-06-29 03:33:37,709 | INFO     | data_pipeline.loaders | Loading complete: 15 datasets loaded, 127,230 total rows
+2026-06-29 03:33:37,710 | INFO     | data_pipeline.api_fetchers | ======================================================================
+2026-06-29 03:33:37,710 | INFO     | data_pipeline.api_fetchers | STAGE 2: Fetching BLS CPI data
+2026-06-29 03:33:37,711 | INFO     | data_pipeline.api_fetchers | ======================================================================
+2026-06-29 03:33:37,714 | INFO     | data_pipeline.api_fetchers | Force mode: fetching all years 2015–2025
+2026-06-29 03:33:37,715 | INFO     | data_pipeline.api_fetchers | Missing years to fetch: [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2026-06-29 03:33:37,715 | INFO     | data_pipeline.api_fetchers | BLS API request: CUSR0000SA0 [2015–2025]
+2026-06-29 03:33:40,419 | INFO     | models.demand_model | DemandResponseModel trained: R²=0.9044, MAE=38.7 kWh, ε=-0.0358, α=1.9307, 513ms
+2026-06-29 03:33:40,420 | INFO     | api.main | DemandResponseModel trained (elasticity=-0.0358)
+2026-06-29 03:33:45,417 | ERROR    | data_pipeline.api_fetchers | Failed to fetch CPI for 2015–2025: could not convert string to float: '-'
+2026-06-29 03:33:45,434 | INFO     | data_pipeline.api_fetchers | Falling back to cached data if available.
+2026-06-29 03:33:45,526 | WARNING  | data_pipeline.api_fetchers | API fetch returned no data; using cached CPI data.
+2026-06-29 03:33:45,650 | INFO     | data_pipeline.noaa_fetcher | ======================================================================
+2026-06-29 03:33:45,660 | INFO     | data_pipeline.noaa_fetcher | STAGE 3a: Fetching NOAA Weather data
+2026-06-29 03:33:45,662 | INFO     | data_pipeline.noaa_fetcher | ======================================================================
+2026-06-29 03:33:45,663 | WARNING  | data_pipeline.config | Environment variable NOAA_TOKEN not set. API calls requiring this key will fail.
+2026-06-29 03:33:45,663 | WARNING  | data_pipeline.noaa_fetcher | NOAA_TOKEN is not set. Falling back to synthetic weather generation.
+2026-06-29 03:33:45,664 | INFO     | data_pipeline.noaa_fetcher | Generating realistic fallback weather data for NJ...
+2026-06-29 03:33:45,790 | INFO     | data_pipeline.census_fetcher | ======================================================================
+2026-06-29 03:33:45,791 | INFO     | data_pipeline.census_fetcher | STAGE 3b: Fetching US Census Demographics
+2026-06-29 03:33:45,792 | INFO     | data_pipeline.census_fetcher | ======================================================================
+2026-06-29 03:33:45,792 | WARNING  | data_pipeline.config | Environment variable CENSUS_API_KEY not set. API calls requiring this key will fail.
+2026-06-29 03:33:45,793 | WARNING  | data_pipeline.census_fetcher | CENSUS_API_KEY is not set. Using fallback Census demographics for NJ.
+2026-06-29 03:33:45,793 | INFO     | data_pipeline.census_fetcher | Generating realistic fallback Census data for NJ...
+2026-06-29 03:33:45,802 | INFO     | data_pipeline.pjm_realtime_fetcher | ======================================================================
+2026-06-29 03:33:45,802 | INFO     | data_pipeline.pjm_realtime_fetcher | STAGE 3c: Fetching PJM Market data
+2026-06-29 03:33:45,803 | INFO     | data_pipeline.pjm_realtime_fetcher | ======================================================================
+2026-06-29 03:33:45,803 | WARNING  | data_pipeline.config | Environment variable PJM_API_KEY not set. API calls requiring this key will fail.
+2026-06-29 03:33:45,807 | WARNING  | data_pipeline.pjm_realtime_fetcher | PJM_API_KEY is not set. Using synthetic PJM market data.
+2026-06-29 03:33:45,812 | INFO     | data_pipeline.pjm_realtime_fetcher | Generating realistic fallback PJM market data for PSEG...
+2026-06-29 03:33:45,976 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 03:33:45,976 | INFO     | data_pipeline.pipeline_runner | STAGE 3: Preprocessing Datasets
+2026-06-29 03:33:45,977 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 03:33:46,343 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 03:33:46,344 | INFO     | data_pipeline.eia861_processor | EIA-861 FULL PROCESSING PIPELINE
+2026-06-29 03:33:46,346 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 03:33:46,347 | INFO     | data_pipeline.eia861_processor | Processing Sales: Sales_Ult_Cust_master.csv
+2026-06-29 03:33:48,744 | INFO     | data_pipeline.eia861_processor |   Sales: 29108 rows, 10 years, 51 states
+2026-06-29 03:33:49,414 | INFO     | data_pipeline.eia861_processor | Processing Net Metering (Utility): Net_Metering_net_metering_states_master.csv
+2026-06-29 03:33:49,819 | INFO     | data_pipeline.eia861_processor |   Net Metering Utility: 1050 rows
+2026-06-29 03:33:49,832 | INFO     | data_pipeline.eia861_processor | Processing Demand Response: Demand_Response_demand_response_states_master.csv
+2026-06-29 03:33:49,932 | INFO     | data_pipeline.eia861_processor |   Demand Response: 388 rows, 54 active
+2026-06-29 03:33:49,941 | INFO     | data_pipeline.eia861_processor | Processing Dynamic Pricing: Dynamic_Pricing_dynamic_pricing_states_master.csv
+2026-06-29 03:33:50,669 | INFO     | data_pipeline.eia861_processor |   Dynamic Pricing: 108 rows, 103 active
+2026-06-29 03:33:50,701 | INFO     | data_pipeline.eia861_processor | Processing Net Metering (State): Net_Metering_states_state_level_master.csv
+2026-06-29 03:33:50,988 | INFO     | data_pipeline.eia861_processor |   Net Metering State: 51 rows
+2026-06-29 03:33:51,005 | INFO     | data_pipeline.eia861_processor | Processing Operational Data: Operational_Data_master.csv
+2026-06-29 03:33:52,153 | INFO     | data_pipeline.eia861_processor |   Operational: 18768 rows
+2026-06-29 03:33:52,204 | INFO     | data_pipeline.eia861_processor | Processing Service Territory: Service_Territory_counties_states_master.csv
+2026-06-29 03:33:52,354 | INFO     | data_pipeline.eia861_processor |   Service Territory: 12073 rows, 51 states
+2026-06-29 03:33:52,367 | INFO     | data_pipeline.eia861_processor | Merging datasets...
+2026-06-29 03:33:52,618 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 03:33:52,619 | INFO     | data_pipeline.eia861_processor | EIA-861 MASTER: 29108 rows × 14 cols
+2026-06-29 03:33:52,619 | INFO     | data_pipeline.eia861_processor | Years: [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+2026-06-29 03:33:52,621 | INFO     | data_pipeline.eia861_processor | States: 51
+2026-06-29 03:33:52,621 | INFO     | data_pipeline.eia861_processor | Saved to: C:\Users\dukar\OneDrive\Desktop\Electric\data\processed\eia861\eia861_master_clean.csv
+2026-06-29 03:33:52,622 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 03:33:52,624 | INFO     | data_pipeline.validators | ======================================================================
+2026-06-29 03:33:52,624 | INFO     | data_pipeline.validators | STAGE 4: Validating Datasets
+2026-06-29 03:33:52,625 | INFO     | data_pipeline.validators | ======================================================================
+2026-06-29 03:33:52,626 | INFO     | data_pipeline.validators | [bgs_auction] Coverage: 2002 - 2026
+2026-06-29 03:33:52,626 | INFO     | data_pipeline.validators | [municipal_energy] Coverage: 2015 - 2023
+2026-06-29 03:33:52,627 | INFO     | data_pipeline.validators | [community_energy] Coverage: 2016 - 2023
+2026-06-29 03:33:52,627 | INFO     | data_pipeline.validators | [nj_retail_prices] Coverage: 2001 - 2026
+2026-06-29 03:33:52,628 | INFO     | data_pipeline.validators | [eia_residential_prices] Coverage: 2005 - 2026
+2026-06-29 03:33:52,629 | INFO     | data_pipeline.validators | [weather_monthly] Coverage: 2019 - 2025
+2026-06-29 03:33:52,629 | INFO     | data_pipeline.validators | [cpi_monthly] Coverage: 2015 - 2024
+2026-06-29 03:33:52,630 | WARNING  | data_pipeline.validators | [bgs_auction] Columns exceeding 10.0% missing values:
+2026-06-29 03:33:52,631 | WARNING  | data_pipeline.validators |   - final_price_k_wh: 47.1%
+2026-06-29 03:33:52,631 | WARNING  | data_pipeline.validators |   - final_price_m_wday: 52.9%
+2026-06-29 03:33:52,668 | INFO     | data_pipeline.validators | Validation complete.
+2026-06-29 03:33:52,669 | INFO     | data_pipeline.merger | ======================================================================
+2026-06-29 03:33:52,669 | INFO     | data_pipeline.merger | STAGE 5: Merging Datasets
+2026-06-29 03:33:52,670 | INFO     | data_pipeline.merger | ======================================================================
+2026-06-29 03:33:52,671 | INFO     | data_pipeline.merger | Spine initialized with 303 rows (NJ retail prices)
+2026-06-29 03:33:52,675 | INFO     | data_pipeline.merger | Joined CPI: 303 rows
+2026-06-29 03:33:52,678 | INFO     | data_pipeline.merger | Joined Weather: 303 rows
+2026-06-29 03:33:52,680 | INFO     | data_pipeline.merger | Computed real_price_cents_kwh (base year: 2024, base CPI: 313.70)
+2026-06-29 03:33:52,682 | INFO     | data_pipeline.merger | Master dataset built successfully: 303 rows, 11 columns
+2026-06-29 03:33:52,683 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 03:33:52,683 | INFO     | data_pipeline.pipeline_runner | STAGE 6: Saving Outputs
+2026-06-29 03:33:52,683 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 03:33:52,687 | INFO     | data_pipeline.pipeline_runner | Saved bgs_auction.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 03:33:52,745 | INFO     | data_pipeline.pipeline_runner | Saved community_energy.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 03:33:52,811 | INFO     | data_pipeline.pipeline_runner | Saved municipal_energy.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 03:33:52,814 | INFO     | data_pipeline.pipeline_runner | Saved nj_retail_prices.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 03:33:52,861 | INFO     | data_pipeline.pipeline_runner | Saved eia_residential_prices.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 03:33:52,863 | INFO     | data_pipeline.pipeline_runner | Saved weather_monthly.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 03:33:52,868 | INFO     | data_pipeline.pipeline_runner | Saved final_master_dataset.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 03:33:52,873 | INFO     | database.seed | ======================================================================
+2026-06-29 03:33:52,877 | INFO     | database.seed | DATABASE SEED — Loading existing data into PostgreSQL
+2026-06-29 03:33:52,878 | INFO     | database.seed | ======================================================================
+2026-06-29 03:33:52,879 | INFO     | database.connection | No PostgreSQL config found — using SQLite fallback
+2026-06-29 03:33:52,902 | INFO     | database.seed | force=True, clearing existing tables before seeding...
+2026-06-29 03:33:53,351 | INFO     | database.seed | Cleared all existing tables successfully.
+2026-06-29 03:33:53,384 | INFO     | database.seed | Seeded 84 billing records
+2026-06-29 03:33:53,724 | INFO     | database.seed | Seeded 1231 raw_weather + 1231 weather_index records
+2026-06-29 03:33:53,804 | INFO     | database.seed | Seeded 408 state benchmark records
+2026-06-29 03:33:53,815 | INFO     | database.seed | Seeded 8 tariff/plan records
+2026-06-29 03:33:53,877 | INFO     | database.seed | Seeded 204 BGS Auction rates
+2026-06-29 03:33:54,785 | INFO     | database.seed | Seeded 4506 Community Energy records
+2026-06-29 03:33:56,985 | INFO     | database.seed | Seeded 15249 Municipal Energy records
+2026-06-29 03:34:04,244 | INFO     | database.seed | Seeded 13260 State Monthly Price records
+2026-06-29 03:34:12,572 | INFO     | api.services.causal_model_service | EconML available — will use LinearDML for causal inference
+2026-06-29 03:34:13,761 | INFO     | api.services.causal_model_service |   DML(bgs_rate): θ=1286.41, p=0.0000
+2026-06-29 03:34:15,974 | INFO     | api.services.causal_model_service |   DML(distribution_rate): θ=3431.84, p=0.0000
+2026-06-29 03:34:17,094 | INFO     | api.services.causal_model_service |   DML(transmission_rate): θ=3247.20, p=0.0000
+2026-06-29 03:34:18,227 | INFO     | api.services.causal_model_service |   DML(sbc_rate): θ=6198.97, p=0.0000
+2026-06-29 03:34:18,626 | INFO     | api.services.causal_model_service |   DML(avg_lmp): θ=13.43, p=0.0003
+2026-06-29 03:34:18,626 | INFO     | api.main | CausalModelService (DML) fitted
+2026-06-29 03:34:18,638 | INFO     | api.main | Rate covariance matrix built
+2026-06-29 03:34:19,910 | INFO     | database.seed | Seeded 29108 EIA-861 master records
+2026-06-29 03:34:19,911 | INFO     | models.forecast_model | No DB demand data — loading from CSV: C:\Users\dukar\OneDrive\Desktop\Electric\data\raw\eia_pjm_daily_demand.csv
+2026-06-29 03:34:20,278 | INFO     | models.forecast_model | Loaded weather from CSV fallback: C:\Users\dukar\OneDrive\Desktop\Electric\data\raw\weather_openmeteo.csv
+2026-06-29 03:34:20,618 | INFO     | models.forecast_model | Successfully merged weather data (temp_avg, hdd, cdd).
+2026-06-29 03:34:20,674 | INFO     | models.forecast_model | Prepared 2729 days of PJM demand data (2019-01-01 to 2026-06-21)
+2026-06-29 03:34:20,744 | INFO     | models.forecast_model | Applied forecast weather noise (σ=1.5°C) to 30 test rows to prevent data leakage.
+2026-06-29 03:34:21,598 | INFO     | database.seed | Seeded 2730 weather_openmeteo records
+2026-06-29 03:34:26,983 | INFO     | database.seed | Seeded 10704 daily_subba_demand records
+2026-06-29 03:34:27,032 | INFO     | database.seed | Seed complete: {'billing': 84, 'weather': 1231, 'benchmarks': 408, 'plans': 8, 'bgs_auction': 204, 'community_energy': 4506, 'municipal_energy': 15249, 'state_monthly': 13260, 'eia861': 29108, 'weather_openmeteo': 2730, 'daily_subba_demand': 10704}
+2026-06-29 03:34:27,166 | INFO     | data_pipeline.pipeline_runner | Successfully loaded processed data into PostgreSQL database
+2026-06-29 03:34:27,169 | INFO     | data_pipeline.pipeline_runner | Pipeline completed successfully.
+2026-06-29 03:34:27,229 | INFO     | orchestration.tasks | Scheduled ETL pipeline completed in 52.8s. Outputs: {'bgs_auction': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\bgs_auction.csv', 'community_energy': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\community_energy.csv', 'municipal_energy': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\municipal_energy.csv', 'nj_retail_prices': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\nj_retail_prices.csv', 'eia_residential_prices': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\eia_residential_prices.csv', 'weather_monthly': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\weather_monthly.csv', 'master': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\final_master_dataset.csv'}
+2026-06-29 03:34:27,230 | INFO     | orchestration.scheduler | Scheduler triggering job 'Fetch EIA Demand + Retrain Forecast'
+2026-06-29 03:34:27,230 | INFO     | orchestration.tasks | Executing scheduled job: fetch_eia_demand_task
+2026-06-29 03:34:27,248 | INFO     | data_pipeline.eia_demand_fetcher | Incremental mode (DB): existing data through 2026-06-21, fetching from 2026-06-22
+2026-06-29 03:34:27,248 | INFO     | data_pipeline.eia_demand_fetcher | EIA fetch page 1 (offset=0, 2026-06-22 → 2026-06-29)...
+2026-06-29 03:34:29,683 | INFO     | cmdstanpy | Chain [1] start processing
+2026-06-29 03:34:31,650 | INFO     | data_pipeline.eia_demand_fetcher |   84 records fetched | total: 84 | pages: 1
+2026-06-29 03:34:31,654 | INFO     | data_pipeline.eia_demand_fetcher | EIA download complete — 84 records total
+2026-06-29 03:34:33,160 | INFO     | data_pipeline.eia_demand_fetcher | Upserted 84 demand records to database
+2026-06-29 03:34:33,161 | INFO     | data_pipeline.eia_demand_fetcher | Appended 84 new records to database.
+2026-06-29 03:34:33,677 | INFO     | orchestration.tasks | EIA demand data updated in 6.4s
+2026-06-29 03:34:33,683 | INFO     | data_pipeline.weather_service | Updating weather from DB: 2026-06-23 to 2026-06-28
+2026-06-29 03:34:33,720 | INFO     | cmdstanpy | Chain [1] done processing
+2026-06-29 03:34:36,364 | INFO     | data_pipeline.weather_service | Upserted 6 weather records to database
+2026-06-29 03:34:36,382 | INFO     | data_pipeline.weather_service | Appended 6 new days to database.
+2026-06-29 03:34:39,022 | INFO     | orchestration.tasks | Open-Meteo weather updated in 5.3s
+2026-06-29 03:34:39,039 | INFO     | orchestration.tasks | Executing scheduled job: retrain_forecast_models_task
+2026-06-29 03:34:45,603 | INFO     | models.forecast_model | Loaded 10724 demand records from database
+2026-06-29 03:34:46,316 | INFO     | models.forecast_model | Loaded 2736 weather records from database
+2026-06-29 03:34:46,347 | INFO     | models.forecast_model | Successfully merged weather data (temp_avg, hdd, cdd).
+2026-06-29 03:34:46,349 | INFO     | models.forecast_model | Prepared 2734 days of PJM demand data (2019-01-01 to 2026-06-26)
+2026-06-29 03:34:46,352 | INFO     | models.forecast_model | Applied forecast weather noise (σ=1.5°C) to 30 test rows to prevent data leakage.
+2026-06-29 03:34:46,476 | INFO     | models.forecast_model | Ensemble Evaluation Metrics: {'MAE': 6387.231177516105, 'RMSE': 8452.868156700526, 'MAPE': 3.294779952323898}
+2026-06-29 03:34:46,476 | INFO     | api.main | Demand Forecast ensemble trained and ready
+2026-06-29 03:34:47,076 | INFO     | cmdstanpy | Chain [1] start processing
+2026-06-29 03:34:47,212 | INFO     | api.main | Loaded database tables: bgs_auction=204, community_energy=4506, municipal_energy=15249, state_monthly_prices=13260, eia861_master=29108
+2026-06-29 03:34:47,676 | INFO     | api.main | Geo monthly data built from real EIA monthly prices: 13260 records
+2026-06-29 03:34:47,677 | INFO     | api.main | Initialization complete -- all systems ready
+2026-06-29 03:34:47,948 | INFO     | cmdstanpy | Chain [1] done processing
+2026-06-29 03:34:53,130 | INFO     | models.forecast_model | Ensemble Evaluation Metrics: {'MAE': 7391.721612391581, 'RMSE': 9216.886706688983, 'MAPE': 3.810845315835947}
+2026-06-29 03:34:53,130 | INFO     | orchestration.tasks | Retraining of forecasting models completed in 14.1s
+2026-06-29 03:34:53,131 | INFO     | orchestration.tasks | Full pipeline (demand + weather + retrain) completed in 25.9s
+2026-06-29 03:34:53,131 | INFO     | orchestration.scheduler | Scheduler triggering job 'Update Elasticity Model'
+2026-06-29 03:34:53,131 | INFO     | orchestration.tasks | Executing scheduled job: update_elasticity_model_task
+2026-06-29 03:34:53,131 | INFO     | data_pipeline.cleaners | Running cleaning pipeline...
+2026-06-29 03:34:53,150 | INFO     | data_pipeline.cleaners | Cleaned: billing=84, weather=2557, market=2557
+2026-06-29 03:34:53,151 | INFO     | data_pipeline.features | Building feature matrix...
+2026-06-29 03:34:53,152 | INFO     | data_pipeline.features | Reading NOAA daily temperature observations from air_temp.csv...
+2026-06-29 03:34:53,170 | INFO     | data_pipeline.features | Successfully aggregated NOAA observations: 41 months.
+2026-06-29 03:34:53,231 | INFO     | data_pipeline.features | Feature matrix: 72 rows, 69 features
+2026-06-29 03:34:53,453 | INFO     | models.demand_model | DemandResponseModel trained: R²=0.9044, MAE=38.7 kWh, ε=-0.0358, α=1.9307, 221ms
+2026-06-29 03:34:53,453 | INFO     | orchestration.tasks | Demand response elasticity model updated in 0.3s
+2026-06-29 03:35:29,042 | INFO     | data_pipeline.weather_service | Fetched 1-day weather forecast from Open-Meteo
+2026-06-29 03:35:29,051 | WARNING  | models.forecast_model | 1 forecast days still missing weather after interpolation — dropping those days from forecast.
+2026-06-29 03:35:29,055 | INFO     | models.forecast_model | Using REAL Open-Meteo forecast weather for 0 days
+2026-06-29 03:36:07,952 | INFO     | data_pipeline.weather_service | Forecast API provides 16 days; extending remaining 14 with climatology.
+2026-06-29 03:36:08,098 | INFO     | data_pipeline.weather_service | Fetched 30-day weather forecast from Open-Meteo
+2026-06-29 03:36:08,111 | WARNING  | models.forecast_model | 2 forecast days still missing weather after interpolation — dropping those days from forecast.
+2026-06-29 03:36:08,114 | INFO     | models.forecast_model | Using REAL Open-Meteo forecast weather for 28 days
+2026-06-29 03:36:14,982 | INFO     | data_pipeline.weather_service | Forecast API provides 16 days; extending remaining 14 with climatology.
+2026-06-29 03:36:15,127 | INFO     | data_pipeline.weather_service | Fetched 30-day weather forecast from Open-Meteo
+2026-06-29 03:36:15,140 | WARNING  | models.forecast_model | 2 forecast days still missing weather after interpolation — dropping those days from forecast.
+2026-06-29 03:36:15,144 | INFO     | models.forecast_model | Using REAL Open-Meteo forecast weather for 28 days
+2026-06-29 12:01:40,185 | INFO     | data_pipeline.config | Logging initialized. Log file: C:\Users\dukar\OneDrive\Desktop\Electric\data\pipeline.log
+2026-06-29 12:01:40,186 | INFO     | data_pipeline.pipeline_runner | Starting Data Pipeline
+2026-06-29 12:01:40,186 | INFO     | data_pipeline.loaders | ======================================================================
+2026-06-29 12:01:40,186 | INFO     | data_pipeline.loaders | STAGE 1: Loading all local datasets from data/raw/
+2026-06-29 12:01:40,187 | INFO     | data_pipeline.loaders | ======================================================================
+2026-06-29 12:01:40,221 | INFO     | data_pipeline.loaders | Loaded bgs_auction: 204 rows × 6 cols | columns: ['year', 'edc', 'auction_product_type', 'final_price_k_wh', 'sheet', 'final_price_m_wday']
+2026-06-29 12:01:40,535 | INFO     | data_pipeline.loaders | Loaded community_energy: 4,542 rows × 36 cols | columns: ['municipality', 'county', 'muni_county', 'year', 'electric_utility', 'residential_electricity', 'commercial_electricity', 'industrial_electricity']...
+2026-06-29 12:01:40,596 | INFO     | data_pipeline.loaders | Loaded municipal_energy: 30,498 rows × 11 cols | columns: ['objectid', 'municipality', 'county', 'gnis', 'utility', 'year', 'sector', 'electricity_k_wh']...
+2026-06-29 12:01:40,612 | INFO     | data_pipeline.loaders | Loaded nj_retail_prices: 303 rows × 5 cols | columns: ['month_str', 'price_cents_kwh', 'date', 'year', 'month']
+2026-06-29 12:01:40,626 | INFO     | data_pipeline.loaders | Loaded avg_price_electricity (raw): 51 rows × 6 cols | columns: [0, 1, 2, 3, 4, 5]
+2026-06-29 12:01:40,645 | INFO     | data_pipeline.loaders | Loaded sales_of_electricity (raw): 67 rows × 11 cols | columns: [0, 1, 2, 3, 4, 5, 6, 7]...
+2026-06-29 12:01:40,665 | INFO     | data_pipeline.loaders | Loaded eia_residential_prices: 13,260 rows × 6 cols | columns: ['date', 'state', 'state_name', 'price_cents_per_k_wh', 'year', 'month']
+2026-06-29 12:01:40,678 | INFO     | data_pipeline.loaders | Loaded weather: 2,557 rows × 7 cols | columns: ['date', 'station', 'avg_temp_f', 'hdd', 'cdd', 'precip_in', 'humidity_pct']
+2026-06-29 12:01:40,682 | INFO     | data_pipeline.loaders | Loaded air_temp: 1,231 rows × 6 cols | columns: ['station', 'name', 'date', 'tavg', 'tmax', 'tmin']
+2026-06-29 12:01:40,692 | INFO     | data_pipeline.loaders | Loaded cpi_monthly (cached): 120 rows × 3 cols | columns: ['year', 'month', 'cpi']
+2026-06-29 12:01:40,702 | INFO     | data_pipeline.loaders | Loaded cpi_yearly (cached): 10 rows × 4 cols | columns: ['year', 'cpi_annual_avg', 'deflator', 'inflation_pct']
+2026-06-29 12:01:40,705 | INFO     | data_pipeline.loaders | Loaded pseg_rate_history: 272 rows × 23 cols | columns: ['date', 'year', 'month', 'season', 'tier', 'distribution_rate', 'riders_adj_sbc_nug_etc', 'total_delivery_rate']...
+2026-06-29 12:01:40,831 | INFO     | data_pipeline.loaders | Loaded eia861/Sales_Ult_Cust_master.csv: 31,995 rows × 31 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'unnamed_6']...
+2026-06-29 12:01:40,937 | INFO     | data_pipeline.loaders | Loaded eia861/Operational_Data_master.csv: 21,134 rows × 38 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'demand']...
+2026-06-29 12:01:40,999 | INFO     | data_pipeline.loaders | Loaded eia861/Utility_Data_master.csv: 20,986 rows × 37 cols | columns: ['year', 'utility_characteristics', 'unnamed_1', 'unnamed_2', 'unnamed_3', 'unnamed_4', 'unnamed_5', 'also_operating_in_other_nerc_regions']...
+2026-06-29 12:01:41,000 | INFO     | data_pipeline.loaders | Loading complete: 15 datasets loaded, 127,230 total rows
+2026-06-29 12:01:41,000 | INFO     | data_pipeline.api_fetchers | ======================================================================
+2026-06-29 12:01:41,000 | INFO     | data_pipeline.api_fetchers | STAGE 2: Fetching BLS CPI data
+2026-06-29 12:01:41,001 | INFO     | data_pipeline.api_fetchers | ======================================================================
+2026-06-29 12:01:41,002 | INFO     | data_pipeline.api_fetchers | Force mode: fetching all years 2015–2025
+2026-06-29 12:01:41,002 | INFO     | data_pipeline.api_fetchers | Missing years to fetch: [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]
+2026-06-29 12:01:41,003 | INFO     | data_pipeline.api_fetchers | BLS API request: CUSR0000SA0 [2015–2025]
+2026-06-29 12:01:46,366 | INFO     | models.demand_model | DemandResponseModel trained: R²=0.9044, MAE=38.7 kWh, ε=-0.0358, α=1.9307, 134ms
+2026-06-29 12:01:46,366 | INFO     | api.main | DemandResponseModel trained (elasticity=-0.0358)
+2026-06-29 12:01:46,846 | ERROR    | data_pipeline.api_fetchers | Failed to fetch CPI for 2015–2025: could not convert string to float: '-'
+2026-06-29 12:01:46,847 | INFO     | data_pipeline.api_fetchers | Falling back to cached data if available.
+2026-06-29 12:01:46,849 | WARNING  | data_pipeline.api_fetchers | API fetch returned no data; using cached CPI data.
+2026-06-29 12:01:46,851 | INFO     | data_pipeline.noaa_fetcher | ======================================================================
+2026-06-29 12:01:46,851 | INFO     | data_pipeline.noaa_fetcher | STAGE 3a: Fetching NOAA Weather data
+2026-06-29 12:01:46,851 | INFO     | data_pipeline.noaa_fetcher | ======================================================================
+2026-06-29 12:01:46,851 | WARNING  | data_pipeline.config | Environment variable NOAA_TOKEN not set. API calls requiring this key will fail.
+2026-06-29 12:01:46,852 | WARNING  | data_pipeline.noaa_fetcher | NOAA_TOKEN is not set. Falling back to synthetic weather generation.
+2026-06-29 12:01:46,852 | INFO     | data_pipeline.noaa_fetcher | Generating realistic fallback weather data for NJ...
+2026-06-29 12:01:46,899 | INFO     | data_pipeline.census_fetcher | ======================================================================
+2026-06-29 12:01:46,899 | INFO     | data_pipeline.census_fetcher | STAGE 3b: Fetching US Census Demographics
+2026-06-29 12:01:46,899 | INFO     | data_pipeline.census_fetcher | ======================================================================
+2026-06-29 12:01:46,899 | WARNING  | data_pipeline.config | Environment variable CENSUS_API_KEY not set. API calls requiring this key will fail.
+2026-06-29 12:01:46,900 | WARNING  | data_pipeline.census_fetcher | CENSUS_API_KEY is not set. Using fallback Census demographics for NJ.
+2026-06-29 12:01:46,901 | INFO     | data_pipeline.census_fetcher | Generating realistic fallback Census data for NJ...
+2026-06-29 12:01:46,905 | INFO     | data_pipeline.pjm_realtime_fetcher | ======================================================================
+2026-06-29 12:01:46,906 | INFO     | data_pipeline.pjm_realtime_fetcher | STAGE 3c: Fetching PJM Market data
+2026-06-29 12:01:46,906 | INFO     | data_pipeline.pjm_realtime_fetcher | ======================================================================
+2026-06-29 12:01:46,906 | WARNING  | data_pipeline.config | Environment variable PJM_API_KEY not set. API calls requiring this key will fail.
+2026-06-29 12:01:46,906 | WARNING  | data_pipeline.pjm_realtime_fetcher | PJM_API_KEY is not set. Using synthetic PJM market data.
+2026-06-29 12:01:46,907 | INFO     | data_pipeline.pjm_realtime_fetcher | Generating realistic fallback PJM market data for PSEG...
+2026-06-29 12:01:46,935 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 12:01:46,935 | INFO     | data_pipeline.pipeline_runner | STAGE 3: Preprocessing Datasets
+2026-06-29 12:01:46,935 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 12:01:47,023 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 12:01:47,024 | INFO     | data_pipeline.eia861_processor | EIA-861 FULL PROCESSING PIPELINE
+2026-06-29 12:01:47,024 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 12:01:47,024 | INFO     | data_pipeline.eia861_processor | Processing Sales: Sales_Ult_Cust_master.csv
+2026-06-29 12:01:47,236 | INFO     | data_pipeline.eia861_processor |   Sales: 29108 rows, 10 years, 51 states
+2026-06-29 12:01:47,331 | INFO     | data_pipeline.eia861_processor | Processing Net Metering (Utility): Net_Metering_net_metering_states_master.csv
+2026-06-29 12:01:47,358 | INFO     | data_pipeline.eia861_processor |   Net Metering Utility: 1050 rows
+2026-06-29 12:01:47,362 | INFO     | data_pipeline.eia861_processor | Processing Demand Response: Demand_Response_demand_response_states_master.csv
+2026-06-29 12:01:47,397 | INFO     | data_pipeline.eia861_processor |   Demand Response: 388 rows, 54 active
+2026-06-29 12:01:47,400 | INFO     | data_pipeline.eia861_processor | Processing Dynamic Pricing: Dynamic_Pricing_dynamic_pricing_states_master.csv
+2026-06-29 12:01:47,434 | INFO     | data_pipeline.eia861_processor |   Dynamic Pricing: 108 rows, 103 active
+2026-06-29 12:01:47,437 | INFO     | data_pipeline.eia861_processor | Processing Net Metering (State): Net_Metering_states_state_level_master.csv
+2026-06-29 12:01:47,454 | INFO     | data_pipeline.eia861_processor |   Net Metering State: 51 rows
+2026-06-29 12:01:47,455 | INFO     | data_pipeline.eia861_processor | Processing Operational Data: Operational_Data_master.csv
+2026-06-29 12:01:47,591 | INFO     | data_pipeline.eia861_processor |   Operational: 18768 rows
+2026-06-29 12:01:47,635 | INFO     | data_pipeline.eia861_processor | Processing Service Territory: Service_Territory_counties_states_master.csv
+2026-06-29 12:01:47,730 | INFO     | data_pipeline.eia861_processor |   Service Territory: 12073 rows, 51 states
+2026-06-29 12:01:47,738 | INFO     | data_pipeline.eia861_processor | Merging datasets...
+2026-06-29 12:01:47,920 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 12:01:47,920 | INFO     | data_pipeline.eia861_processor | EIA-861 MASTER: 29108 rows × 14 cols
+2026-06-29 12:01:47,920 | INFO     | data_pipeline.eia861_processor | Years: [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+2026-06-29 12:01:47,922 | INFO     | data_pipeline.eia861_processor | States: 51
+2026-06-29 12:01:47,922 | INFO     | data_pipeline.eia861_processor | Saved to: C:\Users\dukar\OneDrive\Desktop\Electric\data\processed\eia861\eia861_master_clean.csv
+2026-06-29 12:01:47,923 | INFO     | data_pipeline.eia861_processor | ======================================================================
+2026-06-29 12:01:47,924 | INFO     | data_pipeline.validators | ======================================================================
+2026-06-29 12:01:47,924 | INFO     | data_pipeline.validators | STAGE 4: Validating Datasets
+2026-06-29 12:01:47,924 | INFO     | data_pipeline.validators | ======================================================================
+2026-06-29 12:01:47,925 | INFO     | data_pipeline.validators | [bgs_auction] Coverage: 2002 - 2026
+2026-06-29 12:01:47,927 | INFO     | data_pipeline.validators | [municipal_energy] Coverage: 2015 - 2023
+2026-06-29 12:01:47,927 | INFO     | data_pipeline.validators | [community_energy] Coverage: 2016 - 2023
+2026-06-29 12:01:47,928 | INFO     | data_pipeline.validators | [nj_retail_prices] Coverage: 2001 - 2026
+2026-06-29 12:01:47,928 | INFO     | data_pipeline.validators | [eia_residential_prices] Coverage: 2005 - 2026
+2026-06-29 12:01:47,929 | INFO     | data_pipeline.validators | [weather_monthly] Coverage: 2019 - 2025
+2026-06-29 12:01:47,931 | INFO     | data_pipeline.validators | [cpi_monthly] Coverage: 2015 - 2024
+2026-06-29 12:01:47,932 | WARNING  | data_pipeline.validators | [bgs_auction] Columns exceeding 10.0% missing values:
+2026-06-29 12:01:47,932 | WARNING  | data_pipeline.validators |   - final_price_k_wh: 47.1%
+2026-06-29 12:01:47,932 | WARNING  | data_pipeline.validators |   - final_price_m_wday: 52.9%
+2026-06-29 12:01:47,951 | INFO     | data_pipeline.validators | Validation complete.
+2026-06-29 12:01:47,951 | INFO     | data_pipeline.merger | ======================================================================
+2026-06-29 12:01:47,952 | INFO     | data_pipeline.merger | STAGE 5: Merging Datasets
+2026-06-29 12:01:47,952 | INFO     | data_pipeline.merger | ======================================================================
+2026-06-29 12:01:47,952 | INFO     | data_pipeline.merger | Spine initialized with 303 rows (NJ retail prices)
+2026-06-29 12:01:47,954 | INFO     | data_pipeline.merger | Joined CPI: 303 rows
+2026-06-29 12:01:47,956 | INFO     | data_pipeline.merger | Joined Weather: 303 rows
+2026-06-29 12:01:47,958 | INFO     | data_pipeline.merger | Computed real_price_cents_kwh (base year: 2024, base CPI: 313.70)
+2026-06-29 12:01:47,959 | INFO     | data_pipeline.merger | Master dataset built successfully: 303 rows, 11 columns
+2026-06-29 12:01:47,960 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 12:01:47,960 | INFO     | data_pipeline.pipeline_runner | STAGE 6: Saving Outputs
+2026-06-29 12:01:47,961 | INFO     | data_pipeline.pipeline_runner | ======================================================================
+2026-06-29 12:01:47,963 | INFO     | data_pipeline.pipeline_runner | Saved bgs_auction.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 12:01:47,996 | INFO     | data_pipeline.pipeline_runner | Saved community_energy.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 12:01:48,036 | INFO     | data_pipeline.pipeline_runner | Saved municipal_energy.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 12:01:48,039 | INFO     | data_pipeline.pipeline_runner | Saved nj_retail_prices.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 12:01:48,075 | INFO     | data_pipeline.pipeline_runner | Saved eia_residential_prices.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 12:01:48,081 | INFO     | data_pipeline.pipeline_runner | Saved weather_monthly.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 12:01:48,084 | INFO     | data_pipeline.pipeline_runner | Saved final_master_dataset.csv to C:\Users\dukar\OneDrive\Desktop\Electric\data\processed
+2026-06-29 12:01:48,087 | INFO     | database.seed | ======================================================================
+2026-06-29 12:01:48,087 | INFO     | database.seed | DATABASE SEED — Loading existing data into PostgreSQL
+2026-06-29 12:01:48,088 | INFO     | database.seed | ======================================================================
+2026-06-29 12:01:48,088 | INFO     | database.connection | No PostgreSQL config found — using SQLite fallback
+2026-06-29 12:01:48,096 | INFO     | database.seed | force=True, clearing existing tables before seeding...
+2026-06-29 12:01:48,495 | INFO     | database.seed | Cleared all existing tables successfully.
+2026-06-29 12:01:48,518 | INFO     | database.seed | Seeded 84 billing records
+2026-06-29 12:01:48,806 | INFO     | database.seed | Seeded 1231 raw_weather + 1231 weather_index records
+2026-06-29 12:01:48,859 | INFO     | database.seed | Seeded 408 state benchmark records
+2026-06-29 12:01:48,868 | INFO     | database.seed | Seeded 8 tariff/plan records
+2026-06-29 12:01:48,903 | INFO     | database.seed | Seeded 204 BGS Auction rates
+2026-06-29 12:01:49,368 | INFO     | database.seed | Seeded 4506 Community Energy records
+2026-06-29 12:01:50,552 | INFO     | database.seed | Seeded 15249 Municipal Energy records
+2026-06-29 12:02:04,108 | INFO     | database.seed | Seeded 13260 State Monthly Price records
+2026-06-29 12:02:17,443 | INFO     | database.seed | Seeded 29108 EIA-861 master records
+2026-06-29 12:02:20,960 | INFO     | database.seed | Seeded 2736 weather_openmeteo records
+2026-06-29 12:02:23,704 | INFO     | api.services.causal_model_service | EconML available — will use LinearDML for causal inference
+2026-06-29 12:02:31,555 | INFO     | api.services.causal_model_service |   DML(bgs_rate): θ=1286.41, p=0.0000
+2026-06-29 12:02:32,719 | INFO     | api.services.causal_model_service |   DML(distribution_rate): θ=3431.84, p=0.0000
+2026-06-29 12:02:33,614 | INFO     | api.services.causal_model_service |   DML(transmission_rate): θ=3247.20, p=0.0000
+2026-06-29 12:02:34,390 | INFO     | api.services.causal_model_service |   DML(sbc_rate): θ=6198.97, p=0.0000
+2026-06-29 12:02:35,502 | INFO     | api.services.causal_model_service |   DML(avg_lmp): θ=13.43, p=0.0003
+2026-06-29 12:02:35,503 | INFO     | api.main | CausalModelService (DML) fitted
+2026-06-29 12:02:35,518 | INFO     | api.main | Rate covariance matrix built
+2026-06-29 12:02:36,236 | INFO     | database.seed | Seeded 10724 daily_subba_demand records
+2026-06-29 12:02:36,260 | INFO     | database.seed | Seed complete: {'billing': 84, 'weather': 1231, 'benchmarks': 408, 'plans': 8, 'bgs_auction': 204, 'community_energy': 4506, 'municipal_energy': 15249, 'state_monthly': 13260, 'eia861': 29108, 'weather_openmeteo': 2736, 'daily_subba_demand': 10724}
+2026-06-29 12:02:36,261 | INFO     | data_pipeline.pipeline_runner | Successfully loaded processed data into PostgreSQL database
+2026-06-29 12:02:36,262 | INFO     | data_pipeline.pipeline_runner | Pipeline completed successfully.
+2026-06-29 12:02:36,298 | INFO     | orchestration.tasks | Scheduled ETL pipeline completed in 56.1s. Outputs: {'bgs_auction': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\bgs_auction.csv', 'community_energy': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\community_energy.csv', 'municipal_energy': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\municipal_energy.csv', 'nj_retail_prices': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\nj_retail_prices.csv', 'eia_residential_prices': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\eia_residential_prices.csv', 'weather_monthly': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\weather_monthly.csv', 'master': 'C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\final_master_dataset.csv'}
+2026-06-29 12:02:36,299 | INFO     | orchestration.scheduler | Scheduler triggering job 'Fetch EIA Demand + Retrain Forecast'
+2026-06-29 12:02:36,299 | INFO     | orchestration.tasks | Executing scheduled job: fetch_eia_demand_task
+2026-06-29 12:02:36,318 | INFO     | data_pipeline.eia_demand_fetcher | Incremental mode (DB): existing data through 2026-06-26, fetching from 2026-06-27
+2026-06-29 12:02:36,319 | INFO     | data_pipeline.eia_demand_fetcher | EIA fetch page 1 (offset=0, 2026-06-27 → 2026-06-29)...
+2026-06-29 12:02:37,073 | INFO     | models.forecast_model | Loaded 10724 demand records from database
+2026-06-29 12:02:37,251 | INFO     | models.forecast_model | Loaded 2736 weather records from database
+2026-06-29 12:02:37,268 | INFO     | models.forecast_model | Successfully merged weather data (temp_avg, hdd, cdd).
+2026-06-29 12:02:37,276 | INFO     | models.forecast_model | Prepared 2734 days of PJM demand data (2019-01-01 to 2026-06-26)
+2026-06-29 12:02:37,295 | INFO     | models.forecast_model | Applied forecast weather noise (σ=1.5°C) to 30 test rows to prevent data leakage.
+2026-06-29 12:02:40,055 | INFO     | cmdstanpy | Chain [1] start processing
+2026-06-29 12:02:42,239 | INFO     | cmdstanpy | Chain [1] done processing
+2026-06-29 12:02:47,612 | INFO     | data_pipeline.eia_demand_fetcher |   4 records fetched | total: 4 | pages: 1
+2026-06-29 12:02:47,643 | INFO     | data_pipeline.eia_demand_fetcher | EIA download complete — 4 records total
+2026-06-29 12:02:47,905 | INFO     | data_pipeline.eia_demand_fetcher | Upserted 4 demand records to database
+2026-06-29 12:02:47,933 | INFO     | data_pipeline.eia_demand_fetcher | Appended 4 new records to database.
+2026-06-29 12:02:49,514 | INFO     | orchestration.tasks | EIA demand data updated in 13.2s
+2026-06-29 12:02:49,545 | INFO     | data_pipeline.weather_service | Weather data is already up to date (checked database).
+2026-06-29 12:02:49,780 | INFO     | orchestration.tasks | Open-Meteo weather updated in 0.3s
+2026-06-29 12:02:49,794 | INFO     | orchestration.tasks | Executing scheduled job: retrain_forecast_models_task
+2026-06-29 12:02:50,845 | INFO     | models.forecast_model | Loaded 10728 demand records from database
+2026-06-29 12:02:51,292 | INFO     | models.forecast_model | Loaded 2736 weather records from database
+2026-06-29 12:02:51,377 | INFO     | models.forecast_model | Successfully merged weather data (temp_avg, hdd, cdd).
+2026-06-29 12:02:51,424 | INFO     | models.forecast_model | Prepared 2735 days of PJM demand data (2019-01-01 to 2026-06-27)
+2026-06-29 12:02:51,502 | INFO     | models.forecast_model | Applied forecast weather noise (σ=1.5°C) to 30 test rows to prevent data leakage.
+2026-06-29 12:02:54,509 | INFO     | models.forecast_model | Ensemble Evaluation Metrics: {'MAE': 7391.721612391581, 'RMSE': 9216.886706688983, 'MAPE': 3.810845315835947}
+2026-06-29 12:02:54,512 | INFO     | api.main | Demand Forecast ensemble trained and ready
+2026-06-29 12:02:55,744 | INFO     | cmdstanpy | Chain [1] start processing
+2026-06-29 12:02:55,921 | INFO     | api.main | Loaded database tables: bgs_auction=204, community_energy=4506, municipal_energy=15249, state_monthly_prices=13260, eia861_master=29108
+2026-06-29 12:02:56,946 | INFO     | cmdstanpy | Chain [1] done processing
+2026-06-29 12:02:57,354 | INFO     | api.main | Geo monthly data built from real EIA monthly prices: 13260 records
+2026-06-29 12:02:57,355 | INFO     | api.main | Initialization complete -- all systems ready
+2026-06-29 12:03:07,549 | INFO     | models.forecast_model | Ensemble Evaluation Metrics: {'MAE': 6248.558731473323, 'RMSE': 7919.601066320812, 'MAPE': 3.2438726630123935}
+2026-06-29 12:03:07,550 | INFO     | orchestration.tasks | Retraining of forecasting models completed in 17.7s
+2026-06-29 12:03:07,550 | INFO     | orchestration.tasks | Full pipeline (demand + weather + retrain) completed in 31.3s
+2026-06-29 12:03:07,551 | INFO     | orchestration.scheduler | Scheduler triggering job 'Update Elasticity Model'
+2026-06-29 12:03:07,551 | INFO     | orchestration.tasks | Executing scheduled job: update_elasticity_model_task
+2026-06-29 12:03:07,552 | INFO     | data_pipeline.cleaners | Running cleaning pipeline...
+2026-06-29 12:03:07,588 | INFO     | data_pipeline.cleaners | Cleaned: billing=84, weather=2557, market=2557
+2026-06-29 12:03:07,588 | INFO     | data_pipeline.features | Building feature matrix...
+2026-06-29 12:03:07,589 | INFO     | data_pipeline.features | Reading NOAA daily temperature observations from air_temp.csv...
+2026-06-29 12:03:07,612 | INFO     | data_pipeline.features | Successfully aggregated NOAA observations: 41 months.
+2026-06-29 12:03:07,707 | INFO     | data_pipeline.features | Feature matrix: 72 rows, 69 features
+2026-06-29 12:03:08,103 | INFO     | models.demand_model | DemandResponseModel trained: R²=0.9044, MAE=38.7 kWh, ε=-0.0358, α=1.9307, 394ms
+2026-06-29 12:03:08,104 | INFO     | orchestration.tasks | Demand response elasticity model updated in 0.6s
+2026-06-29 12:04:56,497 | INFO     | data_pipeline.weather_service | Fetched 1-day weather forecast from Open-Meteo
+2026-06-29 12:04:56,505 | WARNING  | models.forecast_model | 1 forecast days still missing weather after interpolation — dropping those days from forecast.
+2026-06-29 12:04:56,508 | INFO     | models.forecast_model | Using REAL Open-Meteo forecast weather for 0 days
+2026-06-29 12:05:00,932 | INFO     | models.impact_model | Calibrating weather attribution from air_temp.csv and billing.csv...
+2026-06-29 12:05:01,073 | INFO     | models.impact_model | Weather OLS Regression Calibrated on Effective kWh: Int=717.4, CDD=1.205, HDD=0.228
+2026-06-29 12:14:35,128 | INFO     | models.impact_model | Calibrating weather attribution from air_temp.csv and billing.csv...
+2026-06-29 12:14:35,282 | INFO     | models.impact_model | Weather OLS Regression Calibrated on Effective kWh: Int=717.4, CDD=1.205, HDD=0.228
+2026-06-29 13:04:36,657 | INFO     | data_pipeline.weather_service | Fetched 1-day weather forecast from Open-Meteo
+2026-06-29 13:04:36,678 | WARNING  | models.forecast_model | 1 forecast days still missing weather after interpolation — dropping those days from forecast.
+2026-06-29 13:04:36,681 | INFO     | models.forecast_model | Using REAL Open-Meteo forecast weather for 0 days
+2026-06-29 13:05:10,606 | INFO     | models.impact_model | Calibrating weather attribution from air_temp.csv and billing.csv...
+2026-06-29 13:05:10,748 | INFO     | models.impact_model | Weather OLS Regression Calibrated on Effective kWh: Int=717.4, CDD=1.205, HDD=0.228
+2026-06-29 13:14:07,108 | INFO     | models.impact_model | Calibrating weather attribution from air_temp.csv and billing.csv...
+2026-06-29 13:14:07,248 | INFO     | models.impact_model | Weather OLS Regression Calibrated on Effective kWh: Int=717.4, CDD=1.205, HDD=0.228
+2026-06-29 13:46:39,841 | INFO     | models.impact_model | Calibrating weather attribution from air_temp.csv and billing.csv...
+2026-06-29 13:46:39,980 | INFO     | models.impact_model | Weather OLS Regression Calibrated on Effective kWh: Int=717.4, CDD=1.205, HDD=0.228
+2026-06-29 13:46:48,169 | INFO     | data_pipeline.weather_service | Fetched 1-day weather forecast from Open-Meteo
+2026-06-29 13:46:48,186 | WARNING  | models.forecast_model | 1 forecast days still missing weather after interpolation — dropping those days from forecast.
+2026-06-29 13:46:48,189 | INFO     | models.forecast_model | Using REAL Open-Meteo forecast weather for 0 days
+2026-06-29 13:50:11,921 | INFO     | api.main | Shutting down...
+2026-06-29 13:50:11,942 | INFO     | database.connection | Database connection pool closed

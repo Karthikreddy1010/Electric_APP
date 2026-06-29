@@ -67,91 +67,207 @@ def merge_weather_monthly(billing_df: pd.DataFrame,
                           weather_df: pd.DataFrame) -> pd.DataFrame:
     """
     Aggregate daily weather to monthly and merge with billing.
-    Reads daily NOAA air_temp.csv if available to compute monthly_CDD and monthly_HDD.
-    Key features: monthly_CDD, monthly_HDD, avg temp, temp variance.
+    Hybrid loading strategy:
+      1. Processed CSV (weather_monthly.csv)
+      2. Open-Meteo DB (weather_openmeteo)
+      3. Fallback to NOAA air_temp.csv or synthetic weather_df
     """
     import os
+    import numpy as np
     from pathlib import Path
-    
-    raw_dir = Path(__file__).resolve().parent.parent / "data" / "raw"
-    csv_path = raw_dir / "air_temp.csv"
-    
-    noaa_monthly = None
-    if csv_path.exists():
-        try:
-            logger.info("Reading NOAA daily temperature observations from air_temp.csv...")
-            noaa_df = pd.read_csv(csv_path)
-            noaa_df["DATE"] = pd.to_datetime(noaa_df["DATE"])
-            
-            # Fill missing TAVG using (TMAX + TMIN)/2
-            if "TAVG" not in noaa_df.columns:
-                noaa_df["TAVG"] = np.nan
-            tavg_calc = (noaa_df["TMAX"].astype(float) + noaa_df["TMIN"].astype(float)) / 2.0
-            noaa_df["TAVG"] = noaa_df["TAVG"].fillna(tavg_calc)
-            
-            # Clip outlier temperatures
-            noaa_df["TAVG"] = noaa_df["TAVG"].clip(-30, 120)
-            
-            # Compute CDD / HDD with 65°F base
-            noaa_df["cdd_calc"] = np.maximum(noaa_df["TAVG"] - 65.0, 0)
-            noaa_df["hdd_calc"] = np.maximum(65.0 - noaa_df["TAVG"], 0)
-            
-            # Group monthly
-            noaa_df["year_month"] = noaa_df["DATE"].dt.to_period("M")
-            noaa_monthly = noaa_df.groupby("year_month").agg(
-                monthly_CDD=("cdd_calc", "sum"),
-                monthly_HDD=("hdd_calc", "sum"),
-                avg_temp=("TAVG", "mean"),
-                temp_std=("TAVG", "std"),
-                max_temp=("TAVG", "max"),
-                min_temp=("TAVG", "min")
-            ).reset_index()
-            logger.info(f"Successfully aggregated NOAA observations: {len(noaa_monthly)} months.")
-        except Exception as e:
-            logger.error(f"Error parsing NOAA daily air_temp.csv: {e}. Falling back to standard weather.")
-            
-    # Load and clean standard weather fallback
-    weather = weather_df.copy()
-    weather["date"] = pd.to_datetime(weather["date"])
-    weather["year_month"] = weather["date"].dt.to_period("M")
-    
-    monthly_weather = weather.groupby("year_month").agg(
-        monthly_hdd=("hdd", "sum"),
-        monthly_cdd=("cdd", "sum"),
-        avg_temp_std=("avg_temp_f", "std"),
-        max_temp_std=("avg_temp_f", "max"),
-        min_temp_std=("avg_temp_f", "min"),
-    ).reset_index()
     
     billing = billing_df.copy()
     billing["date"] = pd.to_datetime(billing["date"])
     billing["year_month"] = billing["date"].dt.to_period("M")
+    billing_months = set(billing["year_month"].unique())
+
+    # --- 1. Try Processed CSV ---
+    project_root = Path(__file__).resolve().parent.parent
+    processed_csv_path = project_root / "data" / "processed" / "weather_monthly.csv"
     
-    # Merge NOAA monthly data or standard weather
-    if noaa_monthly is not None:
-        merged = billing.merge(noaa_monthly, on="year_month", how="left")
-        # Fill any missing periods gracefully using the fallback standard weather
-        merged = merged.merge(monthly_weather, on="year_month", how="left")
-        merged["monthly_CDD"] = merged["monthly_CDD"].fillna(merged["monthly_cdd"])
-        merged["monthly_HDD"] = merged["monthly_HDD"].fillna(merged["monthly_hdd"])
-        merged["avg_temp"] = merged["avg_temp"].fillna(merged["avg_temp_std"])
-        merged["temp_std"] = merged["temp_std"].fillna(merged["avg_temp_std"])
-        merged["max_temp"] = merged["max_temp"].fillna(merged["max_temp_std"])
-        merged["min_temp"] = merged["min_temp"].fillna(merged["min_temp_std"])
-        merged = merged.drop(columns=["monthly_cdd", "monthly_hdd", "avg_temp_std", "max_temp_std", "min_temp_std"])
-    else:
-        merged = billing.merge(monthly_weather, on="year_month", how="left")
-        merged["monthly_CDD"] = merged["monthly_cdd"]
-        merged["monthly_HDD"] = merged["monthly_hdd"]
-        merged["avg_temp"] = merged["avg_temp_std"]
-        merged["temp_std"] = merged["avg_temp_std"]
-        merged["max_temp"] = merged["max_temp_std"]
-        merged["min_temp"] = merged["min_temp_std"]
-        merged = merged.drop(columns=["monthly_cdd", "monthly_hdd", "avg_temp_std", "max_temp_std", "min_temp_std"])
+    csv_weather = None
+    if processed_csv_path.exists():
+        try:
+            temp_df = pd.read_csv(processed_csv_path)
+            # Create year_month from year and month
+            temp_df["year_month"] = pd.to_datetime(
+                temp_df["year"].astype(str) + "-" + temp_df["month"].astype(str).str.zfill(2) + "-01"
+            ).dt.to_period("M")
+            
+            csv_months = set(temp_df["year_month"].unique())
+            if billing_months.issubset(csv_months):
+                logger.info("Using complete processed weather from weather_monthly.csv")
+                csv_weather = temp_df
+                # Standardize csv_weather columns
+                csv_weather = csv_weather.rename(columns={
+                    "total_hdd": "monthly_HDD",
+                    "total_cdd": "monthly_CDD",
+                    "avg_temp_f": "avg_temp",
+                })
+                # Add dummy columns for min/max/std if missing to be filled later
+                for col in ["temp_std", "max_temp", "min_temp"]:
+                    if col not in csv_weather.columns:
+                        csv_weather[col] = np.nan
+            else:
+                logger.info("Processed weather_monthly.csv is incomplete/outdated. Will fallback to Open-Meteo DB.")
+        except Exception as e:
+            logger.error(f"Error reading weather_monthly.csv: {e}")
+
+    # --- 2. Try Open-Meteo DB ---
+    db_weather = None
+    if csv_weather is None:
+        try:
+            from database.connection import get_sync_session
+            from database.models import WeatherOpenMeteo
+            with get_sync_session() as session:
+                rows = session.query(WeatherOpenMeteo).order_by(WeatherOpenMeteo.date.asc()).all()
+                if rows:
+                    records = []
+                    for r in rows:
+                        records.append({
+                            "date": pd.Timestamp(r.date),
+                            "temp_avg": r.temp_avg,
+                            "temp_max": r.temp_max,
+                            "temp_min": r.temp_min
+                        })
+                    db_df = pd.DataFrame(records)
+                    
+                    # Convert from Celsius to Fahrenheit
+                    for col in ["temp_avg", "temp_max", "temp_min"]:
+                        db_df[col] = (db_df[col] * 9/5) + 32.0
+                        
+                    # Calculate CDD and HDD base 65F
+                    db_df["cdd"] = np.maximum(db_df["temp_avg"] - 65.0, 0)
+                    db_df["hdd"] = np.maximum(65.0 - db_df["temp_avg"], 0)
+                    
+                    db_df["year_month"] = db_df["date"].dt.to_period("M")
+                    db_monthly = db_df.groupby("year_month").agg(
+                        monthly_CDD=("cdd", "sum"),
+                        monthly_HDD=("hdd", "sum"),
+                        avg_temp=("temp_avg", "mean"),
+                        temp_std=("temp_avg", "std"),
+                        max_temp=("temp_max", "max"),
+                        min_temp=("temp_min", "min")
+                    ).reset_index()
+                    
+                    db_months = set(db_monthly["year_month"].unique())
+                    if billing_months.issubset(db_months):
+                        logger.info("Using complete weather from Open-Meteo DB")
+                        db_weather = db_monthly
+                    else:
+                        logger.info("Open-Meteo DB is incomplete. Will use standard fallback.")
+        except Exception as e:
+            logger.error(f"Error reading from Open-Meteo DB: {e}")
+
+    # --- 3. Fallback (NOAA CSV or Synthetic) ---
+    fallback_weather = None
+    if csv_weather is None and db_weather is None:
+        raw_dir = project_root / "data" / "raw"
+        csv_path = raw_dir / "air_temp.csv"
         
-    merged = merged.drop(columns=["year_month"])
+        if csv_path.exists():
+            try:
+                logger.info("Reading NOAA daily temperature observations from air_temp.csv...")
+                noaa_df = pd.read_csv(csv_path)
+                noaa_df["DATE"] = pd.to_datetime(noaa_df["DATE"])
+                
+                # Fill missing TAVG using (TMAX + TMIN)/2
+                if "TAVG" not in noaa_df.columns:
+                    noaa_df["TAVG"] = np.nan
+                tavg_calc = (noaa_df["TMAX"].astype(float) + noaa_df["TMIN"].astype(float)) / 2.0
+                noaa_df["TAVG"] = noaa_df["TAVG"].fillna(tavg_calc)
+                
+                # Clip outlier temperatures
+                noaa_df["TAVG"] = noaa_df["TAVG"].clip(-30, 120)
+                
+                # Compute CDD / HDD with 65°F base
+                noaa_df["cdd_calc"] = np.maximum(noaa_df["TAVG"] - 65.0, 0)
+                noaa_df["hdd_calc"] = np.maximum(65.0 - noaa_df["TAVG"], 0)
+                
+                # Group monthly
+                noaa_df["year_month"] = noaa_df["DATE"].dt.to_period("M")
+                fallback_weather = noaa_df.groupby("year_month").agg(
+                    monthly_CDD=("cdd_calc", "sum"),
+                    monthly_HDD=("hdd_calc", "sum"),
+                    avg_temp=("TAVG", "mean"),
+                    temp_std=("TAVG", "std"),
+                    max_temp=("TMAX", "max"),
+                    min_temp=("TMIN", "min")
+                ).reset_index()
+            except Exception as e:
+                logger.error(f"Error parsing NOAA daily air_temp.csv: {e}. Falling back to standard weather.")
+
+    # Always compute a baseline from synthetic weather_df to fill any missing features
+    weather = weather_df.copy()
+    weather["date"] = pd.to_datetime(weather["date"])
+    weather["year_month"] = weather["date"].dt.to_period("M")
+    synthetic_fallback = weather.groupby("year_month").agg(
+        fallback_hdd=("hdd", "sum"),
+        fallback_cdd=("cdd", "sum"),
+        fallback_avg_temp=("avg_temp_f", "mean"),
+        fallback_temp_std=("avg_temp_f", "std"),
+        fallback_max_temp=("avg_temp_f", "max"),
+        fallback_min_temp=("avg_temp_f", "min"),
+    ).reset_index()
+
+    # --- Merge Logic ---
+    if csv_weather is not None:
+        merged = billing.merge(csv_weather, on="year_month", how="left")
+    elif db_weather is not None:
+        merged = billing.merge(db_weather, on="year_month", how="left")
+    elif fallback_weather is not None:
+        merged = billing.merge(fallback_weather, on="year_month", how="left")
+    else:
+        # If all else failed, just use synthetic directly
+        synthetic_mapped = synthetic_fallback.rename(columns={
+            "fallback_hdd": "monthly_HDD",
+            "fallback_cdd": "monthly_CDD",
+            "fallback_avg_temp": "avg_temp",
+            "fallback_temp_std": "temp_std",
+            "fallback_max_temp": "max_temp",
+            "fallback_min_temp": "min_temp",
+        })
+        merged = billing.merge(synthetic_mapped, on="year_month", how="left")
+
+    # Fill missing values from synthetic fallback
+    merged = merged.merge(synthetic_fallback, on="year_month", how="left")
     
-    # Add backward compatible lowercase columns too so other endpoints continue to work without changes
+    # Use fallback where primary is missing
+    if "monthly_CDD" not in merged.columns:
+        merged["monthly_CDD"] = merged["fallback_cdd"]
+    else:
+        merged["monthly_CDD"] = merged["monthly_CDD"].fillna(merged["fallback_cdd"])
+        
+    if "monthly_HDD" not in merged.columns:
+        merged["monthly_HDD"] = merged["fallback_hdd"]
+    else:
+        merged["monthly_HDD"] = merged["monthly_HDD"].fillna(merged["fallback_hdd"])
+        
+    if "avg_temp" not in merged.columns:
+        merged["avg_temp"] = merged["fallback_avg_temp"]
+    else:
+        merged["avg_temp"] = merged["avg_temp"].fillna(merged["fallback_avg_temp"])
+        
+    if "temp_std" not in merged.columns:
+        merged["temp_std"] = merged["fallback_temp_std"]
+    else:
+        merged["temp_std"] = merged["temp_std"].fillna(merged["fallback_temp_std"])
+        
+    if "max_temp" not in merged.columns:
+        merged["max_temp"] = merged["fallback_max_temp"]
+    else:
+        merged["max_temp"] = merged["max_temp"].fillna(merged["fallback_max_temp"])
+        
+    if "min_temp" not in merged.columns:
+        merged["min_temp"] = merged["fallback_min_temp"]
+    else:
+        merged["min_temp"] = merged["min_temp"].fillna(merged["fallback_min_temp"])
+    
+    # Cleanup extra columns
+    cols_to_drop = ["year_month", "year", "month", "avg_humidity"] + [c for c in merged.columns if c.startswith("fallback_")]
+    merged = merged.drop(columns=cols_to_drop, errors="ignore")
+    
+    # Add backward compatible lowercase columns
     merged["monthly_cdd"] = merged["monthly_CDD"]
     merged["monthly_hdd"] = merged["monthly_HDD"]
     
