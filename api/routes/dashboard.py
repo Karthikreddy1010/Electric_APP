@@ -5,7 +5,7 @@ from api.schemas import (
     OverviewResponse, ForecastResponse, ImpactResponse, SimulateRequest, 
     SimulateResult, BenchmarkResponse, GeoResponse, PlanSimResponse,
     OverviewKPI, BillComponent, TrendResponse, GeoTrendPoint, GeoDetailResponse,
-    GeoPoint, ForecastPoint
+    GeoPoint, ForecastPoint, EIA861MSummary
 )
 from api.services.billing_service import build_breakdown, build_trends
 from api.services.bill_impact_engine import bill_impact_engine, COMPONENT_TYPES
@@ -224,6 +224,28 @@ async def get_overview():
     else:
         alerts.append("Rates are currently in the standard winter pricing tier.")
 
+    # 4. EIA-861M monthly summary
+    eia861m_summary = None
+    eia861m_df = app_state.get("eia861m_df")
+    if eia861m_df is not None and not eia861m_df.empty:
+        try:
+            totals = eia861m_df[eia861m_df["sector"] == "total"].copy()
+            if not totals.empty:
+                latest_period = totals["period"].max()
+                latest_data = totals[totals["period"] == latest_period]
+                if not latest_data.empty:
+                    eia861m_summary = EIA861MSummary(
+                        year=int(latest_data["year"].iloc[0]),
+                        month=int(latest_data["month"].iloc[0]),
+                        period=str(latest_period),
+                        monthly_sales_mwh=float(latest_data["sales_mwh"].sum()),
+                        monthly_revenue_k=float(latest_data["revenue_k_dollars"].sum()),
+                        customer_count=int(latest_data["customers"].sum()),
+                        avg_price_cents_kwh=round(float(latest_data["price_cents_kwh"].mean()), 4)
+                    )
+        except Exception as e_summary:
+            logger.warning(f"Error computing eia861m_summary: {e_summary}")
+
     return OverviewResponse(
         kpis=kpis, 
         breakdown=breakdown, 
@@ -234,7 +256,8 @@ async def get_overview():
         state_rank=state_rank,
         state_percentile=state_percentile,
         insights=insights,
-        alerts=alerts
+        alerts=alerts,
+        eia861m_summary=eia861m_summary
     )
 
 

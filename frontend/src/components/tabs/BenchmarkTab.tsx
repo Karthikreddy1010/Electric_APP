@@ -4,9 +4,9 @@ import axios from 'axios';
 import USMap from '../USMap.tsx';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ScatterChart, Scatter, Cell, Legend
+  ScatterChart, Scatter, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { Trophy, TrendingUp, TrendingDown, Globe, MapPin, Activity, BarChart3, Info, Zap } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown, Globe, MapPin, Activity, BarChart3, Info, Zap, Calendar, Building2 } from 'lucide-react';
 
 const REGION_COLORS: Record<string, string> = {
   Northeast: '#6366F1',
@@ -24,6 +24,24 @@ const BenchmarkTab = () => {
     queryKey: ['benchmark', selectedYear],
     queryFn: async () => {
       const res = await axios.get(`/benchmark?year=${selectedYear}&compare_state=NJ`);
+      return res.data;
+    }
+  });
+
+  // Fetch EIA-861M Monthly Trends
+  const { data: monthlyTrends } = useQuery({
+    queryKey: ['eia861m-trends'],
+    queryFn: async () => {
+      const res = await axios.get('/eia861m/trends?sector=total');
+      return res.data;
+    }
+  });
+
+  // Fetch OpenEI Utility Coverage for NJ
+  const { data: njUtilities } = useQuery({
+    queryKey: ['nj-utilities'],
+    queryFn: async () => {
+      const res = await axios.get('/utility/coverage?state=NJ');
       return res.data;
     }
   });
@@ -248,6 +266,75 @@ const BenchmarkTab = () => {
           </div>
         </div>
       )}
+
+      {/* ── 🔹 NEW SECTION: Monthly Trends & Utility Listings (EIA-861M & OpenEI) ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Chart: National Monthly Sales Trends (EIA-861M) */}
+        <div className="card p-6">
+          <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+            <Calendar size={16} className="text-blue-600" /> National Monthly Energy Sales (EIA-861M)
+          </h4>
+          <div className="h-[320px]">
+            {monthlyTrends ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={monthlyTrends.periods.map((p: string, idx: number) => ({
+                  period: p,
+                  sales: monthlyTrends.sales[idx] / 1e6, // MWh to TWh
+                  price: monthlyTrends.prices[idx],
+                })).slice(-36)}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                  <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v.toFixed(1)}TWh`} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v.toFixed(1)}¢`} />
+                  <Tooltip />
+                  <Legend />
+                  <Line yAxisId="left" type="monotone" dataKey="sales" name="Sales (TWh)" stroke="#2563EB" strokeWidth={2} dot={false} />
+                  <Line yAxisId="right" type="monotone" dataKey="price" name="Avg Price (¢/kWh)" stroke="#F59E0B" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-slate-400">Loading monthly trends...</div>
+            )}
+          </div>
+        </div>
+
+        {/* Table: NJ Utility Rate Rankings (OpenEI) */}
+        <div className="card p-6">
+          <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+            <Building2 size={16} className="text-purple-600" /> NJ Utility Service Areas & Rates (OpenEI)
+          </h4>
+          <div className="overflow-x-auto max-h-[320px]">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-100 text-slate-400 font-bold">
+                  <th className="py-2">Utility Name</th>
+                  <th className="py-2">Type</th>
+                  <th className="py-2 text-right">ZIP Codes</th>
+                  <th className="py-2 text-right">Res. Rate</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                {njUtilities ? (
+                  njUtilities.slice(0, 10).map((util: any) => (
+                    <tr key={util.eia_utility_id} className="hover:bg-slate-50/55 transition-colors">
+                      <td className="py-2.5 truncate max-w-[200px]">{util.utility_name}</td>
+                      <td className="py-2.5 text-slate-500">{util.ownership_type || 'Other'}</td>
+                      <td className="py-2.5 text-right text-slate-500">{util.zip_count}</td>
+                      <td className="py-2.5 text-right text-blue-600 font-bold">
+                        {util.residential_rate ? `${(util.residential_rate * 100).toFixed(2)}¢` : '—'}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-slate-400">Loading utilities...</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

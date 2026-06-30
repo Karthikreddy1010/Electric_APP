@@ -10,6 +10,17 @@ const UtilityTab = () => {
   const [selectedState, setSelectedState] = useState<string>('NJ');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedUtilityId, setSelectedUtilityId] = useState<number | null>(null);
+  const [granularity, setGranularity] = useState<'annual' | 'monthly'>('annual');
+
+  // Fetch EIA-861M Monthly State Trends
+  const { data: stateMonthlyData, isLoading: isMonthlyLoading } = useQuery({
+    queryKey: ['eia861m_state_monthly', selectedState],
+    queryFn: async () => {
+      const res = await axios.get(`/eia861m/state/${selectedState}`);
+      return res.data;
+    },
+    enabled: granularity === 'monthly'
+  });
 
   // 1. Fetch available states
   const { data: statesData } = useQuery({
@@ -148,6 +159,25 @@ const UtilityTab = () => {
               {/* Header Card */}
               <div className="card p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[10px] font-black uppercase bg-blue-600/30 text-blue-300 px-2 py-0.5 rounded-md tracking-wider">
+                      {selectedState} Utility Network
+                    </span>
+                    <div className="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50">
+                      <button
+                        onClick={() => setGranularity('annual')}
+                        className={`px-2 py-1 text-[9px] font-black uppercase rounded-md transition-all ${granularity === 'annual' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}`}
+                      >
+                        Annual
+                      </button>
+                      <button
+                        onClick={() => setGranularity('monthly')}
+                        className={`px-2 py-1 text-[9px] font-black uppercase rounded-md transition-all ${granularity === 'monthly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}`}
+                      >
+                        Monthly (EIA-861M)
+                      </button>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2 text-xs font-black uppercase text-blue-400 mb-1">
                     <MapPin size={12} /> {utilityDetail.state} Utility profile
                   </div>
@@ -175,116 +205,215 @@ const UtilityTab = () => {
               </div>
 
               {/* KPI Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="card p-4">
-                  <p className="text-xs text-slate-400 font-bold mb-1">Residential Rate ({latestData.year})</p>
-                  <h4 className="text-2xl font-black text-slate-900">
-                    {latestData.avg_price ? `${(latestData.avg_price / 10).toFixed(2)}¢` : 'N/A'}
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-1">cents/kWh average</p>
-                </div>
-                <div className="card p-4">
-                  <p className="text-xs text-slate-400 font-bold mb-1">Customers Served</p>
-                  <h4 className="text-2xl font-black text-slate-900">
-                    {latestData.total_customers ? latestData.total_customers.toLocaleString() : 'N/A'}
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-1">active accounts</p>
-                </div>
-                <div className="card p-4">
-                  <p className="text-xs text-slate-400 font-bold mb-1">Summer Peak Demand</p>
-                  <h4 className="text-2xl font-black text-slate-900">
-                    {latestData.peak_demand ? `${latestData.peak_demand.toLocaleString()} MW` : 'N/A'}
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-1">grid peak requirement</p>
-                </div>
-                <div className="card p-4">
-                  <p className="text-xs text-slate-400 font-bold mb-1">Net Metering Accounts</p>
-                  <h4 className="text-2xl font-black text-blue-600">
-                    {latestData.nm_customers ? latestData.nm_customers.toLocaleString() : '0'}
-                  </h4>
-                  <p className="text-xs text-slate-400 mt-1">distributed energy users</p>
-                </div>
-              </div>
-
-              {/* Graphs Section */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 1. Price trend */}
-                <div className="card p-6">
-                  <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                    <TrendingUp size={16} className="text-blue-600" /> Historical Price Trend (cents/kWh)
-                  </h4>
-                  <div className="h-[260px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={historyData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                        <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={(v) => [`${Number(v).toFixed(2)}¢/kWh`, 'Price']} />
-                        <Line type="monotone" dataKey="avg_price_cents" stroke="#2563EB" strokeWidth={3} dot={{ r: 4 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+              {granularity === 'monthly' ? (
+                // ── MONTHLY GRANULARITY VIEWS (EIA-861M) ──
+                isMonthlyLoading || !stateMonthlyData ? (
+                  <div className="card p-12 text-center text-slate-400">
+                    <div className="animate-spin h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+                    Loading monthly state trends...
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Monthly Sales Trend */}
+                    <div className="card p-6 border border-slate-100">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <TrendingUp size={16} className="text-blue-600" /> State Monthly Sales (MWh)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
+                            period: p,
+                            sales: stateMonthlyData.sales[idx],
+                          })).slice(-36)}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} MWh`, 'Sales']} />
+                            <Line type="monotone" dataKey="sales" stroke="#2563EB" strokeWidth={3} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
 
-                {/* 2. Customer vs Load */}
-                <div className="card p-6">
-                  <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                    <Zap size={16} className="text-amber-500" /> Customers vs Energy Sold (MWh)
-                  </h4>
-                  <div className="h-[260px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={historyData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                        <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '10px' }} />
-                        <Bar dataKey="total_customers" name="Customers" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="total_sales_mwh" name="Sales (MWh)" fill="#10B981" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+                    {/* Monthly Price Trend */}
+                    <div className="card p-6 border border-slate-100">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <TrendingUp size={16} className="text-teal-600" /> State Average Retail Price (¢/kWh)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
+                            period: p,
+                            price: stateMonthlyData.prices[idx],
+                          })).slice(-36)}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip formatter={(v) => [`${Number(v).toFixed(2)}¢/kWh`, 'Price']} />
+                            <Line type="monotone" dataKey="price" stroke="#0D9488" strokeWidth={3} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
 
-                {/* 3. Peak Demand vs Load */}
-                <div className="card p-6">
-                  <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                    <Users size={16} className="text-indigo-600" /> Peak Summer Demand vs Total Load (MWh)
-                  </h4>
-                  <div className="h-[260px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={historyData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                        <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                        <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '10px' }} />
-                        <Line yAxisId="left" type="monotone" dataKey="peak_demand" name="Peak Demand (MW)" stroke="#EF4444" strokeWidth={2} />
-                        <Line yAxisId="right" type="monotone" dataKey="total_load" name="Total Load (MWh)" stroke="#6366F1" strokeWidth={2} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
+                    {/* Monthly Customer Count Trend */}
+                    <div className="card p-6 border border-slate-100">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <Users size={16} className="text-purple-600" /> Total Active Customers (State Count)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
+                            period: p,
+                            customers: stateMonthlyData.customers[idx],
+                          })).slice(-36)}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip formatter={(v) => [Number(v).toLocaleString(), 'Customers']} />
+                            <Line type="monotone" dataKey="customers" stroke="#8B5CF6" strokeWidth={3} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
 
-                {/* 4. Solar Net Metering Adoption */}
-                <div className="card p-6">
-                  <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                    <Sun size={16} className="text-emerald-500" /> Solar Net Metering Energy (MWh)
-                  </h4>
-                  <div className="h-[260px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={historyData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                        <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} MWh`, 'Energy Sold Back']} />
-                        <Line type="monotone" dataKey="nm_energy_mwh" name="Energy Sold Back (MWh)" stroke="#10B981" strokeWidth={2} activeDot={{ r: 8 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
+                    {/* Monthly Revenue Trend */}
+                    <div className="card p-6 border border-slate-100">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <Zap size={16} className="text-amber-600" /> Total Utility Revenue ($K)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
+                            period: p,
+                            revenue: stateMonthlyData.revenue[idx],
+                          })).slice(-36)}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
+                            <YAxis tick={{ fontSize: 9 }} />
+                            <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}K`, 'Revenue']} />
+                            <Line type="monotone" dataKey="revenue" stroke="#F59E0B" strokeWidth={3} dot={false} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                )
+              ) : (
+                // ── ANNUAL GRANULARITY VIEWS (EIA-861 Original Dashboard) ──
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="card p-4">
+                      <p className="text-xs text-slate-400 font-bold mb-1">Residential Rate ({latestData.year})</p>
+                      <h4 className="text-2xl font-black text-slate-900">
+                        {latestData.avg_price ? `${(latestData.avg_price / 10).toFixed(2)}¢` : 'N/A'}
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">cents/kWh average</p>
+                    </div>
+                    <div className="card p-4">
+                      <p className="text-xs text-slate-400 font-bold mb-1">Customers Served</p>
+                      <h4 className="text-2xl font-black text-slate-900">
+                        {latestData.total_customers ? latestData.total_customers.toLocaleString() : 'N/A'}
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">active accounts</p>
+                    </div>
+                    <div className="card p-4">
+                      <p className="text-xs text-slate-400 font-bold mb-1">Summer Peak Demand</p>
+                      <h4 className="text-2xl font-black text-slate-900">
+                        {latestData.peak_demand ? `${latestData.peak_demand.toLocaleString()} MW` : 'N/A'}
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">grid peak requirement</p>
+                    </div>
+                    <div className="card p-4">
+                      <p className="text-xs text-slate-400 font-bold mb-1">Net Metering Accounts</p>
+                      <h4 className="text-2xl font-black text-blue-600">
+                        {latestData.nm_customers ? latestData.nm_customers.toLocaleString() : '0'}
+                      </h4>
+                      <p className="text-xs text-slate-400 mt-1">distributed energy users</p>
+                    </div>
+                  </div>
+
+                  {/* Graphs Section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* 1. Price trend */}
+                    <div className="card p-6">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <TrendingUp size={16} className="text-blue-600" /> Historical Price Trend (cents/kWh)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={historyData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip formatter={(v) => [`${Number(v).toFixed(2)}¢/kWh`, 'Price']} />
+                            <Line type="monotone" dataKey="avg_price_cents" stroke="#2563EB" strokeWidth={3} dot={{ r: 4 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* 2. Customer vs Load */}
+                    <div className="card p-6">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <Zap size={16} className="text-amber-500" /> Customers vs Energy Sold (MWh)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={historyData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: '10px' }} />
+                            <Bar dataKey="total_customers" name="Customers" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="total_sales_mwh" name="Sales (MWh)" fill="#10B981" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* 3. Peak Demand vs Load */}
+                    <div className="card p-6">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <Users size={16} className="text-indigo-600" /> Peak Summer Demand vs Total Load (MWh)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={historyData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+                            <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: '10px' }} />
+                            <Line yAxisId="left" type="monotone" dataKey="peak_demand" name="Peak Demand (MW)" stroke="#EF4444" strokeWidth={2} />
+                            <Line yAxisId="right" type="monotone" dataKey="total_load" name="Total Load (MWh)" stroke="#6366F1" strokeWidth={2} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* 4. Solar Net Metering Adoption */}
+                    <div className="card p-6">
+                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+                        <Sun size={16} className="text-emerald-500" /> Solar Net Metering Energy (MWh)
+                      </h4>
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={historyData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} MWh`, 'Energy Sold Back']} />
+                            <Line type="monotone" dataKey="nm_energy_mwh" name="Energy Sold Back (MWh)" stroke="#10B981" strokeWidth={2} activeDot={{ r: 8 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

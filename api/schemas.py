@@ -165,6 +165,15 @@ class BillComponent(BaseModel):
     value: float
     percentage: float
 
+class EIA861MSummary(BaseModel):
+    year: int
+    month: int
+    period: str
+    monthly_sales_mwh: float
+    monthly_revenue_k: float
+    customer_count: int
+    avg_price_cents_kwh: float
+
 class OverviewResponse(BaseModel):
     kpis: OverviewKPI
     breakdown: list[BillComponent]
@@ -176,6 +185,8 @@ class OverviewResponse(BaseModel):
     state_percentile: Optional[float] = None
     insights: Optional[list[str]] = None
     alerts: Optional[list[str]] = None
+    eia861m_summary: Optional[EIA861MSummary] = None
+
 
 
 # ===== Health =====
@@ -322,4 +333,98 @@ class BillAnalysisResponse(BaseModel):
     percentages: BillAnalysisPercentages
     driver: Optional[str] = None  # "usage", "rate", "fixed"
     insight: Optional[str] = None
+
+
+# ===== EIA-861M =====
+class EIA861MRecord(BaseModel):
+    year: int
+    month: int
+    state: str
+    sector: str
+    period: str
+    data_status: Optional[str] = None
+    revenue_k_dollars: Optional[float] = None
+    sales_mwh: Optional[float] = None
+    customers: Optional[int] = None
+    price_cents_kwh: Optional[float] = None
+
+class EIA861MStateTrends(BaseModel):
+    state: str
+    periods: list[str]
+    sales: list[float]
+    revenue: list[float]
+    prices: list[float]
+    customers: list[int]
+
+class EIA861MRankingItem(BaseModel):
+    state: str
+    price_cents_kwh: float
+    sales_mwh: float
+    customers: int
+    rank: int
+
+
+# ===== OpenEI Utility / ZIP =====
+class UtilityLookupResponse(BaseModel):
+    eia_utility_id: int
+    utility_name: str
+    state: str
+    ownership_type: Optional[str] = None
+    zip_code: str
+    service_type: Optional[str] = None
+    residential_rate: Optional[float] = None
+    commercial_rate: Optional[float] = None
+    industrial_rate: Optional[float] = None
+
+class UtilityDetailResponse(BaseModel):
+    eia_utility_id: int
+    utility_name: str
+    state: str
+    ownership_type: Optional[str] = None
+    residential_rate: Optional[float] = None
+    commercial_rate: Optional[float] = None
+    industrial_rate: Optional[float] = None
+    zip_count: int
+
+class UtilityCompareResponse(BaseModel):
+    utilities: list[UtilityDetailResponse]
+    residential_diff_pct: Optional[float] = None
+    commercial_diff_pct: Optional[float] = None
+    industrial_diff_pct: Optional[float] = None
+
+
+# ===== EIA-930 Hourly Grid Operations =====
+class HourlyDemandPoint(BaseModel):
+    period: str
+    demand: float
+    forecast: Optional[float] = None
+    generation: Optional[float] = None
+
+class FuelMixPoint(BaseModel):
+    fuel_type: str
+    fuel_type_name: str
+    value_mwh: float
+    percentage: float
+
+class SubregionDemandPoint(BaseModel):
+    subba_code: str
+    subba_name: str
+    value_mwh: float
+
+class InterchangePoint(BaseModel):
+    neighbor: str
+    neighbor_name: str
+    net_interchange_mwh: float  # positive means exporting, negative means importing
+
+class GridStatusResponse(BaseModel):
+    ba_code: str
+    ba_name: str
+    latest_period: str
+    current_demand_mwh: float
+    current_forecast_mwh: Optional[float] = None
+    current_generation_mwh: Optional[float] = None
+    fuel_mix: list[FuelMixPoint]
+    subregions: list[SubregionDemandPoint]
+    interchange: list[InterchangePoint]
+
 

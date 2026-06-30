@@ -235,6 +235,47 @@ const OverviewTab = () => {
         </div>
       </div>
 
+      {/* 🔹 EIA-861M MONTHLY STATS ROW */}
+      {data.eia861m_summary && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="card p-5 relative overflow-hidden transition-all duration-300 hover:shadow-md border border-slate-100 bg-gradient-to-br from-slate-50 to-white">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Reporting Cycle</span>
+              <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Calendar size={14} /></span>
+            </div>
+            <h4 className="text-xl font-extrabold text-slate-900 mt-1">{data.eia861m_summary.period}</h4>
+            <p className="text-[10px] text-slate-400 mt-2">EIA-861M dataset status</p>
+          </div>
+
+          <div className="card p-5 relative overflow-hidden transition-all duration-300 hover:shadow-md border border-slate-100 bg-gradient-to-br from-slate-50 to-white">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Utility Sales</span>
+              <span className="p-1.5 bg-purple-50 text-purple-600 rounded-lg"><Zap size={14} /></span>
+            </div>
+            <h4 className="text-xl font-extrabold text-slate-900 mt-1">{(data.eia861m_summary.monthly_sales_mwh / 1e6).toFixed(2)}M <span className="text-xs font-medium text-slate-400">MWh</span></h4>
+            <p className="text-[10px] text-slate-400 mt-2">Aggregated national retail sales</p>
+          </div>
+
+          <div className="card p-5 relative overflow-hidden transition-all duration-300 hover:shadow-md border border-slate-100 bg-gradient-to-br from-slate-50 to-white">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Monthly Revenue</span>
+              <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg"><DollarSign size={14} /></span>
+            </div>
+            <h4 className="text-xl font-extrabold text-slate-900 mt-1">${(data.eia861m_summary.monthly_revenue_k / 1e6).toFixed(2)}B</h4>
+            <p className="text-[10px] text-slate-400 mt-2">Total revenue from end-use customers</p>
+          </div>
+
+          <div className="card p-5 relative overflow-hidden transition-all duration-300 hover:shadow-md border border-slate-100 bg-gradient-to-br from-slate-50 to-white">
+            <div className="flex justify-between items-start mb-2">
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Average Rate</span>
+              <span className="p-1.5 bg-teal-50 text-teal-600 rounded-lg"><TrendingUp size={14} /></span>
+            </div>
+            <h4 className="text-xl font-extrabold text-slate-900 mt-1">{data.eia861m_summary.avg_price_cents_kwh.toFixed(2)}¢<span className="text-xs font-medium text-slate-400">/kWh</span></h4>
+            <p className="text-[10px] text-slate-400 mt-2">State-level weighted average</p>
+          </div>
+        </div>
+      )}
+
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 🔹 2. BILL COMPONENT BREAKDOWN */}

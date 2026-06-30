@@ -86,7 +86,15 @@ DATASET_REGISTRY = {
     "eia_pjm_daily_demand": "eia_pjm_daily_demand.csv",
     "state_benchmark": "state_benchmark.csv",
     "retail_plans": "retail_plans.csv",
+    "eia861m_monthly": "EIA_861M_sales_revenue.xlsx",
+    "openei_iou_mapping": "OpenEI_IOU_Utility_ZIP_Mapping_2024.csv",
+    "openei_noniou_mapping": "OpenEI_NonIOU_Utility_ZIP_Mapping_2024.csv",
 }
+
+# EIA-930 Default Balancing Authorities (PJM is primary)
+EIA930_BA_CODES = ["PJM"]
+EIA930_SUB_BA_PARENT = "PJM"
+
 
 # EIA-861 tables to process (subset of the full 23-file directory)
 EIA861_TABLES = [

@@ -6,7 +6,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 
 from api.state import app_state
-from api.schemas import BillBreakdownResponse, TrendResponse
+from api.schemas import BillBreakdownResponse, TrendResponse, UtilityLookupResponse
 from api.services.billing_service import build_breakdown, build_trends
 
 router = APIRouter(tags=["billing"])
@@ -285,3 +285,60 @@ async def analyze_ocr(req: BillAnalysisRequest):
     except Exception as e:
         logger.warning(f"Ollama parsing failed: {e or type(e).__name__}. Running deterministic fallback.")
         return parse_deterministic_bill(req.bill_text)
+
+
+# ── ZIP Auto-Detection for Utility and Tariff ────────────────────────────────
+@router.get("/bill-analysis/auto-detect", response_model=list[UtilityLookupResponse])
+async def auto_detect_utility_by_zip(
+    zip: str = Query(..., description="5-digit ZIP code"),
+):
+    """Auto-detect utility and average rate information by ZIP code."""
+    from sqlalchemy import text
+    from database.connection import get_sync_engine
+    from api.schemas import UtilityLookupResponse
+    
+    zip_code = zip.strip().zfill(5)
+    engine = get_sync_engine()
+
+    query = text("""
+        SELECT 
+            m.eia_utility_id,
+            m.utility_name,
+            m.state,
+            m.ownership_type,
+            z.zip_code,
+            z.service_type,
+            r.residential_rate,
+            r.commercial_rate,
+            r.industrial_rate
+        FROM utility_zip_lookup z
+        JOIN utility_master m ON z.eia_utility_id = m.eia_utility_id AND z.state = m.state
+        LEFT JOIN utility_rates r ON m.eia_utility_id = r.eia_utility_id AND m.state = r.state
+        WHERE z.zip_code = :zip_code
+    """)
+
+    try:
+        df = pd.read_sql(query, con=engine, params={"zip_code": zip_code})
+    except Exception as e:
+        logger.error(f"Error auto-detecting utility by ZIP: {e}")
+        raise HTTPException(500, "Database query error")
+
+    if df.empty:
+        raise HTTPException(404, f"No utilities found for ZIP code {zip_code}")
+
+    results = []
+    for _, row in df.iterrows():
+        results.append(UtilityLookupResponse(
+            eia_utility_id=int(row["eia_utility_id"]),
+            utility_name=str(row["utility_name"]),
+            state=str(row["state"]),
+            ownership_type=str(row["ownership_type"]) if pd.notna(row.get("ownership_type")) else None,
+            zip_code=str(row["zip_code"]),
+            service_type=str(row["service_type"]) if pd.notna(row.get("service_type")) else None,
+            residential_rate=float(row["residential_rate"]) if pd.notna(row.get("residential_rate")) else None,
+            commercial_rate=float(row["commercial_rate"]) if pd.notna(row.get("commercial_rate")) else None,
+            industrial_rate=float(row["industrial_rate"]) if pd.notna(row.get("industrial_rate")) else None,
+        ))
+
+    return results
+

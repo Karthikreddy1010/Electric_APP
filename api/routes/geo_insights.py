@@ -363,3 +363,234 @@ async def generate_geo_insights(req: GeoInsightsRequest):
         logger.warning(f"LLM unavailable ({e or type(e).__name__}), using deterministic fallback")
         return _compute_deterministic_insights(req)
 
+
+@router.get("/utility-layer")
+async def get_geo_utility_layer(
+    state: str = Query("NJ", description="State code"),
+):
+    """Get utility service territories mapping summary for a state."""
+    from sqlalchemy import text
+    from database.connection import get_sync_engine
+    import pandas as pd
+    
+    state = state.strip().upper()
+    engine = get_sync_engine()
+
+    query = text("""
+        SELECT 
+            m.eia_utility_id,
+            m.utility_name,
+            m.state,
+            m.ownership_type,
+            r.residential_rate,
+            r.commercial_rate,
+            r.industrial_rate,
+            COUNT(DISTINCT z.zip_code) as zip_count
+        FROM utility_master m
+        LEFT JOIN utility_rates r ON m.eia_utility_id = r.eia_utility_id AND m.state = r.state
+        LEFT JOIN utility_zip_lookup z ON m.eia_utility_id = z.eia_utility_id AND m.state = z.state
+        WHERE m.state = :state
+        GROUP BY m.eia_utility_id, m.utility_name, m.state, m.ownership_type, r.residential_rate, r.commercial_rate, r.industrial_rate
+        ORDER BY zip_count DESC
+    """)
+
+    try:
+        df = pd.read_sql(query, con=engine, params={"state": state})
+        records = df.replace({float('nan'): None}).to_dict(orient="records")
+        return {"state": state, "count": len(records), "utilities": records}
+    except Exception as e:
+        logger.error(f"Error fetching geo utility layer: {e}")
+        raise HTTPException(500, "Database query error")
+
+
+@router.get("/grid-status")
+async def get_geo_grid_status(
+    ba: str = Query("PJM", description="Balancing Authority code"),
+):
+    """Get grid status summary for geographical display."""
+    from sqlalchemy import text
+    from database.connection import get_sync_engine
+    import pandas as pd
+    
+    ba = ba.strip().upper()
+    engine = get_sync_engine()
+
+    query = text("""
+        SELECT period, type_code, value_mwh
+        FROM eia930_hourly
+        WHERE ba_code = :ba AND period = (
+            SELECT MAX(period) FROM eia930_hourly WHERE ba_code = :ba
+        )
+    """)
+
+    try:
+        df = pd.read_sql(query, con=engine, params={"ba": ba})
+        if df.empty:
+            return {"ba": ba, "status": "No data", "demand": None, "generation": None}
+        
+        latest_period = df["period"].max()
+        latest_period_str = None
+        if latest_period:
+            if isinstance(latest_period, str):
+                try:
+                    import dateutil.parser
+                    latest_period = dateutil.parser.parse(latest_period)
+                except Exception:
+                    pass
+            latest_period_str = latest_period.strftime("%Y-%m-%dT%H:%M:%SZ") if hasattr(latest_period, "strftime") else str(latest_period)
+        
+        demand = None
+        generation = None
+        for _, row in df.iterrows():
+            if row["type_code"] == "D":
+                demand = float(row["value_mwh"]) if pd.notna(row["value_mwh"]) else None
+            elif row["type_code"] == "NG":
+                generation = float(row["value_mwh"]) if pd.notna(row["value_mwh"]) else None
+
+        return {
+            "ba": ba,
+            "period": latest_period_str,
+            "status": "Online",
+            "demand_mwh": demand,
+            "generation_mwh": generation,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching geo grid status: {e}")
+        raise HTTPException(500, "Database query error")
+
+
+@router.get("/boundaries")
+async def get_geo_boundaries(
+    state: str = Query("NJ", description="State code, e.g. NJ"),
+):
+    """
+    Get ZCTA boundaries with utility mapping and electricity prices for a state.
+    Uses cached GeoJSON if available, otherwise generates it from raw shapefiles.
+    """
+    import os
+    import json
+    from pathlib import Path
+    
+    state = state.strip().upper()
+    cache_dir = Path("data/geojson_cache")
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"zctas_{state}.json"
+    
+    if cache_file.exists():
+        try:
+            with open(cache_file, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error reading cached boundaries for {state}: {e}")
+            # Fall through to generate
+            
+    # Generate boundaries from database + shapefiles
+    from database.connection import get_sync_engine
+    from sqlalchemy import text
+    import pandas as pd
+    import geopandas as gpd
+    
+    engine = get_sync_engine()
+    
+    query = text("""
+        SELECT 
+            z.zip_code, 
+            z.utility_name,
+            z.eia_utility_id,
+            r.residential_rate, 
+            r.commercial_rate, 
+            r.industrial_rate
+        FROM utility_zip_lookup z
+        LEFT JOIN utility_rates r ON z.eia_utility_id = r.eia_utility_id AND z.state = r.state
+        WHERE z.state = :state
+    """)
+    
+    try:
+        df_db = pd.read_sql(query, con=engine, params={"state": state})
+    except Exception as e:
+        logger.error(f"Database query error in get_geo_boundaries: {e}")
+        raise HTTPException(500, "Database query error")
+        
+    if df_db.empty:
+        return {"type": "FeatureCollection", "features": []}
+        
+    # Clean zip code
+    df_db['zip_code'] = df_db['zip_code'].astype(str).str.strip().str.zfill(5)
+    
+    # Group by zip_code to aggregate properties
+    zip_properties = {}
+    for zip_code, group in df_db.groupby('zip_code'):
+        utilities = group['utility_name'].dropna().tolist()
+        rates = group['residential_rate'].dropna().tolist()
+        comm_rates = group['commercial_rate'].dropna().tolist()
+        ind_rates = group['industrial_rate'].dropna().tolist()
+        
+        avg_res_rate = sum(rates) / len(rates) if rates else None
+        avg_comm_rate = sum(comm_rates) / len(comm_rates) if comm_rates else None
+        avg_ind_rate = sum(ind_rates) / len(ind_rates) if ind_rates else None
+        
+        primary_utility = utilities[0] if utilities else "Unknown"
+        utility_list_str = ", ".join(utilities)
+        
+        zip_properties[zip_code] = {
+            "zip_code": zip_code,
+            "state": state,
+            "utility_names": utility_list_str,
+            "primary_utility": primary_utility,
+            "residential_rate": avg_res_rate,
+            "commercial_rate": avg_comm_rate,
+            "industrial_rate": avg_ind_rate
+        }
+        
+    # Load and filter shapefile
+    shp_path = Path("data/raw/tl_2024_us_zcta520/tl_2024_us_zcta520.shp")
+    if not shp_path.exists():
+        logger.error(f"Shapefile not found: {shp_path}")
+        raise HTTPException(404, "ZCTA shapefile not found on server")
+        
+    try:
+        # Load shapefile
+        gdf = gpd.read_file(shp_path)
+        
+        # Filter geometries
+        gdf_filtered = gdf[gdf['ZCTA5CE20'].isin(zip_properties.keys())].copy()
+        
+        if gdf_filtered.empty:
+            return {"type": "FeatureCollection", "features": []}
+            
+        # Simplify geometry to keep file sizes small (approx 1MB)
+        gdf_filtered['geometry'] = gdf_filtered['geometry'].simplify(tolerance=0.001, preserve_topology=True)
+        
+        # Merge properties
+        def get_prop(zip_code, prop_name):
+            props = zip_properties.get(zip_code)
+            if props:
+                return props.get(prop_name)
+            return None
+            
+        gdf_filtered['zip_code'] = gdf_filtered['ZCTA5CE20']
+        gdf_filtered['state'] = state
+        gdf_filtered['utility_names'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'utility_names'))
+        gdf_filtered['primary_utility'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'primary_utility'))
+        gdf_filtered['residential_rate'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'residential_rate'))
+        gdf_filtered['commercial_rate'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'commercial_rate'))
+        gdf_filtered['industrial_rate'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'industrial_rate'))
+        
+        # Keep final columns
+        gdf_final = gdf_filtered[['zip_code', 'state', 'utility_names', 'primary_utility', 'residential_rate', 'commercial_rate', 'industrial_rate', 'geometry']]
+        
+        # Convert to geojson
+        geojson_str = gdf_final.to_json()
+        geojson_data = json.loads(geojson_str)
+        
+        # Cache the result to file
+        with open(cache_file, "w") as f:
+            json.dump(geojson_data, f)
+            
+        return geojson_data
+    except Exception as e:
+        logger.error(f"Error generating boundaries for {state}: {e}")
+        raise HTTPException(500, f"Error processing shapefiles: {str(e)}")
+
+
+

@@ -19,4 +19,11 @@ app_state: dict = {
     "causal_service": None,
     "rate_cov_matrix": None,
     "pjm_defaults": None,
+    # New datasets
+    "eia861m_df": None,
+    "utility_master_df": None,
+    "utility_zip_df": None,
+    "utility_rates_df": None,
+    "eia930_latest": None,
 }
+

@@ -188,6 +188,13 @@ async def lifespan(app: FastAPI):
         app_state["municipal_energy_df"] = pd.read_sql("SELECT * FROM municipal_energy", con=engine)
         app_state["state_monthly_prices_df"] = pd.read_sql("SELECT * FROM state_monthly_prices", con=engine)
         app_state["eia861_master_df"] = pd.read_sql("SELECT * FROM eia861_master", con=engine)
+        
+        # Load EIA-861M monthly
+        try:
+            app_state["eia861m_df"] = pd.read_sql("SELECT * FROM eia861m_monthly", con=engine)
+        except Exception as e_861m:
+            logger.warning(f"Could not load eia861m_monthly table: {e_861m}")
+            app_state["eia861m_df"] = pd.DataFrame()
 
         logger.info(
             f"Loaded database tables: "
@@ -195,7 +202,8 @@ async def lifespan(app: FastAPI):
             f"community_energy={len(app_state['community_energy_df'])}, "
             f"municipal_energy={len(app_state['municipal_energy_df'])}, "
             f"state_monthly_prices={len(app_state['state_monthly_prices_df'])}, "
-            f"eia861_master={len(app_state['eia861_master_df'])}"
+            f"eia861_master={len(app_state['eia861_master_df'])}, "
+            f"eia861m_monthly={len(app_state['eia861m_df'])}"
         )
 
         # Build geo_monthly_df from state_monthly_prices directly
@@ -313,6 +321,11 @@ from api.routes.municipal import router as municipal_router
 from api.routes.eia861 import router as eia861_router
 from api.routes.monitoring import router as monitoring_router
 
+# New routers
+from api.routes.eia861m import router as eia861m_router
+from api.routes.openei import router as openei_router
+from api.routes.eia930 import router as eia930_router
+
 app.include_router(health_router)
 app.include_router(dashboard_router)
 app.include_router(billing_router)
@@ -326,6 +339,9 @@ app.include_router(bgs_router)
 app.include_router(municipal_router)
 app.include_router(eia861_router)
 app.include_router(monitoring_router)
+app.include_router(eia861m_router)
+app.include_router(openei_router)
+app.include_router(eia930_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────

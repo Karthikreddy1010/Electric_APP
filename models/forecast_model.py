@@ -287,6 +287,47 @@ class ElectricityDemandForecaster:
 
         logger.info("Successfully merged weather data (temp_avg, hdd, cdd).")
 
+        # ── Step 8c: Merge EIA-861M monthly macroeconomic features ──────────
+        self.eia861m_cols = []
+        try:
+            from database.connection import get_sync_engine
+            from sqlalchemy import inspect
+            engine = get_sync_engine()
+            inspector = inspect(engine)
+            has_table = inspector.has_table('eia861m_monthly')
+            if has_table:
+                eia861m_query = """
+                    SELECT period, sector, sales_mwh, customers, price_cents_kwh
+                    FROM eia861m_monthly
+                    WHERE state = 'NJ'
+                """
+                m_df = pd.read_sql(eia861m_query, con=engine)
+                if not m_df.empty:
+                    # Pivot to wide format: columns for each sector
+                    m_pivot = m_df.pivot(index="period", columns="sector", values=["sales_mwh", "customers", "price_cents_kwh"])
+                    m_pivot.columns = [f"{col[0]}_{col[1]}" for col in m_pivot.columns]
+                    m_pivot = m_pivot.reset_index()
+                    m_pivot["date"] = pd.to_datetime(m_pivot["period"] + "-01")
+                    m_pivot = m_pivot.set_index("date")
+                    
+                    # Resample to daily and forward-fill
+                    m_daily = m_pivot.resample("D").ffill()
+                    
+                    # Merge with daily DataFrame
+                    cols_to_merge = [c for c in m_daily.columns if c != "period"]
+                    daily = daily.join(m_daily[cols_to_merge], how="left")
+                    
+                    # Forward-fill and backward-fill any gaps
+                    daily[cols_to_merge] = daily[cols_to_merge].ffill().bfill()
+                    self.eia861m_cols = cols_to_merge
+                    logger.info(f"Successfully merged EIA-861M monthly features: {cols_to_merge}")
+                else:
+                    logger.warning("eia861m_monthly table is empty in database. Skipping monthly features.")
+            else:
+                logger.warning("eia861m_monthly table does not exist in database. Skipping monthly features.")
+        except Exception as e_m:
+            logger.warning(f"Failed to merge EIA-861M features into forecast: {e_m}")
+
         # Step 9: Lagged demand features
         daily["demand_lag1"] = daily["demand_mw"].shift(1)
         daily["demand_lag7"] = daily["demand_mw"].shift(7)
@@ -339,24 +380,29 @@ class ElectricityDemandForecaster:
         # Add weather regressors
         for col in WEATHER_COLS:
             self.prophet_model.add_regressor(col)
+        # Add EIA-861M monthly features as regressors
+        for col in getattr(self, "eia861m_cols", []):
+            self.prophet_model.add_regressor(col)
         self.prophet_model.fit(prophet_df)
 
         # Build future DataFrame for Prophet — use noisy weather for test period
         prophet_future = self.prophet_model.make_future_dataframe(periods=30, freq='D')
         prophet_future = prophet_future.set_index("ds")
-        # Join training weather (actual) for historical dates
-        prophet_future = prophet_future.join(train[WEATHER_COLS])
-        # Fill test dates with noisy weather
-        test_for_join = test[WEATHER_COLS].copy()
+        # Join training weather (actual) + monthly features for historical dates
+        cols_to_join = WEATHER_COLS + getattr(self, "eia861m_cols", [])
+        prophet_future = prophet_future.join(train[cols_to_join])
+        # Fill test dates with noisy weather + monthly features
+        test_for_join = test[cols_to_join].copy()
         test_for_join.index.name = None  # ensure index compatibility
         prophet_future.update(test_for_join)
         prophet_future = prophet_future.reset_index()
         prophet_pred_full = self.prophet_model.predict(prophet_future)
         prophet_test_pred = prophet_pred_full.iloc[-30:]['yhat'].values
 
-        # Model 2 - SARIMAX with exogenous weather + lagged demand
+        # Model 2 - SARIMAX with exogenous weather + lagged demand + monthly features
         y_train = train["demand_mw"]
-        exog_train = train[EXOG_COLS]
+        exog_cols = EXOG_COLS + getattr(self, "eia861m_cols", [])
+        exog_train = train[exog_cols]
         is_stationary = self._check_stationarity(y_train)
         d = 0 if is_stationary else 1
 
@@ -373,7 +419,8 @@ class ElectricityDemandForecaster:
 
         # ── RECURSIVE OUT-OF-SAMPLE LAG PROPAGATION FOR VALIDATION ──
         # Resolves lag feature data leakage during test set validation.
-        exog_test_recursive = test[EXOG_COLS].copy()
+        exog_cols = EXOG_COLS + getattr(self, "eia861m_cols", [])
+        exog_test_recursive = test[exog_cols].copy()
         sarima_preds_list = []
         last_train_demand = train["demand_mw"].iloc[-1]
 
@@ -475,6 +522,14 @@ class ElectricityDemandForecaster:
         for col in WEATHER_COLS:
             future_exog[col] = future_exog[col].interpolate(method="linear")
 
+        # Join monthly features (projected forward via ffill)
+        m_cols = getattr(self, "eia861m_cols", [])
+        if m_cols:
+            future_monthly = pd.DataFrame(index=future_dates)
+            for col in m_cols:
+                future_monthly[col] = full_df[col].iloc[-1]
+            future_exog = future_exog.join(future_monthly)
+
         # If there are still NaNs after interpolation, raise
         remaining_nans = future_exog[WEATHER_COLS].isnull().any(axis=1).sum()
         if remaining_nans > 0:
@@ -517,14 +572,16 @@ class ElectricityDemandForecaster:
 
             # Forecast step t using exog up to step t
             exog_so_far = future_exog_sarima.iloc[:t+1]
-            preds = final_sarima_result.forecast(steps=t+1, exog=exog_so_far[EXOG_COLS])
+            exog_cols_dynamic = EXOG_COLS + getattr(self, "eia861m_cols", [])
+            preds = final_sarima_result.forecast(steps=t+1, exog=exog_so_far[exog_cols_dynamic])
             sarima_preds_list.append(float(preds.values[-1]))
 
         # Prophet forecast — needs weather columns on the full future dataframe
         future = final_prophet.make_future_dataframe(periods=days, freq='D')
         future = future.set_index("ds")
-        # Join historical weather for past dates
-        future = future.join(full_df[WEATHER_COLS])
+        # Join historical weather + monthly features for past dates
+        cols_to_join = WEATHER_COLS + getattr(self, "eia861m_cols", [])
+        future = future.join(full_df[cols_to_join])
         # Fill future dates with real forecast weather
         future.update(future_exog)
         future = future.reset_index()
@@ -535,8 +592,9 @@ class ElectricityDemandForecaster:
         prophet_upper = prophet_forecast.iloc[-days:]['yhat_upper'].values
 
         # SARIMA forecast using the recursively populated exog matrix
+        exog_cols_dynamic = EXOG_COLS + getattr(self, "eia861m_cols", [])
         sarima_forecast_obj = final_sarima_result.get_forecast(
-            steps=days, exog=future_exog_sarima[EXOG_COLS]
+            steps=days, exog=future_exog_sarima[exog_cols_dynamic]
         )
         sarima_future_pred = sarima_forecast_obj.predicted_mean.values
         sarima_ci = sarima_forecast_obj.conf_int(alpha=0.20)

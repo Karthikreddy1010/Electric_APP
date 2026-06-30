@@ -17,6 +17,9 @@ from orchestration.tasks import (
     retrain_forecast_models_task,
     update_elasticity_model_task,
     fetch_eia_demand_task,
+    sync_eia861m_task,
+    sync_openei_tariffs_task,
+    sync_eia930_task,
 )
 
 logger = logging.getLogger(__name__)
@@ -125,6 +128,27 @@ _scheduler.add_job(
     name="Update Elasticity Model",
     target=update_elasticity_model_task,
     interval_seconds=604800,
+)
+
+# 4. Sync EIA-861M monthly utility data every 30 days
+_scheduler.add_job(
+    name="EIA-861M Monthly Sync",
+    target=sync_eia861m_task,
+    interval_seconds=2592000,
+)
+
+# 5. Sync OpenEI utility tariff metadata every 30 days
+_scheduler.add_job(
+    name="OpenEI Tariffs Sync",
+    target=sync_openei_tariffs_task,
+    interval_seconds=2592000,
+)
+
+# 6. Sync EIA-930 hourly grid operations data every 1 hour
+_scheduler.add_job(
+    name="EIA-930 Hourly Sync",
+    target=sync_eia930_task,
+    interval_seconds=3600,
 )
 
 

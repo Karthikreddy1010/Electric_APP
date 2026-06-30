@@ -135,6 +135,38 @@ const GeoTab = () => {
   const [insightsResult, setInsightsResult] = useState<any | null>(null);
   const [activeZip, setActiveZip] = useState<string | null>(null);
 
+  // New datasets UI states
+  const [zipInput, setZipInput] = useState('');
+  const [zipUtility, setZipUtility] = useState<any[]>([]);
+  const [zipSearchLoading, setZipSearchLoading] = useState(false);
+  const [zipSearchError, setZipSearchError] = useState<string | null>(null);
+
+  // Fetch EIA-930 hourly grid status
+  const { data: gridStatus } = useQuery({
+    queryKey: ['grid-status'],
+    queryFn: async () => {
+      const res = await axios.get('/grid/current?ba=PJM');
+      return res.data;
+    },
+    refetchInterval: 60000 // every 1 min
+  });
+
+  const handleZipSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!zipInput.trim() || zipInput.length < 5) return;
+    setZipSearchLoading(true);
+    setZipSearchError(null);
+    setZipUtility([]);
+    try {
+      const res = await axios.get(`/utility/lookup?zip=${zipInput}`);
+      setZipUtility(res.data);
+    } catch (err: any) {
+      setZipSearchError(err.response?.data?.detail || 'ZIP code not found');
+    } finally {
+      setZipSearchLoading(false);
+    }
+  };
+
   // Map data
   const { data: geoData, isLoading, error } = useQuery({
     queryKey: ['geo', viewMode],
@@ -299,6 +331,90 @@ const GeoTab = () => {
 
         {/* ── Side Panel ── */}
         <div className="space-y-6">
+          {/* 🔹 NEW: ZIP Code to Utility Lookup (OpenEI) */}
+          <div className="card p-5 bg-white border border-slate-100 shadow-lg space-y-4">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <MapIcon size={12} /> Utility ZIP Finder
+            </h4>
+            <form onSubmit={handleZipSearch} className="flex gap-2">
+              <input
+                type="text"
+                maxLength={5}
+                value={zipInput}
+                onChange={(e) => setZipInput(e.target.value.replace(/\D/g, ''))}
+                placeholder="Enter ZIP code (e.g. 07101)"
+                className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 transition-colors"
+              />
+              <button
+                type="submit"
+                disabled={zipSearchLoading || zipInput.length < 5}
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2 text-xs font-black transition-all disabled:opacity-50"
+              >
+                Find
+              </button>
+            </form>
+
+            {zipSearchError && (
+              <p className="text-[10px] font-bold text-red-500">{zipSearchError}</p>
+            )}
+
+            {zipUtility.length > 0 && (
+              <div className="space-y-2 max-h-[160px] overflow-y-auto pt-1">
+                {zipUtility.map((util: any) => (
+                  <div key={util.eia_utility_id} className="p-2.5 bg-slate-50 rounded-xl border border-slate-100/50">
+                    <p className="text-[10px] font-bold text-slate-900 truncate">{util.utility_name}</p>
+                    <p className="text-[9px] text-slate-400 font-medium">{util.ownership_type} | {util.service_type}</p>
+                    {util.residential_rate && (
+                      <p className="text-xs font-black text-blue-600 mt-1">{(util.residential_rate * 100).toFixed(2)}¢/kWh</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 🔹 NEW: PJM Real-time Grid Monitor (EIA-930) */}
+          <div className="card p-5 bg-white border border-slate-100 shadow-lg space-y-4">
+            <div className="flex justify-between items-center">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                <Globe size={12} /> PJM Real-time Grid
+              </h4>
+              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+            </div>
+
+            {gridStatus ? (
+              <div className="space-y-3">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-xs text-slate-500 font-semibold">Demand Load</span>
+                  <span className="text-sm font-black text-slate-900">{(gridStatus.current_demand_mwh / 1000).toFixed(1)} GW</span>
+                </div>
+                {gridStatus.current_generation_mwh && (
+                  <>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-slate-500 font-semibold">Net Generation</span>
+                      <span className="text-sm font-black text-emerald-600">{(gridStatus.current_generation_mwh / 1000).toFixed(1)} GW</span>
+                    </div>
+                    {/* Fuel Mix Snapshot */}
+                    <div className="pt-2 border-t border-slate-50">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Top Generation Fuels</p>
+                      <div className="space-y-1">
+                        {gridStatus.fuel_mix?.slice(0, 3).map((f: any) => (
+                          <div key={f.fuel_type} className="flex justify-between text-[10px] font-bold text-slate-600">
+                            <span>{f.fuel_type_name}</span>
+                            <span>{f.percentage.toFixed(0)}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+                <p className="text-[8px] text-slate-400 font-medium pt-1">Source: EIA-930 hourly grid database sync</p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-2">Loading grid operations...</p>
+            )}
+          </div>
+
           <div className="card p-6 bg-gradient-to-br from-blue-600 to-blue-700 border-none shadow-xl text-white">
             <h4 className="text-[10px] font-black uppercase tracking-widest mb-4 opacity-70">State Trendline</h4>
             <div className="h-[150px]">

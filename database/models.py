@@ -489,3 +489,250 @@ class DailySubBaDemand(Base):
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  EIA-861M MONTHLY UTILITY DATA
+# ─────────────────────────────────────────────────────────────────────────────
+
+class EIA861MMonthly(Base):
+    """
+    EIA-861M monthly state-level electricity sales, revenue, customers, and prices.
+    Source: EIA_861M_sales_revenue.xlsx (Monthly-States sheet) + EIA API incremental sync.
+    One row per (year, month, state, sector).
+    """
+    __tablename__ = "eia861m_monthly"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    sector = Column(String(20), nullable=False, default="total")  # residential, commercial, industrial, transportation, total
+    period = Column(String(10), nullable=False, index=True)       # YYYY-MM format
+    data_status = Column(String(20))                              # Preliminary, Final
+
+    # Revenue (Thousand Dollars)
+    revenue_k_dollars = Column(Float)
+    # Sales (Megawatthours)
+    sales_mwh = Column(Float)
+    # Customers (Count)
+    customers = Column(Integer)
+    # Average Price (Cents/kWh)
+    price_cents_kwh = Column(Float)
+
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", "state", "sector", name="uq_eia861m_yr_mo_st_sec"),
+        Index("ix_eia861m_state_year", "state", "year"),
+        Index("ix_eia861m_period", "period"),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  OPENEI UTILITY SERVICE TERRITORIES
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UtilityMaster(Base):
+    """
+    Master list of US electric utilities from OpenEI IOU + NonIOU datasets.
+    One row per (eia_utility_id, state).
+    """
+    __tablename__ = "utility_master"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    eia_utility_id = Column(Integer, nullable=False, index=True)
+    utility_name = Column(String(200), nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    ownership_type = Column(String(50))                            # Investor Owned, Municipal, Cooperative, etc.
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    zip_lookups = relationship("UtilityZipLookup", back_populates="utility")
+    rates = relationship("UtilityRate", back_populates="utility")
+
+    __table_args__ = (
+        UniqueConstraint("eia_utility_id", "state", name="uq_util_master_eiaid_st"),
+    )
+
+
+class UtilityZipLookup(Base):
+    """
+    ZIP code → utility mapping from OpenEI CSV datasets.
+    Many ZIPs can map to one utility; one ZIP can have multiple utilities.
+    """
+    __tablename__ = "utility_zip_lookup"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    zip_code = Column(String(10), nullable=False, index=True)
+    eia_utility_id = Column(Integer, ForeignKey("utility_master.eia_utility_id"), nullable=False, index=True)
+    utility_name = Column(String(200))
+    state = Column(String(2), nullable=False, index=True)
+    service_type = Column(String(20))                              # Bundled, Delivery
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    utility = relationship("UtilityMaster", back_populates="zip_lookups",
+                           primaryjoin="UtilityZipLookup.eia_utility_id == UtilityMaster.eia_utility_id",
+                           foreign_keys="[UtilityZipLookup.eia_utility_id]")
+
+    __table_args__ = (
+        UniqueConstraint("zip_code", "eia_utility_id", name="uq_zip_lookup_zip_eiaid"),
+        Index("ix_zip_lookup_state", "state"),
+    )
+
+
+class UtilityRate(Base):
+    """
+    Average electricity rates per utility from OpenEI CSV datasets.
+    One row per (eia_utility_id, state).
+    """
+    __tablename__ = "utility_rates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    eia_utility_id = Column(Integer, ForeignKey("utility_master.eia_utility_id"), nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    residential_rate = Column(Float)                               # $/kWh
+    commercial_rate = Column(Float)                                # $/kWh
+    industrial_rate = Column(Float)                                # $/kWh
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    utility = relationship("UtilityMaster", back_populates="rates",
+                           primaryjoin="UtilityRate.eia_utility_id == UtilityMaster.eia_utility_id",
+                           foreign_keys="[UtilityRate.eia_utility_id]")
+
+    __table_args__ = (
+        UniqueConstraint("eia_utility_id", "state", name="uq_util_rate_eiaid_st"),
+    )
+
+
+class UtilityTariff(Base):
+    """
+    Detailed tariff metadata from OpenEI API (optional monthly sync).
+    Stores structured rate schedules, charges, and effective dates.
+    """
+    __tablename__ = "utility_tariffs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    eia_utility_id = Column(Integer, nullable=False, index=True)
+    label = Column(String(500))
+    name = Column(String(200))
+    uri = Column(String(500))
+    sector = Column(String(50), index=True)                        # Residential, Commercial, Industrial
+    service_type = Column(String(50))                              # Bundled, Delivery
+    source = Column(String(200))
+    source_parent = Column(String(200))
+
+    # Charges
+    fixed_charge = Column(Float)
+    fixed_charge_units = Column(String(50))
+    min_charge = Column(Float)
+    min_charge_units = Column(String(50))
+
+    # Rate structures (stored as JSON text)
+    energy_rate_structure = Column(Text)
+    energy_comments = Column(Text)
+    demand_rate_structure = Column(Text)
+    demand_comments = Column(Text)
+
+    # Effective dates
+    start_date = Column(Date)
+    end_date = Column(Date)
+    approved = Column(Boolean)
+    is_default = Column(Boolean)
+
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_tariff_eiaid", "eia_utility_id"),
+        Index("ix_tariff_sector", "sector"),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  EIA-930 HOURLY GRID OPERATIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class EIA930Hourly(Base):
+    """
+    Hourly demand, demand forecast, net generation, and interchange by balancing authority.
+    Source: EIA API v2 electricity/rto/region-data.
+    type_code: D=Demand, DF=Day-ahead forecast, NG=Net generation, TI=Total interchange.
+    """
+    __tablename__ = "eia930_hourly"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period = Column(DateTime(timezone=True), nullable=False, index=True)
+    ba_code = Column(String(20), nullable=False, index=True)       # PJM, CISO, etc.
+    ba_name = Column(String(200))
+    type_code = Column(String(5), nullable=False)                  # D, DF, NG, TI
+    type_name = Column(String(50))
+    value_mwh = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("period", "ba_code", "type_code", name="uq_eia930h_period_ba_type"),
+        Index("ix_eia930h_ba_period", "ba_code", "period"),
+    )
+
+
+class EIA930Generation(Base):
+    """
+    Hourly generation by energy source per balancing authority.
+    Source: EIA API v2 electricity/rto/fuel-type-data.
+    """
+    __tablename__ = "eia930_generation"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period = Column(DateTime(timezone=True), nullable=False, index=True)
+    ba_code = Column(String(20), nullable=False, index=True)
+    ba_name = Column(String(200))
+    fuel_type = Column(String(10), nullable=False)                 # COL, NG, NUC, WAT, SUN, WND, OIL, OTH
+    fuel_type_name = Column(String(50))                            # Coal, Natural Gas, Nuclear, etc.
+    value_mwh = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("period", "ba_code", "fuel_type", name="uq_eia930g_period_ba_fuel"),
+        Index("ix_eia930g_ba_period", "ba_code", "period"),
+    )
+
+
+class EIA930Subregion(Base):
+    """
+    Hourly demand by sub-balancing authority (subregion).
+    Source: EIA API v2 electricity/rto/region-sub-ba-data.
+    """
+    __tablename__ = "eia930_subregion"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period = Column(DateTime(timezone=True), nullable=False, index=True)
+    subba_code = Column(String(20), nullable=False, index=True)    # AE, JC, PS, RECO, etc.
+    subba_name = Column(String(200))
+    parent_ba = Column(String(20), nullable=False, index=True)     # PJM
+    parent_ba_name = Column(String(200))
+    value_mwh = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("period", "subba_code", name="uq_eia930s_period_subba"),
+        Index("ix_eia930s_parent_period", "parent_ba", "period"),
+    )
+
+
+class EIA930Interchange(Base):
+    """
+    Hourly interchange between neighboring balancing authorities.
+    Source: EIA API v2 electricity/rto/interchange-data.
+    """
+    __tablename__ = "eia930_interchange"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    period = Column(DateTime(timezone=True), nullable=False, index=True)
+    from_ba = Column(String(20), nullable=False, index=True)
+    from_ba_name = Column(String(200))
+    to_ba = Column(String(20), nullable=False, index=True)
+    to_ba_name = Column(String(200))
+    value_mwh = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("period", "from_ba", "to_ba", name="uq_eia930i_period_from_to"),
+        Index("ix_eia930i_from_period", "from_ba", "period"),
+    )
