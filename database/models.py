@@ -426,6 +426,7 @@ class StateMonthlyPrice(Base):
 
     __table_args__ = (
         UniqueConstraint("date", "state", name="uq_state_mo_date_st"),
+        Index("ix_state_monthly_prices_lookup", "state", "year", "month"),
     )
 
 
@@ -575,6 +576,7 @@ class UtilityZipLookup(Base):
     __table_args__ = (
         UniqueConstraint("zip_code", "eia_utility_id", name="uq_zip_lookup_zip_eiaid"),
         Index("ix_zip_lookup_state", "state"),
+        Index("ix_zip_lookup_zip_state", "zip_code", "state"),
     )
 
 
@@ -599,6 +601,7 @@ class UtilityRate(Base):
 
     __table_args__ = (
         UniqueConstraint("eia_utility_id", "state", name="uq_util_rate_eiaid_st"),
+        Index("ix_utility_rates_lookup", "eia_utility_id", "state"),
     )
 
 

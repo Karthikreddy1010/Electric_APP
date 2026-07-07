@@ -101,13 +101,12 @@ async def init_db() -> None:
         "echo": os.environ.get("DB_ECHO", "false").lower() == "true",
     }
 
-    # PostgreSQL-specific pool settings
     if "postgresql" in url:
         engine_kwargs.update({
-            "pool_size": int(os.environ.get("DB_POOL_SIZE", "10")),
-            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "20")),
+            "pool_size": int(os.environ.get("DB_POOL_SIZE", "20")),
+            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "10")),
             "pool_pre_ping": True,
-            "pool_recycle": 3600,
+            "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE", "1800")),
         })
 
     _async_engine = create_async_engine(url, **engine_kwargs)
@@ -176,9 +175,10 @@ def _get_sync_engine():
         }
         if "postgresql" in url:
             engine_kwargs.update({
-                "pool_size": 5,
-                "max_overflow": 10,
+                "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
+                "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "10")),
                 "pool_pre_ping": True,
+                "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE", "1800")),
             })
         _sync_engine = create_engine(url, **engine_kwargs)
         _sync_session_factory = sessionmaker(bind=_sync_engine)

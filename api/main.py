@@ -209,20 +209,8 @@ async def lifespan(app: FastAPI):
         # Build geo_monthly_df from state_monthly_prices directly
         mo_df = app_state["state_monthly_prices_df"].copy()
         
-        # Mapping of average monthly usage by state for bill estimates
-        STATE_AVG_MONTHLY_USAGE = {
-            "AL": 1200, "AK": 570, "AZ": 1060, "AR": 1120, "CA": 530,
-            "CO": 690, "CT": 730, "DE": 930, "DC": 710, "FL": 1100,
-            "GA": 1120, "HI": 510, "ID": 960, "IL": 720, "IN": 940,
-            "IA": 870, "KS": 930, "KY": 1130, "LA": 1220, "ME": 530,
-            "MD": 1000, "MA": 600, "MI": 630, "MN": 780, "MS": 1200,
-            "MO": 1060, "MT": 810, "NE": 960, "NV": 910, "NH": 590,
-            "NJ": 680, "NM": 640, "NY": 570, "NC": 1060, "ND": 1110,
-            "OH": 870, "OK": 1100, "OR": 910, "PA": 830, "RI": 570,
-            "SC": 1130, "SD": 1020, "TN": 1210, "TX": 1140, "UT": 790,
-            "VT": 540, "VA": 1120, "WA": 950, "WV": 1090, "WI": 680,
-            "WY": 860,
-        }
+        from config.constants import STATE_AVG_MONTHLY_USAGE
+
 
         records = []
         for _, row in mo_df.iterrows():
@@ -325,6 +313,10 @@ from api.routes.monitoring import router as monitoring_router
 from api.routes.eia861m import router as eia861m_router
 from api.routes.openei import router as openei_router
 from api.routes.eia930 import router as eia930_router
+from api.routes.overview import router as overview_router
+from api.routes.report import router as report_router
+from api.routes.simulate import router as simulate_router
+from api.routes.geo_boundaries import router as geo_boundaries_router
 
 app.include_router(health_router)
 app.include_router(dashboard_router)
@@ -342,6 +334,10 @@ app.include_router(monitoring_router)
 app.include_router(eia861m_router)
 app.include_router(openei_router)
 app.include_router(eia930_router)
+app.include_router(overview_router)
+app.include_router(report_router)
+app.include_router(simulate_router)
+app.include_router(geo_boundaries_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────

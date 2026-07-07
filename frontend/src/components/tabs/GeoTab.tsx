@@ -11,6 +11,8 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip
 } from 'recharts';
 import USMap from '../USMap.tsx';
+import StateZipMap from '../StateZipMap.tsx';
+
 
 // ─── NJ PSE&G ZIP codes used to construct synthetic geo-insight payload ──────
 const NJ_ZIPS = ['07101', '07201', '07301', '07401', '07501'];
@@ -141,6 +143,12 @@ const GeoTab = () => {
   const [zipSearchLoading, setZipSearchLoading] = useState(false);
   const [zipSearchError, setZipSearchError] = useState<string | null>(null);
 
+  // Drilldown states
+  const [isDrilldown, setIsDrilldown] = useState(false);
+  const [mapViewMode, setMapViewMode] = useState<'bill' | 'rate' | 'utility'>('rate');
+  const [hoveredZip, setHoveredZip] = useState<string | null>(null);
+
+
   // Fetch EIA-930 hourly grid status
   const { data: gridStatus } = useQuery({
     queryKey: ['grid-status'],
@@ -159,6 +167,21 @@ const GeoTab = () => {
     setZipUtility([]);
     try {
       const res = await axios.get(`/utility/lookup?zip=${zipInput}`);
+      setZipUtility(res.data);
+    } catch (err: any) {
+      setZipSearchError(err.response?.data?.detail || 'ZIP code not found');
+    } finally {
+      setZipSearchLoading(false);
+    }
+  };
+
+  const handleZipClick = async (zip: string) => {
+    setZipInput(zip);
+    setZipSearchLoading(true);
+    setZipSearchError(null);
+    setZipUtility([]);
+    try {
+      const res = await axios.get(`/utility/lookup?zip=${zip}`);
       setZipUtility(res.data);
     } catch (err: any) {
       setZipSearchError(err.response?.data?.detail || 'ZIP code not found');
@@ -196,6 +219,37 @@ const GeoTab = () => {
     },
     enabled: !!selectedState && !!geoData?.current_month
   });
+
+  // Fetch ZCTA boundaries for selected state when in drill-down mode
+  const { data: zipBoundaries, isLoading: isBoundariesLoading } = useQuery({
+    queryKey: ['geo_boundaries', selectedState],
+    queryFn: async () => {
+      const res = await axios.get(`/geo/boundaries?state=${selectedState}`);
+      return res.data;
+    },
+    enabled: isDrilldown
+  });
+
+  // Fetch ZIP statistics for the selected state
+  const { data: zipStats } = useQuery({
+    queryKey: ['geo_zip_stats', selectedState],
+    queryFn: async () => {
+      const res = await axios.get(`/geo/zip-stats?state=${selectedState}`);
+      return res.data;
+    },
+    enabled: isDrilldown
+  });
+
+  // Fetch utility territories counts
+  const { data: utilityTerritories } = useQuery({
+    queryKey: ['geo_utility_territories', selectedState],
+    queryFn: async () => {
+      const res = await axios.get(`/geo/utility-territories?state=${selectedState}`);
+      return res.data;
+    },
+    enabled: isDrilldown
+  });
+
 
   // PSEG rate history
   const { data: psegHistory } = useQuery({
@@ -302,12 +356,71 @@ const GeoTab = () => {
       {/* ── Map + Detail Panel ── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-3 card p-0 overflow-hidden relative min-h-[600px] bg-[#F8FAFC]">
-          <div className="absolute top-8 left-8 z-10 p-4 bg-white/80 rounded-2xl border border-slate-100 shadow-2xl">
-            <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="bg-transparent border-none font-black text-lg text-slate-900 outline-none">
-              {geoData?.data?.map((s: any) => <option key={s.state} value={s.state}>{s.state}</option>)}
-            </select>
+          <div className="absolute top-8 left-8 z-10 flex gap-2">
+            <div className="p-4 bg-white/80 rounded-2xl border border-slate-100 shadow-2xl">
+              <select 
+                value={selectedState} 
+                onChange={(e) => { setSelectedState(e.target.value); setIsDrilldown(false); }} 
+                className="bg-transparent border-none font-black text-lg text-slate-900 outline-none"
+              >
+                {geoData?.data?.map((s: any) => <option key={s.state} value={s.state}>{s.state}</option>)}
+              </select>
+            </div>
+            {isDrilldown && (
+              <button 
+                onClick={() => setIsDrilldown(false)}
+                className="bg-white/80 border border-slate-100 rounded-2xl px-4 text-xs font-black shadow-2xl text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                ← Back to US
+              </button>
+            )}
           </div>
-          <USMap data={mapValues} selectedState={selectedState} onStateClick={setSelectedState} colorRange={viewMode === 'bill' ? ["#EFF6FF", "#1D4ED8"] : ["#F0FDF4", "#166534"]} />
+          
+          {isDrilldown && (
+            <div className="absolute top-8 right-8 z-10 bg-white/80 rounded-2xl p-2 border border-slate-100 shadow-2xl flex bg-slate-100 p-1">
+              <button 
+                onClick={() => setMapViewMode('rate')} 
+                className={`px-3 py-1.5 rounded-xl text-[10px] font-black ${mapViewMode === 'rate' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                Color by Rate
+              </button>
+              <button 
+                onClick={() => setMapViewMode('utility')} 
+                className={`px-3 py-1.5 rounded-xl text-[10px] font-black ${mapViewMode === 'utility' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
+              >
+                Color by Utility
+              </button>
+            </div>
+          )}
+
+          {!isDrilldown ? (
+            <USMap data={mapValues} selectedState={selectedState} onStateClick={setSelectedState} colorRange={viewMode === 'bill' ? ["#EFF6FF", "#1D4ED8"] : ["#F0FDF4", "#166534"]} />
+          ) : isBoundariesLoading ? (
+            <div className="w-full h-full min-h-[500px] flex items-center justify-center">
+              <div className="animate-spin h-8 w-8 border-b-2 border-blue-600" />
+            </div>
+          ) : (
+            <StateZipMap 
+              geoJsonData={zipBoundaries} 
+              viewMode={mapViewMode} 
+              selectedZip={zipInput} 
+              onZipClick={handleZipClick} 
+              onZipHover={setHoveredZip} 
+            />
+          )}
+
+          {isDrilldown && hoveredZip && zipBoundaries?.features && (() => {
+            const f = zipBoundaries.features.find((feat: any) => feat.properties.zip_code === hoveredZip);
+            if (!f) return null;
+            return (
+              <div className="absolute bottom-8 left-8 bg-white/95 backdrop-blur rounded-2xl p-4 shadow-2xl border text-xs z-10 space-y-1">
+                <p className="font-black text-slate-900">ZIP {f.properties.zip_code}</p>
+                <p className="text-slate-500 font-semibold">Utility: <span className="font-black text-slate-900">{f.properties.primary_utility}</span></p>
+                <p className="text-slate-500 font-semibold">Rate: <span className="font-black text-blue-600">${f.properties.residential_rate?.toFixed(4)}/kWh</span></p>
+              </div>
+            );
+          })()}
+
           <div className="absolute bottom-8 right-8 p-6 bg-slate-900 text-white rounded-[32px] shadow-2xl min-w-[280px]">
             <div className="flex justify-between items-start mb-6">
               <h4 className="text-3xl font-black">{selectedState}</h4>
@@ -324,18 +437,85 @@ const GeoTab = () => {
                     {Math.abs(detailData.vs_national_bill_pct)}% vs National Avg
                   </div>
                 )}
+                {!isDrilldown && (
+                  <button
+                    onClick={() => setIsDrilldown(true)}
+                    className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2 text-xs font-black transition-all flex items-center justify-center gap-1"
+                  >
+                    <MapIcon size={12} /> Drill Down to ZIP level
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── Side Panel ── */}
-        <div className="space-y-6">
-          {/* 🔹 NEW: ZIP Code to Utility Lookup (OpenEI) */}
+
+      {/* ── Side Panel ── */}
+      <div className="space-y-6">
+        {/* State ZIP statistics when drilled down */}
+        {isDrilldown && zipStats && (
           <div className="card p-5 bg-white border border-slate-100 shadow-lg space-y-4">
             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-              <MapIcon size={12} /> Utility ZIP Finder
+              <BarChart2 size={12} /> {selectedState} ZIP Statistics
             </h4>
+            <div className="space-y-3 text-xs">
+              <div className="flex justify-between items-baseline">
+                <span className="text-slate-500 font-semibold">Total ZIPs</span>
+                <span className="font-black text-slate-900">{zipStats.total_zips}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-slate-500 font-semibold">Avg. Rate</span>
+                <span className="font-black text-slate-900">${zipStats.avg_rate?.toFixed(4)}/kWh</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-slate-500 font-semibold">Rate Spread (σ)</span>
+                <span className="font-black text-slate-600">${zipStats.std_dev?.toFixed(4)}</span>
+              </div>
+              {zipStats.min_rate && (
+                <div className="pt-2 border-t border-slate-50 text-[10px] text-slate-500 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Cheapest ZIP: {zipStats.min_rate.zip_code}</span>
+                    <span className="font-bold text-emerald-600">${zipStats.min_rate.rate?.toFixed(4)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Primiest ZIP: {zipStats.max_rate.zip_code}</span>
+                    <span className="font-bold text-red-600">${zipStats.max_rate.rate?.toFixed(4)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* State Utility Coverage when drilled down */}
+        {isDrilldown && utilityTerritories && (
+          <div className="card p-5 bg-white border border-slate-100 shadow-lg space-y-4">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <Zap size={12} /> Utility Coverage
+            </h4>
+            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pt-1">
+              {utilityTerritories.map((util: any) => (
+                <div key={util.eia_utility_id} className="flex justify-between items-center text-xs">
+                  <div className="truncate max-w-[140px]">
+                    <p className="font-bold text-slate-900 truncate">{util.utility_name}</p>
+                    <p className="text-[9px] text-slate-400 font-semibold">{util.zip_count} ZIPs served</p>
+                  </div>
+                  <span className="font-black text-blue-600">
+                    {util.avg_residential_rate ? `$${util.avg_residential_rate.toFixed(4)}` : 'N/A'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ZIP Code to Utility Lookup (OpenEI) */}
+        <div className="card p-5 bg-white border border-slate-100 shadow-lg space-y-4">
+          <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+            <MapIcon size={12} /> Utility ZIP Finder
+          </h4>
+
             <form onSubmit={handleZipSearch} className="flex gap-2">
               <input
                 type="text"

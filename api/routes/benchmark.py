@@ -114,3 +114,108 @@ async def state_benchmark(
         "scatter_data": scatter,
         "total_states": len(states),
     }
+
+
+@router.get("/benchmark/zip-level")
+async def benchmark_zip_level(state: str = Query("NJ")):
+    state = state.strip().upper()
+    from database.connection import get_sync_engine
+    from sqlalchemy import text
+    import pandas as pd
+    import numpy as np
+
+    engine = get_sync_engine()
+    query = text("""
+        SELECT 
+            z.zip_code, 
+            r.residential_rate
+        FROM utility_zip_lookup z
+        LEFT JOIN utility_rates r ON z.eia_utility_id = r.eia_utility_id AND z.state = r.state
+        WHERE z.state = :state
+    """)
+
+    try:
+        df = pd.read_sql(query, con=engine, params={"state": state})
+    except Exception as e:
+        logger.error(f"Database query error in benchmark_zip_level: {e}")
+        raise HTTPException(500, "Database query error")
+
+    if df.empty:
+        return {"state": state, "avg_rate": 0, "zips": []}
+
+    df['zip_code'] = df['zip_code'].astype(str).str.strip().str.zfill(5)
+    grouped = df.groupby('zip_code')['residential_rate'].mean().dropna().reset_index()
+
+    if grouped.empty:
+        return {"state": state, "avg_rate": 0, "zips": []}
+
+    avg_rate = float(grouped['residential_rate'].mean())
+
+    zips_list = []
+    for _, row in grouped.sort_values('residential_rate', ascending=False).iterrows():
+        rate = float(row['residential_rate'])
+        vs_avg_pct = round((rate - avg_rate) / avg_rate * 100, 1) if avg_rate > 0 else 0.0
+        zips_list.append({
+            "zip_code": row['zip_code'],
+            "rate": round(rate, 4),
+            "vs_state_avg_pct": vs_avg_pct
+        })
+
+    above_avg = sum(1 for z in zips_list if z["vs_state_avg_pct"] > 0)
+    below_avg = len(zips_list) - above_avg
+
+    return {
+        "state": state,
+        "avg_rate": round(avg_rate, 4),
+        "above_average_count": above_avg,
+        "below_average_count": below_avg,
+        "zips": zips_list
+    }
+
+
+@router.get("/benchmark/utility-comparison")
+async def benchmark_utility_comparison(state: str = Query("NJ")):
+    state = state.strip().upper()
+    from database.connection import get_sync_engine
+    from sqlalchemy import text
+    import pandas as pd
+
+    engine = get_sync_engine()
+    query = text("""
+        SELECT 
+            z.utility_name,
+            r.residential_rate,
+            r.commercial_rate,
+            r.industrial_rate
+        FROM utility_zip_lookup z
+        LEFT JOIN utility_rates r ON z.eia_utility_id = r.eia_utility_id AND z.state = r.state
+        WHERE z.state = :state AND z.utility_name IS NOT NULL
+    """)
+
+    try:
+        df = pd.read_sql(query, con=engine, params={"state": state})
+    except Exception as e:
+        logger.error(f"Database query error in benchmark_utility_comparison: {e}")
+        raise HTTPException(500, "Database query error")
+
+    if df.empty:
+        return []
+
+    # Calculate average rates per utility
+    grouped = df.groupby('utility_name').agg({
+        'residential_rate': 'mean',
+        'commercial_rate': 'mean',
+        'industrial_rate': 'mean'
+    }).dropna(subset=['residential_rate']).reset_index()
+
+    utils_list = []
+    for _, row in grouped.sort_values('residential_rate', ascending=False).iterrows():
+        utils_list.append({
+            "utility_name": row['utility_name'],
+            "residential_rate": round(float(row['residential_rate']), 4),
+            "commercial_rate": round(float(row['commercial_rate']), 4) if pd.notna(row['commercial_rate']) else None,
+            "industrial_rate": round(float(row['industrial_rate']), 4) if pd.notna(row['industrial_rate']) else None,
+        })
+
+    return utils_list
+

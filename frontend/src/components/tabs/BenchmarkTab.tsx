@@ -46,6 +46,25 @@ const BenchmarkTab = () => {
     }
   });
 
+  // Fetch ZIP-level benchmarking for selected comparison state
+  const { data: zipBenchmark } = useQuery({
+    queryKey: ['benchmark_zip_level', comparisonState || 'NJ'],
+    queryFn: async () => {
+      const res = await axios.get(`/benchmark/zip-level?state=${comparisonState || 'NJ'}`);
+      return res.data;
+    }
+  });
+
+  // Fetch utility rates comparison for selected comparison state
+  const { data: utilityBenchmark } = useQuery({
+    queryKey: ['benchmark_utility_comparison', comparisonState || 'NJ'],
+    queryFn: async () => {
+      const res = await axios.get(`/benchmark/utility-comparison?state=${comparisonState || 'NJ'}`);
+      return res.data;
+    }
+  });
+
+
   const mapData = useMemo(() => {
     if (!data) return [];
     return data.states.map((s: any) => ({
@@ -266,6 +285,79 @@ const BenchmarkTab = () => {
           </div>
         </div>
       )}
+
+      {/* ── Sub-State ZCTA & Utility Benchmarking ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Utility Comparison within state */}
+        <div className="card p-6">
+          <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+            <Building2 size={16} className="text-blue-600" /> Utility Rate Comparison ({comparisonState || 'NJ'})
+          </h4>
+          <div className="h-[280px]">
+            {utilityBenchmark && utilityBenchmark.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={utilityBenchmark} margin={{ bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
+                  <XAxis dataKey="utility_name" tick={{ fontSize: 9 }} interval={0} 
+                    tickFormatter={(name) => name.length > 15 ? name.substring(0, 15) + '...' : name} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `${(v * 100).toFixed(0)}¢`} />
+                  <Tooltip formatter={(v: any) => [`${(Number(v) * 100).toFixed(2)}¢/kWh`, 'Rate']} />
+                  <Bar dataKey="residential_rate" fill="#3B82F6" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-xs text-slate-400">
+                No utility data available for this state.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ZIP-level distribution metrics within state */}
+        <div className="card p-6">
+          <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
+            <Zap size={16} className="text-amber-500" /> ZIP Code Rate Disparity ({comparisonState || 'NJ'})
+          </h4>
+          {zipBenchmark && zipBenchmark.zips && zipBenchmark.zips.length > 0 ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-100/50">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">State average</p>
+                  <p className="text-base font-black text-slate-900">${(zipBenchmark.avg_rate * 100).toFixed(2)}¢</p>
+                </div>
+                <div className="bg-emerald-50/50 rounded-xl p-3.5 border border-emerald-100/20">
+                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-wider mb-1">Below Avg ZIPs</p>
+                  <p className="text-base font-black text-emerald-700">{zipBenchmark.below_average_count}</p>
+                </div>
+                <div className="bg-red-50/50 rounded-xl p-3.5 border border-red-100/20">
+                  <p className="text-[9px] font-black text-red-600 uppercase tracking-wider mb-1">Above Avg ZIPs</p>
+                  <p className="text-base font-black text-red-700">{zipBenchmark.above_average_count}</p>
+                </div>
+              </div>
+              
+              <div className="pt-2">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2.5">Top 5 Most Expensive ZIPs</p>
+                <div className="space-y-1.5 font-sans">
+                  {zipBenchmark.zips.slice(0, 5).map((z: any) => (
+                    <div key={z.zip_code} className="flex justify-between items-center text-xs text-slate-700 p-2 bg-slate-50 rounded-lg">
+                      <span className="font-bold">ZIP {z.zip_code}</span>
+                      <div className="flex gap-2 items-center">
+                        <span className="font-black text-slate-900">${(z.rate * 100).toFixed(2)}¢/kWh</span>
+                        <span className="text-[10px] text-red-500 font-bold">+{z.vs_state_avg_pct}% vs avg</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex items-center justify-center text-xs text-slate-400">
+              No ZIP code data available for this state.
+            </div>
+          )}
+        </div>
+      </div>
+
 
       {/* ── 🔹 NEW SECTION: Monthly Trends & Utility Listings (EIA-861M & OpenEI) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
