@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load data and train models on startup. Never retrain per-request."""
+    from config.logging_config import setup_logging
+    setup_logging()
+    
     logger.info("Starting data + model initialization...")
 
     # Initialize DB connection pool
@@ -266,6 +269,9 @@ async def lifespan(app: FastAPI):
 #  APP CREATION
 # ═════════════════════════════════════════════════════════════════════════════
 
+from api.middleware.standard_response import StandardResponseMiddleware
+from api.middleware.metrics import PrometheusMetricsMiddleware
+
 app = FastAPI(
     title="Electricity Cost AI API",
     description="ML-powered electricity cost analysis, forecasting, and plan comparison for NJ",
@@ -273,6 +279,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(StandardResponseMiddleware)
+app.add_middleware(PrometheusMetricsMiddleware)
 app.add_middleware(RateLimiterMiddleware, requests_limit=100, window_seconds=60)
 
 app.add_middleware(
@@ -317,6 +325,9 @@ from api.routes.overview import router as overview_router
 from api.routes.report import router as report_router
 from api.routes.simulate import router as simulate_router
 from api.routes.geo_boundaries import router as geo_boundaries_router
+from api.routes.metrics import router as metrics_router
+from api.routes.tariffs import router as tariffs_router
+from api.routes.service_territory import router as service_territory_router
 
 app.include_router(health_router)
 app.include_router(dashboard_router)
@@ -338,6 +349,10 @@ app.include_router(overview_router)
 app.include_router(report_router)
 app.include_router(simulate_router)
 app.include_router(geo_boundaries_router)
+app.include_router(metrics_router)
+app.include_router(tariffs_router)
+app.include_router(service_territory_router)
+
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────

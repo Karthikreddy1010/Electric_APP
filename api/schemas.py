@@ -80,6 +80,17 @@ class PlanResult(BaseModel):
     p95_annual_cost: float
     risk_score: float
     monthly_expected: list[float]
+    
+    # New integration fields
+    utility_name: Optional[str] = None
+    tariff_name: Optional[str] = None
+    fixed_charge: Optional[float] = None
+    energy_charge: Optional[float] = None
+    service_type: Optional[str] = None
+    rate_structure: Optional[str] = None
+    effective_date: Optional[str] = None
+    green_pct: Optional[float] = None
+
 
 class PlanSimResponse(BaseModel):
     comparison: list[PlanResult]

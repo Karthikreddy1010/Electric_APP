@@ -739,3 +739,23 @@ class EIA930Interchange(Base):
         UniqueConstraint("period", "from_ba", "to_ba", name="uq_eia930i_period_from_to"),
         Index("ix_eia930i_from_period", "from_ba", "period"),
     )
+
+
+class UtilityServiceTerritory(Base):
+    """
+    EIA-861 Utility Service Territory mapping (county-level).
+    Stores which utilities serve which counties.
+    """
+    __tablename__ = "utility_service_territories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    utility_id = Column(Integer, nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    county = Column(String(100), nullable=False, index=True)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("utility_id", "state", "county", name="uq_ust_util_state_county"),
+        Index("ix_ust_state_county", "state", "county"),
+    )
+

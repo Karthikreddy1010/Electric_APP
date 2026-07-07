@@ -20,14 +20,21 @@ async def get_overview():
     latest = billing.iloc[-1]
     prev = billing.iloc[-2] if len(billing) > 1 else latest
     
-    # Lookup real tariff fixed customer charge from PSEG history if available
+    # Lookup real tariff fixed customer charge from utility tariffs
+    from api.services.tariff_service import get_default_residential_tariff
+    
     fixed_charge = DEFAULT_CUSTOMER_CHARGE
-    pseg_df = app_state.get("pseg_history_df")
-    if pseg_df is not None and not pseg_df.empty:
-        try:
-            fixed_charge = float(pseg_df["fixed_charge_per_month"].dropna().iloc[-1])
-        except Exception:
-            pass
+    pseg_tariff = get_default_residential_tariff(15477)
+    if pseg_tariff and pseg_tariff.get("fixed_charge") is not None:
+        fixed_charge = float(pseg_tariff["fixed_charge"])
+    else:
+        # Fallback to legacy behavior if database is not fully populated
+        pseg_df = app_state.get("pseg_history_df")
+        if pseg_df is not None and not pseg_df.empty:
+            try:
+                fixed_charge = float(pseg_df["fixed_charge_per_month"].dropna().iloc[-1])
+            except Exception:
+                pass
 
     # 1. Compute Core Metrics using tariff + usage
     latest_kwh = float(latest["usage_kwh"])

@@ -43,6 +43,7 @@ from database.models import (
     EIA930Generation,
     EIA930Subregion,
     EIA930Interchange,
+    UtilityServiceTerritory,
 )
 
 logger = logging.getLogger(__name__)
@@ -291,6 +292,7 @@ def run_seed(force: bool = False) -> dict:
                 session.query(UtilityRate).delete()
                 session.query(UtilityTariff).delete()
                 session.query(UtilityMaster).delete()
+                session.query(UtilityServiceTerritory).delete()
                 session.query(EIA930Hourly).delete()
                 session.query(EIA930Generation).delete()
                 session.query(EIA930Subregion).delete()
@@ -318,6 +320,7 @@ def run_seed(force: bool = False) -> dict:
     results["eia861m_monthly"] = seed_eia861m_monthly(force)
     results["openei_utilities"] = seed_openei_utilities(force)
     results["eia930_initial"] = seed_eia930_initial(force)
+    results["utility_service_territories"] = seed_utility_service_territories(force)
 
     logger.info(f"Seed complete: {results}")
     return results
@@ -794,6 +797,44 @@ def seed_eia930_initial(force: bool = False) -> int:
         logger.info(f"Seeded {len(records)} eia930_interchange records")
 
     return total
+
+
+def seed_utility_service_territories(force: bool = False) -> int:
+    """Load service_territory_clean.csv into utility_service_territories table."""
+    csv_path = PROCESSED_DIR / "eia861" / "service_territory_clean.csv"
+    if not csv_path.exists():
+        csv_path = PROJECT_ROOT / "data" / "processed" / "eia861" / "service_territory_clean.csv"
+        
+    if not csv_path.exists():
+        logger.warning(f"No service territory CSV found at {csv_path} — skipping")
+        return 0
+
+    df = pd.read_csv(csv_path)
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(UtilityServiceTerritory.id)).scalar()
+            if count > 0:
+                logger.info(f"utility_service_territories already has {count} rows — skipping")
+                return count
+
+        records = []
+        for _, row in df.iterrows():
+            records.append(UtilityServiceTerritory(
+                utility_id=int(row["utility_id"]),
+                state=str(row["state"]).strip().upper(),
+                county=str(row["county"]).strip(),
+            ))
+            if len(records) >= 5000:
+                session.add_all(records)
+                session.commit()
+                records = []
+        if records:
+            session.add_all(records)
+            session.commit()
+
+    logger.info(f"Seeded {len(df)} utility service territory records")
+    return len(df)
+
 
 
 

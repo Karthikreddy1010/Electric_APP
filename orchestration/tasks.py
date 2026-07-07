@@ -7,6 +7,7 @@ import logging
 import time
 import pandas as pd
 from api.state import app_state
+from api.cache import invalidate_all_caches
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ def run_etl_pipeline_task():
         output_paths = run_pipeline(force=True)
         duration = time.time() - t0
         logger.info(f"Scheduled ETL pipeline completed in {duration:.1f}s. Outputs: {output_paths}")
+        invalidate_all_caches()
     except Exception as e:
         logger.error(f"Scheduled ETL pipeline failed: {e}", exc_info=True)
 
@@ -36,6 +38,7 @@ def retrain_forecast_models_task():
         app_state["forecast_model"] = ensemble
         duration = time.time() - t0
         logger.info(f"Retraining of forecasting models completed in {duration:.1f}s")
+        invalidate_all_caches()
     except Exception as e:
         logger.error(f"Retraining of forecasting models failed: {e}", exc_info=True)
 
@@ -64,6 +67,7 @@ def update_elasticity_model_task():
             app_state["demand_model"] = demand_model
             duration = time.time() - t0
             logger.info(f"Demand response elasticity model updated in {duration:.1f}s")
+            invalidate_all_caches()
         else:
             logger.warning("Missing datasets in app_state; skipping elasticity model update")
     except Exception as e:
@@ -161,6 +165,7 @@ def sync_eia861m_task():
         app_state["eia861m_df"] = pd.read_sql("SELECT * FROM eia861m_monthly", con=engine)
         duration = time.time() - t0
         logger.info(f"EIA-861M sync completed: inserted {inserted_count}, updated {updated_count} records in {duration:.1f}s")
+        invalidate_all_caches()
     except Exception as e:
         logger.error(f"EIA-861M API sync task failed: {e}", exc_info=True)
 
@@ -214,6 +219,7 @@ def sync_openei_tariffs_task():
 
         duration = time.time() - t0
         logger.info(f"OpenEI tariff sync completed: inserted {len(records)} records in {duration:.1f}s")
+        invalidate_all_caches()
     except Exception as e:
         logger.error(f"OpenEI tariff sync task failed: {e}", exc_info=True)
 
@@ -305,6 +311,7 @@ def sync_eia930_task():
 
         duration = time.time() - t0
         logger.info(f"EIA-930 grid sync completed: upserted {inserted_count} records in {duration:.1f}s")
+        invalidate_all_caches()
     except Exception as e:
         logger.error(f"EIA-930 hourly sync task failed: {e}", exc_info=True)
 

@@ -264,13 +264,13 @@ def _make_cache_key(prefix: str, args: tuple, kwargs: dict) -> str:
     return raw
 
 
-def cached(ttl: int = 300, prefix: Optional[str] = None):
+def cached(ttl: Optional[int] = None, prefix: Optional[str] = None):
     """
     Cache decorator for async functions.
 
     Parameters
     ----------
-    ttl : cache time-to-live in seconds (default: 5 minutes)
+    ttl : cache time-to-live in seconds (default: API_CACHE_TTL_SECONDS or 5 minutes)
     prefix : optional key prefix (defaults to function name)
 
     Usage:
@@ -299,9 +299,10 @@ def cached(ttl: int = 300, prefix: Optional[str] = None):
 
             # Cache the result
             try:
+                effective_ttl = ttl if ttl is not None else int(os.environ.get("API_CACHE_TTL_SECONDS", "300"))
                 from fastapi.encoders import jsonable_encoder
                 serialized = json.dumps(jsonable_encoder(result), default=str)
-                await cache.set(key, serialized, ttl)
+                await cache.set(key, serialized, effective_ttl)
             except (TypeError, ValueError) as e:
                 logger.debug(f"Could not cache result for {key}: {e}")
 
@@ -309,3 +310,20 @@ def cached(ttl: int = 300, prefix: Optional[str] = None):
 
         return wrapper
     return decorator
+
+
+def invalidate_all_caches() -> None:
+    """Synchronous wrapper to invalidate all Redis and In-Memory caches from threads."""
+    import asyncio
+    cache = get_cache()
+    try:
+        loop = asyncio.get_running_loop()
+        asyncio.run_coroutine_threadsafe(cache.invalidate_pattern("*"), loop)
+        logger.info("Triggered asynchronous background cache invalidation")
+    except RuntimeError:
+        try:
+            asyncio.run(cache.invalidate_pattern("*"))
+            logger.info("Successfully invalidated cache synchronously")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate cache synchronously: {e}")
+

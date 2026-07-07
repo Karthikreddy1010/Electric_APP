@@ -39,6 +39,8 @@ class BackgroundScheduler:
         self._jobs: list[ScheduledJob] = []
         self._shutdown_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        from concurrent.futures import ThreadPoolExecutor
+        self._executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ElectricTaskWorker")
 
     def add_job(self, name: str, target: Callable[[], None], interval_seconds: int) -> None:
         """Register a job to run periodically."""
@@ -64,7 +66,39 @@ class BackgroundScheduler:
         logger.info("Stopping background scheduler...")
         self._shutdown_event.set()
         self._thread.join(timeout=5.0)
+        self._executor.shutdown(wait=False)
         logger.info("Background scheduler stopped.")
+
+    def _run_job_with_retry(self, name: str, target: Callable) -> None:
+        """Run task with exponential backoff retry logic for fetching/syncing tasks."""
+        is_sync_task = any(kw in name.lower() for kw in ["sync", "fetch", "ingestion"])
+        max_retries = 3 if is_sync_task else 0
+        backoff_factor = 2.0
+        initial_delay = 5.0
+        
+        retries = 0
+        while not self._shutdown_event.is_set():
+            try:
+                logger.info(f"Worker running task '{name}' (attempt {retries + 1}/{max_retries + 1})")
+                target()
+                logger.info(f"Task '{name}' completed successfully.")
+                break
+            except Exception as e:
+                if retries < max_retries and not self._shutdown_event.is_set():
+                    delay = initial_delay * (backoff_factor ** retries)
+                    logger.warning(
+                        f"Task '{name}' failed with error: {e}. "
+                        f"Retrying in {delay:.1f} seconds (retry {retries + 1}/{max_retries})..."
+                    )
+                    retries += 1
+                    # Sleep in small increments to respond to shutdown event quickly
+                    for _ in range(int(delay)):
+                        if self._shutdown_event.is_set():
+                            break
+                        time.sleep(1)
+                else:
+                    logger.error(f"Task '{name}' failed after {max_retries} retries: {e}", exc_info=True)
+                    break
 
     def _run_loop(self) -> None:
         """Main loop that evaluates when jobs need execution."""
@@ -91,11 +125,11 @@ class BackgroundScheduler:
                 # Check if interval elapsed
                 elapsed = (now - state["last_run"]).total_seconds()
                 if elapsed >= state["interval"]:
-                    logger.info(f"Scheduler triggering job '{name}'")
+                    logger.info(f"Scheduler submitting job '{name}' to worker pool")
                     try:
-                        state["target"]()
+                        self._executor.submit(self._run_job_with_retry, name, state["target"])
                     except Exception as e:
-                        logger.error(f"Error executing job '{name}': {e}", exc_info=True)
+                        logger.error(f"Failed to submit job '{name}' to worker pool: {e}")
                     state["last_run"] = datetime.now()
 
             # Sleep in small increments to remain responsive to shutdown requests

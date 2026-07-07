@@ -102,18 +102,32 @@ class PlanSimulator:
                 )
             supply_cost = usage * variable_rates[:, :self.horizon_months]
         
-        # Add delivery charges (~$0.055/kWh for NJ PSE&G)
+        # Resolve real tariff data dynamically if available, otherwise fallback
+        fixed_charge = 8.24
         delivery_rate = 0.055
+        rider_rate = 0.008
+        tax_rate = 0.06625
+
+        try:
+            from api.services.tariff_service import get_default_residential_tariff
+            tariff = get_default_residential_tariff(15477)  # PSE&G
+            if tariff:
+                if tariff.get("fixed_charge") is not None:
+                    fixed_charge = float(tariff["fixed_charge"])
+        except Exception:
+            pass
+
+        # Add delivery charges (~$0.055/kWh for NJ PSE&G)
         delivery_cost = usage * delivery_rate
         
         # Add riders/SBC (~$0.008/kWh)
-        rider_cost = usage * 0.008
+        rider_cost = usage * rider_rate
         
-        # Total per-month cost
-        monthly_total = supply_cost + delivery_cost + rider_cost
+        # Total per-month cost (including supply, delivery, riders, and fixed customer charge)
+        monthly_total = supply_cost + delivery_cost + rider_cost + fixed_charge
         
         # Tax (NJ 6.625%)
-        monthly_total *= 1.06625
+        monthly_total *= (1.0 + tax_rate)
         
         # Annual total cost
         annual_total = monthly_total.sum(axis=1)
