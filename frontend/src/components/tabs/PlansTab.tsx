@@ -23,6 +23,14 @@ const PlansTab = () => {
     }
   });
 
+  const { data: defaultTariff } = useQuery({
+    queryKey: ['default-tariff'],
+    queryFn: async () => {
+      const res = await axios.get('/tariffs/default?utility_id=15477');
+      return res.data;
+    }
+  });
+
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center p-20 space-y-4">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -134,6 +142,46 @@ const PlansTab = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Active Utility Tariff Details ── */}
+      {defaultTariff && (
+        <div className="card p-8 bg-white shadow-2xl shadow-slate-200/50 space-y-6">
+          <div>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+              <Zap size={16} className="text-blue-600" /> Active Utility Tariff Parameters
+            </h3>
+            <p className="text-xs text-slate-500 mt-1">Real-time parameters loaded from OpenEI Utility Rate Database (URDB)</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Utility & Tariff Name</span>
+              <p className="text-base font-black text-slate-800 mt-1">PSE&G</p>
+              <p className="text-xs text-slate-500 font-medium">{defaultTariff.name}</p>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fixed Monthly Charge</span>
+              <p className="text-2xl font-black text-slate-800 mt-1">${defaultTariff.fixed_charge?.toFixed(2) || "0.00"}</p>
+              <p className="text-xs text-slate-500 font-medium">{defaultTariff.fixed_charge_units || "per month"}</p>
+            </div>
+            <div className="p-4 bg-slate-50 rounded-2xl">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Effective Energy Charge</span>
+              <p className="text-2xl font-black text-slate-800 mt-1">${defaultTariff.energy_rate?.toFixed(5) || "0.12000"} <span className="text-xs font-normal">/kWh</span></p>
+              <p className="text-xs text-slate-500 font-medium">Service Type: {defaultTariff.service_type || "Bundled"}</p>
+            </div>
+          </div>
+          <div className="p-6 bg-slate-50 rounded-2xl space-y-3">
+             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Rate Structure & Comments</span>
+             <p className="text-xs text-slate-600 leading-relaxed font-medium">{defaultTariff.energy_comments || "No comments available."}</p>
+             <div className="flex gap-4 text-xs font-bold text-slate-500 pt-2 border-t border-slate-200">
+                <span>Start Date: {defaultTariff.start_date || "N/A"}</span>
+                <span>End Date: {defaultTariff.end_date || "Present"}</span>
+                <span className={defaultTariff.approved ? "text-emerald-600" : "text-amber-500"}>
+                   Status: {defaultTariff.approved ? "Approved" : "Pending"}
+                </span>
+             </div>
+          </div>
+        </div>
+      )}
 
       {/* ── BGS Auction Rates History Chart ── */}
       {bgsData && bgsData.data && (

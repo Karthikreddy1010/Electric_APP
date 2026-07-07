@@ -109,11 +109,28 @@ class PlanSimulator:
         tax_rate = 0.06625
 
         try:
-            from api.services.tariff_service import get_default_residential_tariff
+            from api.services.tariff_service import get_default_residential_tariff, _parse_rate_structure
             tariff = get_default_residential_tariff(15477)  # PSE&G
             if tariff:
                 if tariff.get("fixed_charge") is not None:
                     fixed_charge = float(tariff["fixed_charge"])
+                
+                # Parse rates from structure
+                rate_struct = _parse_rate_structure(tariff.get("energy_rate_structure"))
+                if rate_struct and isinstance(rate_struct, list) and len(rate_struct) > 0:
+                    period = rate_struct[0]
+                    if isinstance(period, list) and len(period) > 0:
+                        tier = period[0]
+                        base_rate = float(tier.get("rate", 0.055))
+                        adj = float(tier.get("adj", 0.008))
+                        
+                        # Standard BGS supply rate is approx 0.10279 $/kWh, Delivery is the remainder
+                        if base_rate > 0.09:
+                            delivery_rate = round(base_rate - 0.10279, 5)
+                        else:
+                            delivery_rate = base_rate
+                        
+                        rider_rate = adj
         except Exception:
             pass
 

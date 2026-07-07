@@ -42,9 +42,15 @@ async def get_geo_boundaries(
             z.eia_utility_id,
             r.residential_rate, 
             r.commercial_rate, 
-            r.industrial_rate
+            r.industrial_rate,
+            em.total_customers,
+            em.peak_demand,
+            em.nm_customers,
+            em.dynamic_pricing_flag,
+            em.demand_response_flag
         FROM utility_zip_lookup z
         LEFT JOIN utility_rates r ON z.eia_utility_id = r.eia_utility_id AND z.state = r.state
+        LEFT JOIN eia861_master em ON z.eia_utility_id = em.utility_id AND z.state = em.state AND em.year = (SELECT MAX(year) FROM eia861_master)
         WHERE z.state = :state
     """)
     
@@ -72,6 +78,12 @@ async def get_geo_boundaries(
         
         primary_utility = utilities[0] if utilities else "Unknown"
         utility_list_str = ", ".join(utilities)
+
+        total_cust = float(group['total_customers'].sum()) if group['total_customers'].notna().any() else 0.0
+        peak_dem = float(group['peak_demand'].sum()) if group['peak_demand'].notna().any() else 0.0
+        nm_cust = float(group['nm_customers'].sum()) if group['nm_customers'].notna().any() else 0.0
+        dyn_pricing = int(group['dynamic_pricing_flag'].max()) if group['dynamic_pricing_flag'].notna().any() else 0
+        dem_resp = int(group['demand_response_flag'].max()) if group['demand_response_flag'].notna().any() else 0
         
         zip_properties[zip_code] = {
             "zip_code": zip_code,
@@ -80,7 +92,12 @@ async def get_geo_boundaries(
             "primary_utility": primary_utility,
             "residential_rate": avg_res_rate,
             "commercial_rate": avg_comm_rate,
-            "industrial_rate": avg_ind_rate
+            "industrial_rate": avg_ind_rate,
+            "total_customers": total_cust,
+            "peak_demand": peak_dem,
+            "net_metering_customers": nm_cust,
+            "dynamic_pricing": dyn_pricing,
+            "demand_response": dem_resp
         }
         
     shp_path = Path("data/raw/tl_2024_us_zcta520/tl_2024_us_zcta520.shp")
@@ -110,8 +127,18 @@ async def get_geo_boundaries(
         gdf_filtered['residential_rate'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'residential_rate'))
         gdf_filtered['commercial_rate'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'commercial_rate'))
         gdf_filtered['industrial_rate'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'industrial_rate'))
+        gdf_filtered['total_customers'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'total_customers'))
+        gdf_filtered['peak_demand'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'peak_demand'))
+        gdf_filtered['net_metering_customers'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'net_metering_customers'))
+        gdf_filtered['dynamic_pricing'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'dynamic_pricing'))
+        gdf_filtered['demand_response'] = gdf_filtered['zip_code'].apply(lambda z: get_prop(z, 'demand_response'))
         
-        gdf_final = gdf_filtered[['zip_code', 'state', 'utility_names', 'primary_utility', 'residential_rate', 'commercial_rate', 'industrial_rate', 'geometry']]
+        gdf_final = gdf_filtered[[
+            'zip_code', 'state', 'utility_names', 'primary_utility',
+            'residential_rate', 'commercial_rate', 'industrial_rate',
+            'total_customers', 'peak_demand', 'net_metering_customers',
+            'dynamic_pricing', 'demand_response', 'geometry'
+        ]]
         
         geojson_str = gdf_final.to_json()
         geojson_data = json.loads(geojson_str)

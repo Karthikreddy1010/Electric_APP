@@ -31,6 +31,7 @@ class DatabaseSettings(BaseSettings):
     class Config:
         env_prefix = "DB_"
         env_file = str(BASE_DIR / ".env")
+        extra = "ignore"
 
 
 class APISettings(BaseSettings):
@@ -45,6 +46,7 @@ class APISettings(BaseSettings):
     class Config:
         env_prefix = "API_"
         env_file = str(BASE_DIR / ".env")
+        extra = "ignore"
 
 
 class ModelSettings(BaseSettings):
@@ -72,6 +74,7 @@ class ModelSettings(BaseSettings):
     class Config:
         env_prefix = "MODEL_"
         env_file = str(BASE_DIR / ".env")
+        extra = "ignore"
 
 
 class DataSourceSettings(BaseSettings):
@@ -90,6 +93,7 @@ class DataSourceSettings(BaseSettings):
     class Config:
         env_prefix = "DATA_"
         env_file = str(BASE_DIR / ".env")
+        extra = "ignore"
 
 
 # Singleton instances

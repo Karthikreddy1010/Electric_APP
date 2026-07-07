@@ -75,6 +75,48 @@ class BillImpactEngine:
             return demand_model.get_learned_elasticity()
         return -0.20
 
+    def _enrich_components_with_tariff(self, components: dict[str, float]) -> dict[str, float]:
+        """Enrich components dict with real tariff-derived values if lookup succeeds."""
+        enriched = components.copy()
+        try:
+            from api.services.tariff_service import get_default_residential_tariff, _parse_rate_structure
+            eia_utility_id = int(components.get("eia_utility_id") or 15477)
+            tariff = get_default_residential_tariff(eia_utility_id)
+            if tariff:
+                if tariff.get("fixed_charge") is not None:
+                    enriched["customer_charge"] = float(tariff["fixed_charge"])
+                
+                rate_struct = _parse_rate_structure(tariff.get("energy_rate_structure"))
+                if rate_struct and isinstance(rate_struct, list) and len(rate_struct) > 0:
+                    period = rate_struct[0]
+                    if isinstance(period, list) and len(period) > 0:
+                        tier = period[0]
+                        base_rate = float(tier.get("rate", 0.0))
+                        adj = float(tier.get("adj", 0.0))
+                        
+                        # Isolate BGS and Delivery
+                        if base_rate > 0.09:
+                            bgs = 0.10279
+                            delivery = base_rate - bgs
+                        else:
+                            bgs = 0.12
+                            delivery = base_rate
+                        
+                        # Populate if not explicitly provided (keep explicit overrides)
+                        if "bgs_rate" not in components:
+                            enriched["bgs_rate"] = bgs
+                        if "distribution_rate" not in components:
+                            enriched["distribution_rate"] = round(delivery * 0.8, 5)
+                        if "transmission_rate" not in components:
+                            enriched["transmission_rate"] = round(delivery * 0.2, 5)
+                        if "sbc_rate" not in components:
+                            enriched["sbc_rate"] = round(adj * 0.75, 5)
+                        if "transition_rate" not in components:
+                            enriched["transition_rate"] = round(adj * 0.25, 5)
+        except Exception as e:
+            logger.warning(f"Failed to enrich billing components with tariff: {e}")
+        return enriched
+
     # ═══════════════════════════════════════════════════════════════════════════
     #  1. DETERMINISTIC LAYER (Ground Truth)
     # ═══════════════════════════════════════════════════════════════════════════
@@ -87,6 +129,7 @@ class BillImpactEngine:
         """
         from models.pjm_market_physics import DEFAULT_PJM, compute_effective_kwh
 
+        components = self._enrich_components_with_tariff(components)
         line_items = {}
         subtotal = 0.0
 
@@ -138,6 +181,7 @@ class BillImpactEngine:
             compute_total_bill,
         )
 
+        components = self._enrich_components_with_tariff(components)
         lf = loss_factor if loss_factor is not None else DEFAULT_PJM.total_loss_factor
         effective_kwh = compute_effective_kwh(kwh, lf)
 
