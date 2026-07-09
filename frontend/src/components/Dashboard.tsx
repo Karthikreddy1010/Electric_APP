@@ -2,8 +2,7 @@ import OverviewTab from './tabs/OverviewTab.tsx';
 import BillAnalysisTab from './tabs/BillAnalysisTab.tsx';
 import ForecastTab from './tabs/ForecastTab.tsx';
 import ImpactTab from './tabs/ImpactTab.tsx';
-import BenchmarkTab from './tabs/BenchmarkTab.tsx';
-import GeoTab from './tabs/GeoTab.tsx';
+import RegionalInsightsTab from './tabs/RegionalInsights.tsx';
 import PlansTab from './tabs/PlansTab.tsx';
 import UtilityTab from './tabs/UtilityTab.tsx';
 
@@ -76,8 +75,7 @@ const Dashboard = ({
     case 'Overview': return <OverviewTab uploadedBill={uploadedBill} setActiveTab={setActiveTab} />;
     case 'Forecast': return <ForecastTab />;
     case 'Impact & Simulation': return <ImpactTab uploadedBill={uploadedBill} setActiveTab={setActiveTab} />;
-    case 'Benchmark': return <BenchmarkTab uploadedBill={uploadedBill} setActiveTab={setActiveTab} />;
-    case 'Geo Insights': return <GeoTab />;
+    case 'Regional Insights': return <RegionalInsightsTab uploadedBill={uploadedBill} />;
     case 'Plans': return <PlansTab uploadedBill={uploadedBill} setActiveTab={setActiveTab} />;
     case 'Utility Intelligence': return <UtilityTab />;
     case 'Settings': return <SettingsTab />;

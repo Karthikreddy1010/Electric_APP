@@ -12,8 +12,7 @@ const Header = ({ activeTab, setActiveTab, uploadedBill }: HeaderProps) => {
     'Bill Analysis', 
     'Forecast', 
     'Impact & Simulation', 
-    'Benchmark', 
-    'Geo Insights', 
+    'Regional Insights', 
     'Plans', 
     'Utility Intelligence', 
     'Settings'

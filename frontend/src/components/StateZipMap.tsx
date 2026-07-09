@@ -25,13 +25,18 @@ const UTILITY_COLORS = [
 // Helper component to auto-fit map bounds to the GeoJSON layer
 const MapFitter = ({ geoJsonData, selectedZip }: { geoJsonData: any, selectedZip?: string | null }) => {
   const map = useMap();
+  const fittedRef = useMemo(() => ({ current: null as string | null }), []);
   
   useEffect(() => {
     if (geoJsonData && geoJsonData.features && geoJsonData.features.length > 0) {
+      const key = `${geoJsonData.features.length}-${selectedZip}`;
+      if (fittedRef.current === key) return;
+      
       const geojsonLayer = L.geoJSON(geoJsonData);
       const bounds = geojsonLayer.getBounds();
       
       if (bounds.isValid()) {
+        fittedRef.current = key;
         if (selectedZip) {
           // Find the specific feature and fly to its bounds with some padding
           const selectedFeature = geoJsonData.features.find((f: any) => f.properties.zip_code === selectedZip);
@@ -45,7 +50,7 @@ const MapFitter = ({ geoJsonData, selectedZip }: { geoJsonData: any, selectedZip
         map.flyToBounds(bounds, { padding: [20, 20], duration: 1.5 });
       }
     }
-  }, [geoJsonData, selectedZip, map]);
+  }, [geoJsonData, selectedZip, map, fittedRef]);
 
   return null;
 };
