@@ -4,7 +4,7 @@ import axios from 'axios';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-import { Search, MapPin, Zap, Users, Sun, Settings, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Search, MapPin, Users, Sun, Settings, TrendingUp, ShieldCheck, Activity } from 'lucide-react';
 
 const UtilityTab = () => {
   const [selectedState, setSelectedState] = useState<string>('NJ');
@@ -51,7 +51,6 @@ const UtilityTab = () => {
   // Handle setting default utility when state or list changes
   useMemo(() => {
     if (filteredUtilities.length > 0) {
-      // Find PSE&G or similar in NJ as default, else first
       const njDefault = filteredUtilities.find(u => u.utility_name.includes('Public Service') || u.utility_name.includes('PSE&G'));
       setSelectedUtilityId(njDefault ? njDefault.utility_id : filteredUtilities[0].utility_id);
     } else {
@@ -80,24 +79,34 @@ const UtilityTab = () => {
     if (!utilityDetail || !utilityDetail.history) return [];
     return utilityDetail.history.map((h: any) => ({
       ...h,
-      // Convert avg_price $/MWh to cents/kWh for readability
       avg_price_cents: h.avg_price ? h.avg_price / 10 : 0
     }));
   }, [utilityDetail]);
 
   return (
-    <div className="space-y-6">
-      {/* ── Filter / Search Bar ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 card p-6">
+    <div className="space-y-6 font-sans">
+      
+      {/* Title block */}
+      <div>
+        <span className="bg-primary-blue/10 text-primary-blue text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-[6px]">
+          Utility telemetry
+        </span>
+        <h2 className="text-2xl font-bold text-text-primary tracking-tight mt-2">Utility intelligence</h2>
+        <p className="text-xs text-text-secondary mt-1">EIA-861 profile tracking and dynamic rate classifications.</p>
+      </div>
+
+      {/* Filter / Search Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 panel-operational">
         <div>
-          <label className="block text-xs font-black uppercase text-slate-400 mb-2">Select State</label>
+          <label className="block text-[10px] font-bold uppercase text-text-secondary tracking-widest mb-1.5">Select state</label>
           <select
             value={selectedState}
             onChange={(e) => {
               setSelectedState(e.target.value);
               setSearchTerm('');
             }}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-800 outline-none focus:border-blue-500"
+            className="w-full bg-bg-primary border border-border-hairline rounded-md px-3 py-2 text-xs font-bold text-text-primary outline-none focus:border-primary-blue"
+            aria-label="Select state"
           >
             {statesData?.map(st => (
               <option key={st} value={st}>{st}</option>
@@ -106,38 +115,40 @@ const UtilityTab = () => {
         </div>
 
         <div className="md:col-span-2">
-          <label className="block text-xs font-black uppercase text-slate-400 mb-2">Search Utility</label>
+          <label className="block text-[10px] font-bold uppercase text-text-secondary tracking-widest mb-1.5">Search utility</label>
           <div className="relative">
-            <Search className="absolute left-3 top-3.5 text-slate-400" size={16} />
+            <Search className="absolute left-3 top-2.5 text-text-secondary" size={14} />
             <input
               type="text"
               placeholder="Search by utility name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-blue-500"
+              className="w-full bg-bg-primary border border-border-hairline rounded-md pl-9 pr-4 py-2 text-xs font-medium text-text-primary outline-none focus:border-primary-blue"
+              aria-label="Search utility"
             />
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* ── Utilities Selection List ────────────────────────────────────── */}
-        <div className="lg:col-span-1 card p-4 flex flex-col max-h-[600px]">
-          <h4 className="text-xs font-black uppercase text-slate-400 px-2 mb-3">Utilities Found ({filteredUtilities.length})</h4>
-          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+        
+        {/* Utilities Selection List */}
+        <div className="lg:col-span-1 panel-operational p-4 flex flex-col max-h-[600px]">
+          <h4 className="text-[10px] font-bold uppercase text-text-secondary px-1 mb-3">Utilities found ({filteredUtilities.length})</h4>
+          <div className="flex-1 overflow-y-auto space-y-1 pr-1 custom-scrollbar text-xs font-semibold">
             {isUtilsLoading ? (
-              <div className="text-xs text-slate-400 p-4">Loading utilities...</div>
+              <div className="text-text-secondary p-4 animate-pulse">Loading utilities...</div>
             ) : filteredUtilities.length === 0 ? (
-              <div className="text-xs text-slate-400 p-4">No utilities match your search.</div>
+              <div className="text-text-secondary p-4 italic">No utilities found.</div>
             ) : (
               filteredUtilities.map(u => (
                 <button
                   key={u.utility_id}
                   onClick={() => setSelectedUtilityId(u.utility_id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-bold transition-all block truncate ${
+                  className={`w-full text-left px-3 py-2 rounded-md transition-all block truncate ${
                     selectedUtilityId === u.utility_id
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                      : 'text-slate-700 hover:bg-slate-100'
+                      ? 'bg-primary-blue text-white shadow-sm font-bold'
+                      : 'text-text-primary hover:bg-bg-primary/50'
                   }`}
                 >
                   {u.utility_name}
@@ -147,59 +158,59 @@ const UtilityTab = () => {
           </div>
         </div>
 
-        {/* ── Utility Details Dashboard ──────────────────────────────────── */}
+        {/* Utility Details Dashboard */}
         <div className="lg:col-span-3 space-y-6">
           {isDetailLoading || !latestData ? (
-            <div className="card p-12 text-center text-slate-400">
-              <div className="animate-spin h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+            <div className="panel-operational p-12 text-center text-text-secondary">
+              <RefreshCw size={24} className="animate-spin text-primary-blue mx-auto mb-4" />
               Loading utility performance analytics...
             </div>
           ) : (
             <>
               {/* Header Card */}
-              <div className="card p-6 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="panel-operational bg-bg-surface border border-border-hairline shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-black uppercase bg-blue-600/30 text-blue-300 px-2 py-0.5 rounded-md tracking-wider">
-                      {selectedState} Utility Network
+                    <span className="text-[9px] font-bold uppercase bg-primary-blue/10 text-primary-blue px-2 py-0.5 rounded-[4px] border border-primary-blue/20">
+                      {selectedState} utility network
                     </span>
-                    <div className="flex bg-slate-800 p-0.5 rounded-lg border border-slate-700/50">
+                    <div className="flex bg-bg-primary p-0.5 rounded-md border border-border-hairline text-[8px] font-bold uppercase">
                       <button
                         onClick={() => setGranularity('annual')}
-                        className={`px-2 py-1 text-[9px] font-black uppercase rounded-md transition-all ${granularity === 'annual' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}`}
+                        className={`px-2 py-0.5 rounded-sm transition-all ${granularity === 'annual' ? 'bg-bg-surface text-primary-blue shadow-sm border border-border-hairline' : 'text-text-secondary'}`}
                       >
                         Annual
                       </button>
                       <button
                         onClick={() => setGranularity('monthly')}
-                        className={`px-2 py-1 text-[9px] font-black uppercase rounded-md transition-all ${granularity === 'monthly' ? 'bg-blue-600 text-white shadow' : 'text-slate-400'}`}
+                        className={`px-2 py-0.5 rounded-sm transition-all ${granularity === 'monthly' ? 'bg-bg-surface text-primary-blue shadow-sm border border-border-hairline' : 'text-text-secondary'}`}
                       >
                         Monthly (EIA-861M)
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs font-black uppercase text-blue-400 mb-1">
-                    <MapPin size={12} /> {utilityDetail.state} Utility profile
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase text-primary-blue mb-1">
+                    <MapPin size={12} /> {utilityDetail.state} utility profile
                   </div>
-                  <h3 className="text-2xl font-black">{utilityDetail.utility_name}</h3>
-                  <p className="text-xs text-slate-400 mt-1">Utility ID: {utilityDetail.utility_id} • Year Tracked: {historyData[0]?.year} - {latestData.year}</p>
+                  <h3 className="text-xl font-bold text-text-primary">{utilityDetail.utility_name}</h3>
+                  <p className="text-[10px] text-text-secondary mt-1 font-mono-numbers">Utility ID: {utilityDetail.utility_id} • Year: {historyData[0]?.year} - {latestData.year}</p>
                 </div>
 
                 {/* Program Flags */}
-                <div className="flex flex-wrap gap-2">
-                  <div className={`px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1 ${
+                <div className="flex flex-wrap gap-2 text-[10px] font-bold">
+                  <div className={`px-2.5 py-1 rounded-[4px] flex items-center gap-1 ${
                     latestData.demand_response_flag 
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-savings-green/10 text-savings-green border border-savings-green/20' 
+                      : 'bg-bg-primary text-text-secondary border border-border-hairline'
                   }`}>
-                    <ShieldCheck size={14} /> Demand Response: {latestData.demand_response_flag ? 'Yes' : 'No'}
+                    <ShieldCheck size={12} /> Demand response: {latestData.demand_response_flag ? 'Yes' : 'No'}
                   </div>
-                  <div className={`px-3 py-1.5 rounded-full text-xs font-black flex items-center gap-1 ${
+                  <div className={`px-2.5 py-1 rounded-[4px] flex items-center gap-1 ${
                     latestData.dynamic_pricing_flag 
-                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
-                      : 'bg-slate-800 text-slate-400'
+                      ? 'bg-savings-green/10 text-savings-green border border-savings-green/20' 
+                      : 'bg-bg-primary text-text-secondary border border-border-hairline'
                   }`}>
-                    <Settings size={14} /> Dynamic Pricing: {latestData.dynamic_pricing_flag ? 'Yes' : 'No'}
+                    <Settings size={12} /> Dynamic pricing: {latestData.dynamic_pricing_flag ? 'Yes' : 'No'}
                   </div>
                 </div>
               </div>
@@ -208,91 +219,92 @@ const UtilityTab = () => {
               {granularity === 'monthly' ? (
                 // ── MONTHLY GRANULARITY VIEWS (EIA-861M) ──
                 isMonthlyLoading || !stateMonthlyData ? (
-                  <div className="card p-12 text-center text-slate-400">
-                    <div className="animate-spin h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
+                  <div className="panel-operational p-12 text-center text-text-secondary">
+                    <RefreshCw size={24} className="animate-spin text-primary-blue mx-auto mb-4" />
                     Loading monthly state trends...
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
                     {/* Monthly Sales Trend */}
-                    <div className="card p-6 border border-slate-100">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <TrendingUp size={16} className="text-blue-600" /> State Monthly Sales (MWh)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <TrendingUp size={14} className="text-primary-blue" /> State monthly sales (MWh)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
                             period: p,
                             sales: stateMonthlyData.sales[idx],
-                          })).slice(-36)}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
-                            <YAxis tick={{ fontSize: 9 }} />
+                          })).slice(-24)} margin={{ left: -25, right: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="period" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} MWh`, 'Sales']} />
-                            <Line type="monotone" dataKey="sales" stroke="#2563EB" strokeWidth={3} dot={false} />
+                            <Line type="monotone" dataKey="sales" stroke="var(--primary-blue)" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
                     {/* Monthly Price Trend */}
-                    <div className="card p-6 border border-slate-100">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <TrendingUp size={16} className="text-teal-600" /> State Average Retail Price (¢/kWh)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <TrendingUp size={14} className="text-energy-teal" /> State average retail price (¢/kWh)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
                             period: p,
                             price: stateMonthlyData.prices[idx],
-                          })).slice(-36)}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
-                            <YAxis tick={{ fontSize: 9 }} />
+                          })).slice(-24)} margin={{ left: -25, right: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="period" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip formatter={(v) => [`${Number(v).toFixed(2)}¢/kWh`, 'Price']} />
-                            <Line type="monotone" dataKey="price" stroke="#0D9488" strokeWidth={3} dot={false} />
+                            <Line type="monotone" dataKey="price" stroke="var(--energy-teal)" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
                     {/* Monthly Customer Count Trend */}
-                    <div className="card p-6 border border-slate-100">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <Users size={16} className="text-purple-600" /> Total Active Customers (State Count)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <Users size={14} className="text-electric-cyan" /> Total active customers (state count)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
                             period: p,
                             customers: stateMonthlyData.customers[idx],
-                          })).slice(-36)}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
-                            <YAxis tick={{ fontSize: 9 }} />
+                          })).slice(-24)} margin={{ left: -25, right: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="period" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip formatter={(v) => [Number(v).toLocaleString(), 'Customers']} />
-                            <Line type="monotone" dataKey="customers" stroke="#8B5CF6" strokeWidth={3} dot={false} />
+                            <Line type="monotone" dataKey="customers" stroke="var(--electric-cyan)" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
                     {/* Monthly Revenue Trend */}
-                    <div className="card p-6 border border-slate-100">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <Zap size={16} className="text-amber-600" /> Total Utility Revenue ($K)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <Activity size={14} className="text-warning-amber" /> Total utility revenue ($K)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <LineChart data={stateMonthlyData.periods.map((p: string, idx: number) => ({
                             period: p,
                             revenue: stateMonthlyData.revenue[idx],
-                          })).slice(-36)}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="period" tick={{ fontSize: 9 }} />
-                            <YAxis tick={{ fontSize: 9 }} />
+                          })).slice(-24)} margin={{ left: -25, right: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="period" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip formatter={(v) => [`$${Number(v).toLocaleString()}K`, 'Revenue']} />
-                            <Line type="monotone" dataKey="revenue" stroke="#F59E0B" strokeWidth={3} dot={false} />
+                            <Line type="monotone" dataKey="revenue" stroke="var(--warning-amber)" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
@@ -302,111 +314,112 @@ const UtilityTab = () => {
               ) : (
                 // ── ANNUAL GRANULARITY VIEWS (EIA-861 Original Dashboard) ──
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="card p-4">
-                      <p className="text-xs text-slate-400 font-bold mb-1">Residential Rate ({latestData.year})</p>
-                      <h4 className="text-2xl font-black text-slate-900">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 font-mono-numbers text-text-primary text-xs">
+                    <div className="panel-operational">
+                      <p className="text-[10px] text-text-secondary font-bold font-sans mb-1 uppercase tracking-wider">Residential rate ({latestData.year})</p>
+                      <h4 className="text-xl font-bold">
                         {latestData.avg_price ? `${(latestData.avg_price / 10).toFixed(2)}¢` : 'N/A'}
                       </h4>
-                      <p className="text-xs text-slate-400 mt-1">cents/kWh average</p>
+                      <p className="text-[9px] text-text-secondary mt-1 font-sans">cents/kWh average</p>
                     </div>
-                    <div className="card p-4">
-                      <p className="text-xs text-slate-400 font-bold mb-1">Customers Served</p>
-                      <h4 className="text-2xl font-black text-slate-900">
+                    <div className="panel-operational">
+                      <p className="text-[10px] text-text-secondary font-bold font-sans mb-1 uppercase tracking-wider">Customers served</p>
+                      <h4 className="text-xl font-bold">
                         {latestData.total_customers ? latestData.total_customers.toLocaleString() : 'N/A'}
                       </h4>
-                      <p className="text-xs text-slate-400 mt-1">active accounts</p>
+                      <p className="text-[9px] text-text-secondary mt-1 font-sans">active accounts</p>
                     </div>
-                    <div className="card p-4">
-                      <p className="text-xs text-slate-400 font-bold mb-1">Summer Peak Demand</p>
-                      <h4 className="text-2xl font-black text-slate-900">
+                    <div className="panel-operational">
+                      <p className="text-[10px] text-text-secondary font-bold font-sans mb-1 uppercase tracking-wider">Summer peak demand</p>
+                      <h4 className="text-xl font-bold">
                         {latestData.peak_demand ? `${latestData.peak_demand.toLocaleString()} MW` : 'N/A'}
                       </h4>
-                      <p className="text-xs text-slate-400 mt-1">grid peak requirement</p>
+                      <p className="text-[9px] text-text-secondary mt-1 font-sans">grid peak requirement</p>
                     </div>
-                    <div className="card p-4">
-                      <p className="text-xs text-slate-400 font-bold mb-1">Net Metering Accounts</p>
-                      <h4 className="text-2xl font-black text-blue-600">
+                    <div className="panel-operational bg-primary-blue/5 border-primary-blue/20">
+                      <p className="text-[10px] text-primary-blue font-bold font-sans mb-1 uppercase tracking-wider">Net metering accounts</p>
+                      <h4 className="text-xl font-bold text-primary-blue">
                         {latestData.nm_customers ? latestData.nm_customers.toLocaleString() : '0'}
                       </h4>
-                      <p className="text-xs text-slate-400 mt-1">distributed energy users</p>
+                      <p className="text-[9px] text-primary-blue/80 mt-1 font-sans font-semibold">distributed energy users</p>
                     </div>
                   </div>
 
                   {/* Graphs Section */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
                     {/* 1. Price trend */}
-                    <div className="card p-6">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <TrendingUp size={16} className="text-blue-600" /> Historical Price Trend (cents/kWh)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <TrendingUp size={14} className="text-primary-blue" /> Historical price trend (cents/kWh)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={historyData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} />
+                          <LineChart data={historyData} margin={{ left: -25, right: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip formatter={(v) => [`${Number(v).toFixed(2)}¢/kWh`, 'Price']} />
-                            <Line type="monotone" dataKey="avg_price_cents" stroke="#2563EB" strokeWidth={3} dot={{ r: 4 }} />
+                            <Line type="monotone" dataKey="avg_price_cents" stroke="var(--primary-blue)" strokeWidth={2} dot={{ r: 3, fill: 'var(--primary-blue)', strokeWidth: 0 }} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
                     {/* 2. Customer vs Load */}
-                    <div className="card p-6">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <Zap size={16} className="text-amber-500" /> Customers vs Energy Sold (MWh)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <Activity size={14} className="text-warning-amber" /> Customers vs energy sold (MWh)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={historyData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} />
+                          <BarChart data={historyData} margin={{ left: -25, right: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip />
-                            <Legend wrapperStyle={{ fontSize: '10px' }} />
-                            <Bar dataKey="total_customers" name="Customers" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="total_sales_mwh" name="Sales (MWh)" fill="#10B981" radius={[4, 4, 0, 0]} />
+                            <Legend wrapperStyle={{ fontSize: '9px' }} />
+                            <Bar dataKey="total_customers" name="Customers" fill="var(--primary-blue)" radius={[2, 2, 0, 0]} />
+                            <Bar dataKey="total_sales_mwh" name="Sales (MWh)" fill="var(--energy-teal)" radius={[2, 2, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
                     {/* 3. Peak Demand vs Load */}
-                    <div className="card p-6">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <Users size={16} className="text-indigo-600" /> Peak Summer Demand vs Total Load (MWh)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <Users size={14} className="text-electric-cyan" /> Peak summer demand vs total load (MWh)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={historyData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                            <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+                          <LineChart data={historyData} margin={{ left: -25, right: 30 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="left" tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
+                            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip />
-                            <Legend wrapperStyle={{ fontSize: '10px' }} />
-                            <Line yAxisId="left" type="monotone" dataKey="peak_demand" name="Peak Demand (MW)" stroke="#EF4444" strokeWidth={2} />
-                            <Line yAxisId="right" type="monotone" dataKey="total_load" name="Total Load (MWh)" stroke="#6366F1" strokeWidth={2} />
+                            <Legend wrapperStyle={{ fontSize: '9px' }} />
+                            <Line yAxisId="left" type="monotone" dataKey="peak_demand" name="Peak Demand (MW)" stroke="var(--alert-red)" strokeWidth={2} dot={false} />
+                            <Line yAxisId="right" type="monotone" dataKey="total_load" name="Total Load (MWh)" stroke="var(--primary-blue)" strokeWidth={2} dot={false} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
                     </div>
 
                     {/* 4. Solar Net Metering Adoption */}
-                    <div className="card p-6">
-                      <h4 className="text-sm font-black text-slate-900 mb-4 flex items-center gap-2">
-                        <Sun size={16} className="text-emerald-500" /> Solar Net Metering Energy (MWh)
+                    <div className="panel-chart h-[320px] flex flex-col justify-between">
+                      <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
+                        <Sun size={14} className="text-savings-green" /> Solar net metering energy (MWh)
                       </h4>
-                      <div className="h-[260px]">
+                      <div className="flex-1 min-h-[220px]">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={historyData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                            <XAxis dataKey="year" tick={{ fontSize: 10 }} />
-                            <YAxis tick={{ fontSize: 10 }} />
+                          <LineChart data={historyData} margin={{ left: -25, right: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} axisLine={false} tickLine={false} />
                             <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} MWh`, 'Energy Sold Back']} />
-                            <Line type="monotone" dataKey="nm_energy_mwh" name="Energy Sold Back (MWh)" stroke="#10B981" strokeWidth={2} activeDot={{ r: 8 }} />
+                            <Line type="monotone" dataKey="nm_energy_mwh" name="Energy Sold Back (MWh)" stroke="var(--savings-green)" strokeWidth={2} activeDot={{ r: 6 }} dot={false} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
@@ -421,5 +434,13 @@ const UtilityTab = () => {
     </div>
   );
 };
+
+// Internal custom helpers to avoid duplicates
+const RefreshCw = ({ size, className }: { size?: number; className?: string }) => (
+  <svg className={`animate-spin ${className}`} style={{ width: size, height: size }} fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
 
 export default UtilityTab;

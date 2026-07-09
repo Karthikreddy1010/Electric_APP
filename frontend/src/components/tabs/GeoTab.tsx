@@ -3,9 +3,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import {
   TrendingDown, TrendingUp, Play, Pause,
-  Sparkles,
   X, Layers, Building2, Calendar, Target,
-  Activity, ZapOff, ArrowRight, BarChart2
+  Activity, ZapOff, ArrowRight, BarChart2, Info
 } from 'lucide-react';
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -15,14 +14,12 @@ import {
 import USMap from '../USMap.tsx';
 import StateZipMap from '../StateZipMap.tsx';
 
-// ─── NJ PSE&G ZIP codes used to construct synthetic geo-insight payload ──────
 const NJ_ZIPS = ['07101', '07201', '07301', '07401', '07501'];
 
-// ─── Build the request payload from PSEG rate history ────────────────────────
-function buildInsightsPayload(psegData: any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  const electricity_data: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
-  const grouped: Record<string, any[]> = {}; // eslint-disable-line @typescript-eslint/no-explicit-any
-  psegData.forEach((row: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+function buildInsightsPayload(psegData: any[]) {
+  const electricity_data: any[] = [];
+  const grouped: Record<string, any[]> = {};
+  psegData.forEach((row: any) => {
     const key = `${row.year}-${row.month}`;
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push(row);
@@ -31,7 +28,7 @@ function buildInsightsPayload(psegData: any[]) { // eslint-disable-line @typescr
   NJ_ZIPS.forEach((zip, zi) => {
     Object.entries(grouped).forEach(([key, rows]) => {
       const [year, month] = key.split('-').map(Number);
-      const validRates = rows.map((r: any) => r.total_rate_per_kwh).filter((v: any) => v != null && !isNaN(v)); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const validRates = rows.map((r: any) => r.total_rate_per_kwh).filter((v: any) => v != null && !isNaN(v));
       const avgPrice = validRates.length ? validRates.reduce((a: number, b: number) => a + b, 0) / validRates.length : null;
       if (!avgPrice) return;
 
@@ -58,27 +55,26 @@ function buildInsightsPayload(psegData: any[]) { // eslint-disable-line @typescr
   };
 }
 
-// ─── Custom Floating Tooltip (Follows Mouse) ───────────────────────────────────
-const HoverTooltip = ({ visible, data, tooltipRef }: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+const HoverTooltip = ({ visible, data, tooltipRef }: any) => {
   if (!visible || !data) return null;
   return (
     <div 
       ref={tooltipRef}
-      className="fixed z-[9999] pointer-events-none bg-slate-900 text-white p-4 rounded-2xl shadow-2xl border border-slate-700 transform -translate-x-1/2 -translate-y-[120%]"
+      className="fixed z-[9999] pointer-events-none bg-bg-surface text-text-primary p-4 rounded-md shadow-md border border-border-hairline transform -translate-x-1/2 -translate-y-[120%]"
       style={{ minWidth: '220px', pointerEvents: 'none' }}
     >
-      <div className="flex justify-between items-end border-b border-slate-700/50 pb-2 mb-2">
-        <h3 className="font-black text-lg">{data.name || data.state || data.zip}</h3>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{data.level || 'State'}</span>
+      <div className="flex justify-between items-end border-b border-border-hairline pb-2 mb-2">
+        <h3 className="font-bold text-sm text-text-primary">{data.name || data.state || data.zip}</h3>
+        <span className="text-[9px] font-bold uppercase tracking-wider text-text-secondary">{data.level || 'State'}</span>
       </div>
-      <div className="space-y-1.5 text-xs font-semibold">
-        <div className="flex justify-between"><span className="text-slate-400">Avg Bill:</span> <span className="text-white">${data.avg_bill?.toFixed(2) || 'N/A'}</span></div>
-        <div className="flex justify-between"><span className="text-slate-400">Avg Rate:</span> <span className="text-white">${data.avg_rate?.toFixed(4) || 'N/A'}/kWh</span></div>
-        {data.usage_kwh && <div className="flex justify-between"><span className="text-slate-400">Avg Usage:</span> <span className="text-white">{data.usage_kwh?.toLocaleString()} kWh</span></div>}
-        {data.primary_utility && <div className="flex justify-between"><span className="text-slate-400">Primary Utility:</span> <span className="text-emerald-400 truncate max-w-[100px] text-right">{data.primary_utility}</span></div>}
+      <div className="space-y-1.5 text-xs font-semibold font-mono-numbers">
+        <div className="flex justify-between"><span className="text-text-secondary font-sans font-normal">Avg bill:</span> <span className="text-text-primary">${data.avg_bill?.toFixed(2) || 'N/A'}</span></div>
+        <div className="flex justify-between"><span className="text-text-secondary font-sans font-normal">Avg rate:</span> <span className="text-text-primary">${data.avg_rate?.toFixed(4) || 'N/A'}/kWh</span></div>
+        {data.usage_kwh && <div className="flex justify-between"><span className="text-text-secondary font-sans font-normal">Avg usage:</span> <span className="text-text-primary">{data.usage_kwh?.toLocaleString()} kWh</span></div>}
+        {data.primary_utility && <div className="flex justify-between"><span className="text-text-secondary font-sans font-normal">Primary utility:</span> <span className="text-primary-blue truncate max-w-[100px] text-right font-sans">{data.primary_utility}</span></div>}
       </div>
       {data.vs_national_bill_pct !== undefined && (
-        <div className={`mt-3 pt-2 border-t border-slate-700/50 flex items-center gap-1 text-[10px] font-black ${data.vs_national_bill_pct > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+        <div className={`mt-3 pt-2 border-t border-border-hairline flex items-center gap-1 text-[10px] font-bold ${data.vs_national_bill_pct > 0 ? 'text-alert-red' : 'text-savings-green'}`}>
           {data.vs_national_bill_pct > 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
           {Math.abs(data.vs_national_bill_pct)}% vs National Avg
         </div>
@@ -87,32 +83,24 @@ const HoverTooltip = ({ visible, data, tooltipRef }: any) => { // eslint-disable
   );
 };
 
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 const GeoTab = () => {
-  // UI States
   const [viewMode, setViewMode] = useState<'bill' | 'rate'>('bill');
   const [geoLevel, setGeoLevel] = useState<'state' | 'utility' | 'county' | 'zip'>('state');
   const [selectedState, setSelectedState] = useState<string>('NJ'); 
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   
-  // Interactive Map States
   const [isDrilldown, setIsDrilldown] = useState(false);
-  const [hoverData, setHoverData] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const [hoverData, setHoverData] = useState<any>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [floatingPanelOpen, setFloatingPanelOpen] = useState(false);
   
-  // Timeline States
   const [currentMonthIdx, setCurrentMonthIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // Search States
   const [searchInput, setSearchInput] = useState('');
   
-  // Insights
   const [insightsResult, setInsightsResult] = useState<any | null>(null);
 
-  // APIs
   const { data: gridStatus } = useQuery({
     queryKey: ['grid-status'],
     queryFn: async () => (await axios.get('/grid/current?ba=PJM')).data,
@@ -152,7 +140,7 @@ const GeoTab = () => {
 
   const { data: zipStats } = useQuery({
     queryKey: ['geo_zip_stats', selectedState],
-    queryFn: async () => (await axios.get(`/geo/zip-stats?state=${selectedState}`)).data, // eslint-disable-line @typescript-eslint/no-explicit-any
+    queryFn: async () => (await axios.get(`/geo/zip-stats?state=${selectedState}`)).data,
     enabled: isDrilldown
   });
 
@@ -175,20 +163,19 @@ const GeoTab = () => {
     onSuccess: (data) => setInsightsResult(data)
   });
 
-  // Timeline Animation
   useEffect(() => {
-    let interval: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    let interval: any;
     if (isPlaying && geoData?.available_months) {
       interval = setInterval(() => {
         setCurrentMonthIdx((prev) => (prev + 1) % geoData.available_months.length);
-      }, 1500); // Slower animation for better map rendering readability
+      }, 1500);
     }
     return () => clearInterval(interval);
   }, [isPlaying, geoData]);
 
   const mapValues = useMemo(() => {
     if (!geoData?.data) return [];
-    return geoData.data.map((s: any) => ({ // eslint-disable-line @typescript-eslint/no-explicit-any
+    return geoData.data.map((s: any) => ({
       state: s.state,
       value: viewMode === 'bill' ? s.avg_bill : s.avg_rate
     }));
@@ -199,18 +186,16 @@ const GeoTab = () => {
     return geoData.available_months[currentMonthIdx];
   }, [geoData, currentMonthIdx]);
 
-  // Handle map interactions
-  const handleMapHover = (d: any, level: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+  const handleMapHover = (d: any, level: string) => {
     if (!d) {
       setHoverData(null);
       return;
     }
-    // Try to construct a rich data object using existing properties
     const enriched = {
       ...d,
       level,
-      avg_bill: d.avg_bill || (level === 'State' && geoData?.data?.find((s:any) => s.state === d.state)?.avg_bill), // eslint-disable-line @typescript-eslint/no-explicit-any
-      avg_rate: d.avg_rate || (level === 'State' && geoData?.data?.find((s:any) => s.state === d.state)?.avg_rate), // eslint-disable-line @typescript-eslint/no-explicit-any
+      avg_bill: d.avg_bill || (level === 'State' && geoData?.data?.find((s:any) => s.state === d.state)?.avg_bill),
+      avg_rate: d.avg_rate || (level === 'State' && geoData?.data?.find((s:any) => s.state === d.state)?.avg_rate),
     };
     setHoverData(enriched);
   };
@@ -220,14 +205,12 @@ const GeoTab = () => {
     setSelectedRegion(stateName);
     setIsDrilldown(true);
     setFloatingPanelOpen(true);
-    // Auto-fetch insights when drilling down (unless already loading)
     if (!insightsMutation.isPending) insightsMutation.mutate();
   };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchInput.trim()) return;
-    // For ZIP search, try to find state and drill down
     if (searchInput.length === 5 && !isNaN(Number(searchInput))) {
       try {
         const res = await axios.get(`/utility/lookup?zip=${searchInput}`);
@@ -239,10 +222,9 @@ const GeoTab = () => {
           setFloatingPanelOpen(true);
           if (!insightsMutation.isPending) insightsMutation.mutate();
         }
-      } catch (err) { /* ignore */ } // eslint-disable-line @typescript-eslint/no-unused-vars
+      } catch (err) { /* ignore */ }
     } else {
-      // Very basic state fallback
-      const match = geoData?.data?.find((s:any) => s.state.toLowerCase().includes(searchInput.toLowerCase())); // eslint-disable-line @typescript-eslint/no-explicit-any
+      const match = geoData?.data?.find((s:any) => s.state.toLowerCase().includes(searchInput.toLowerCase()));
       if (match) handleStateClick(match.state);
     }
   };
@@ -255,63 +237,61 @@ const GeoTab = () => {
     setIsPlaying(false);
   };
 
-
   if (isLoading) return <div className="flex h-[80vh] items-center justify-center"><div className="animate-spin h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full" /></div>;
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 relative pb-20 animate-in fade-in duration-500">
+    <div className="flex flex-col min-h-screen bg-bg-primary relative pb-20 animate-in fade-in duration-500 font-sans">
       
-      {/* =========================================================================
-          SECTION 1 — TOP CONTROL PANEL
-          ========================================================================= */}
-      <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-xl border-b border-slate-200 shadow-sm px-6 py-3 flex flex-wrap items-center justify-between gap-4">
+      {/* SECTION 1 — TOP CONTROL PANEL */}
+      <div className="sticky top-0 z-40 bg-bg-surface border-b border-border-hairline shadow-sm px-6 py-3 flex flex-wrap items-center justify-between gap-4">
         
         {/* Toggle & Level */}
         <div className="flex flex-col gap-3">
           
           {/* Bill / Price Toggle */}
           <div className="flex items-center gap-3">
-            <span className="text-sm font-black tracking-widest text-slate-900">BILL</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">Bill</span>
             <button 
               onClick={() => setViewMode(viewMode === 'bill' ? 'rate' : 'bill')} 
-              className="relative inline-flex h-6 w-12 items-center rounded-full border-2 border-slate-900 bg-white transition-colors"
+              className="relative inline-flex h-5 w-10 items-center rounded-full border border-border-hairline bg-bg-primary transition-colors focus:outline-none"
+              aria-label="Toggle view mode"
             >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-slate-900 transition-transform ${viewMode === 'rate' ? 'translate-x-6' : 'translate-x-1'}`} />
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-primary-blue transition-transform ${viewMode === 'rate' ? 'translate-x-5' : 'translate-x-1'}`} />
             </button>
-            <span className="text-sm font-black tracking-widest text-slate-900">PRICE</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-text-secondary">Price</span>
           </div>
 
           {/* Control Bar (Heatmap Style) */}
-          <div className="flex items-stretch border-[1.5px] border-slate-900 bg-white rounded-sm shadow-sm overflow-hidden">
+          <div className="flex items-stretch border border-border-hairline bg-bg-surface rounded-md shadow-sm overflow-hidden text-xs font-semibold text-text-primary">
             <button 
               onClick={() => setGeoLevel('state')}
-              className={`px-4 py-2 text-xs font-black uppercase tracking-wider border-r-[1.5px] border-slate-900 transition-colors ${geoLevel === 'state' ? 'bg-[#EADD9F]' : 'hover:bg-slate-50'}`}
+              className={`px-3 py-1.5 border-r border-border-hairline transition-colors ${geoLevel === 'state' ? 'bg-bg-primary text-primary-blue font-bold' : 'hover:bg-bg-primary/50'}`}
             >
-              STATE
+              State
             </button>
             <button 
               onClick={() => setGeoLevel('utility')}
-              className={`px-4 py-2 text-xs font-black uppercase tracking-wider border-r-[1.5px] border-slate-900 transition-colors ${geoLevel === 'utility' ? 'bg-[#EADD9F]' : 'hover:bg-slate-50'}`}
+              className={`px-3 py-1.5 border-r border-border-hairline transition-colors ${geoLevel === 'utility' ? 'bg-bg-primary text-primary-blue font-bold' : 'hover:bg-bg-primary/50'}`}
             >
-              UTILITY
+              Utility
             </button>
             <button 
               onClick={() => setGeoLevel('county')}
-              className={`px-4 py-2 text-xs font-black uppercase tracking-wider border-r-[1.5px] border-slate-900 transition-colors ${geoLevel === 'county' ? 'bg-[#EADD9F]' : 'hover:bg-slate-50'}`}
+              className={`px-3 py-1.5 border-r border-border-hairline transition-colors ${geoLevel === 'county' ? 'bg-bg-primary text-primary-blue font-bold' : 'hover:bg-bg-primary/50'}`}
             >
-              COUNTY
+              County
             </button>
             <button 
               onClick={() => setGeoLevel('zip')}
-              className={`px-4 py-2 text-xs font-black uppercase tracking-wider border-r-[1.5px] border-slate-900 transition-colors ${geoLevel === 'zip' ? 'bg-[#EADD9F]' : 'hover:bg-slate-50'}`}
+              className={`px-3 py-1.5 border-r border-border-hairline transition-colors ${geoLevel === 'zip' ? 'bg-bg-primary text-primary-blue font-bold' : 'hover:bg-bg-primary/50'}`}
             >
-              ZIP CODE
+              ZIP code
             </button>
             <button 
               onClick={handleReset}
-              className="px-4 py-2 text-xs font-black uppercase tracking-wider border-r-[1.5px] border-slate-900 hover:bg-slate-50 transition-colors"
+              className="px-3 py-1.5 border-r border-border-hairline hover:bg-bg-primary/50 transition-colors"
             >
-              RESET
+              Reset
             </button>
             <form onSubmit={handleSearch} className="flex">
               <input 
@@ -319,22 +299,27 @@ const GeoTab = () => {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 placeholder="07304"
-                className="w-32 px-3 py-2 text-xs font-bold text-slate-900 outline-none border-r-[1.5px] border-slate-900 placeholder-slate-400"
+                className="w-24 px-2.5 py-1 text-xs font-bold text-text-primary outline-none border-r border-border-hairline placeholder-text-secondary bg-transparent"
+                aria-label="ZIP lookup search"
               />
               <button 
                 type="submit"
-                className="px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-slate-50 transition-colors"
+                className="px-3 py-1.5 hover:bg-bg-primary/50 transition-colors"
               >
-                LOOKUP
+                Lookup
               </button>
             </form>
           </div>
         </div>
 
         {/* Timeline Slider */}
-        <div className="flex-1 max-w-xl mx-4 hidden lg:flex items-center gap-4 bg-slate-100/50 px-4 py-1.5 rounded-2xl border border-slate-200/50">
-          <button onClick={() => setIsPlaying(!isPlaying)} className={`p-1.5 rounded-full shadow-sm transition-all ${isPlaying ? 'bg-blue-600 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'}`}>
-            {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+        <div className="flex-1 max-w-xl mx-4 hidden lg:flex items-center gap-4 bg-bg-primary px-4 py-1.5 rounded-md border border-border-hairline">
+          <button 
+            onClick={() => setIsPlaying(!isPlaying)} 
+            className={`p-1.5 rounded-full shadow-sm transition-all ${isPlaying ? 'bg-primary-blue text-white' : 'bg-bg-surface text-text-primary border border-border-hairline hover:bg-bg-primary'}`}
+            aria-label={isPlaying ? 'Pause simulation timeline' : 'Play simulation timeline'}
+          >
+            {isPlaying ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
           </button>
           
           <div className="flex-1 relative flex items-center">
@@ -344,25 +329,24 @@ const GeoTab = () => {
               max={(geoData?.available_months?.length || 1) - 1} 
               value={currentMonthIdx}
               onChange={(e) => { setCurrentMonthIdx(Number(e.target.value)); setIsPlaying(false); }}
-              className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              className="w-full h-1 bg-border-hairline rounded-lg appearance-none cursor-pointer accent-primary-blue"
+              aria-label="Month slider control"
             />
           </div>
-          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 w-16 text-right flex items-center justify-end gap-1">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary w-16 text-right flex items-center justify-end gap-1">
             <Calendar size={12}/> {currentMonth}
           </span>
         </div>
 
-
-
-        {/* AI Insights */}
+        {/* AI Insights Button */}
         <div className="flex items-center">
           <button
             onClick={() => insightsMutation.mutate()}
             disabled={insightsMutation.isPending || !psegHistory}
-            className="flex items-center gap-2 px-4 py-2 bg-[#EADD9F] border-[1.5px] border-slate-900 text-slate-900 rounded-sm text-xs font-black hover:bg-[#d6ca8f] transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2 bg-primary-blue text-white rounded-md text-xs font-semibold hover:bg-primary-blue/90 transition-all disabled:opacity-50"
           >
-            {insightsMutation.isPending ? <Sparkles size={14} className="animate-spin text-slate-900" /> : <Sparkles size={14} className="text-slate-900" />}
-            <span className="hidden sm:inline">AI INSIGHTS</span>
+            <Info size={12} />
+            <span>AI insights</span>
           </button>
         </div>
       </div>
@@ -370,12 +354,10 @@ const GeoTab = () => {
       {/* Hover Tooltip (Applies globally) */}
       <HoverTooltip visible={!!hoverData} data={hoverData} tooltipRef={tooltipRef} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[650px] bg-white border-b border-slate-200">
+      <div className="grid grid-cols-1 lg:grid-cols-12 min-h-[650px] bg-bg-surface border-b border-border-hairline">
         
-        {/* =========================================================================
-            SECTION 2 & 3 — FULL INTERACTIVE MAP & FLOATING PANEL
-            ========================================================================= */}
-        <div className="lg:col-span-8 lg:border-r border-slate-200 relative bg-[#F1F5F9] overflow-hidden flex items-center justify-center shadow-inner group">
+        {/* SECTION 2 & 3 — FULL INTERACTIVE MAP & FLOATING PANEL */}
+        <div className="lg:col-span-8 lg:border-r border-border-hairline relative bg-bg-primary overflow-hidden flex items-center justify-center shadow-inner group">
           
           {/* Map Layer */}
           <div 
@@ -394,11 +376,11 @@ const GeoTab = () => {
                 selectedState={selectedState} 
                 onStateClick={(st) => handleStateClick(st)} 
                 onStateHover={(st) => handleMapHover(st ? { state: st, name: st } : null, 'State')}
-                colorRange={viewMode === 'bill' ? ["#E0E7FF", "#1E3A8A"] : ["#DCFCE7", "#14532D"]} 
+                colorRange={viewMode === 'bill' ? ["#F0F4FF", "#2F6BFF"] : ["#E8F7F3", "#16A085"]} 
               />
             ) : isBoundariesLoading ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm">
-                <div className="animate-spin h-10 w-10 border-4 border-blue-600 border-t-transparent rounded-full" />
+              <div className="absolute inset-0 flex items-center justify-center bg-bg-surface/50 backdrop-blur-sm">
+                <div className="animate-spin h-8 w-8 border-b-2 border-primary-blue" />
               </div>
             ) : (
               <StateZipMap 
@@ -413,56 +395,60 @@ const GeoTab = () => {
 
           {/* SECTION 3: Floating Information Panel */}
           {floatingPanelOpen && (
-            <div className="absolute top-6 left-6 z-30 w-80 bg-white/95 backdrop-blur-xl border border-slate-200/60 rounded-3xl shadow-2xl p-6 animate-in fade-in slide-in-from-left-4 duration-300">
-              <button onClick={() => setFloatingPanelOpen(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-1 rounded-full transition-colors">
-                <X size={14} />
+            <div className="absolute top-6 left-6 z-30 w-72 bg-bg-surface border border-border-hairline rounded-md shadow-md p-5 animate-in fade-in slide-in-from-left-4 duration-300">
+              <button 
+                onClick={() => setFloatingPanelOpen(false)} 
+                className="absolute top-4 right-4 text-text-secondary hover:text-text-primary bg-bg-primary hover:bg-border-hairline/50 p-1 rounded-full transition-colors"
+                aria-label="Close panel"
+              >
+                <X size={12} />
               </button>
               
               <div className="flex items-center gap-2 mb-1">
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-[9px] font-black uppercase tracking-wider">
+                <span className="px-2 py-0.5 bg-primary-blue/10 text-primary-blue rounded-[4px] text-[8px] font-bold uppercase tracking-wider">
                   {isDrilldown && selectedRegion !== selectedState ? 'ZIP Level' : 'State Level'}
                 </span>
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-black uppercase tracking-wider">
+                <span className="px-2 py-0.5 bg-savings-green/10 text-savings-green rounded-[4px] text-[8px] font-bold uppercase tracking-wider">
                   Active
                 </span>
               </div>
               
-              <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-4">
+              <h2 className="text-xl font-bold text-text-primary tracking-tight mb-4">
                 {selectedRegion || selectedState}
               </h2>
 
-              <div className="space-y-4">
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Avg Monthly Bill</p>
-                  <p className="text-2xl font-black text-slate-900">${detailData?.avg_bill?.toFixed(2) || '---'}</p>
+              <div className="space-y-4 font-mono-numbers text-xs">
+                <div className="bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+                  <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-1 font-sans">Avg monthly bill</p>
+                  <p className="text-lg font-bold text-text-primary">${detailData?.avg_bill?.toFixed(2) || '---'}</p>
                   {detailData?.vs_national_bill_pct !== undefined && (
-                    <p className={`text-[10px] font-bold mt-1 flex items-center gap-1 ${detailData.vs_national_bill_pct > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                    <p className={`text-[9px] font-semibold mt-1 flex items-center gap-1 font-sans ${detailData.vs_national_bill_pct > 0 ? 'text-alert-red' : 'text-savings-green'}`}>
                       {detailData.vs_national_bill_pct > 0 ? '+' : ''}{detailData.vs_national_bill_pct}% vs National
                     </p>
                   )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Avg Rate</p>
-                    <p className="text-sm font-black text-blue-700">${detailData?.avg_rate?.toFixed(4) || '---'}</p>
+                  <div className="bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-0.5 font-sans">Avg rate</p>
+                    <p className="text-xs font-bold text-primary-blue">${detailData?.avg_rate?.toFixed(4) || '---'}</p>
                   </div>
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Avg Usage</p>
-                    <p className="text-sm font-black text-slate-700">{detailData?.usage_kwh?.toLocaleString() || '---'} <span className="text-[10px] font-bold">kWh</span></p>
+                  <div className="bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-0.5 font-sans">Avg usage</p>
+                    <p className="text-xs font-bold text-text-primary">{detailData?.usage_kwh?.toLocaleString() || '---'} <span className="text-[9px] font-sans font-normal">kWh</span></p>
                   </div>
                 </div>
 
                 {isDrilldown && utilityTerritories && (
-                  <div className="border-t border-slate-100 pt-3">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-1">
-                      <Building2 size={12}/> Primary Utilities
+                  <div className="border-t border-border-hairline pt-3">
+                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-2 flex items-center gap-1 font-sans">
+                      <Building2 size={12}/> Primary utilities
                     </p>
                     <div className="space-y-1.5 max-h-24 overflow-y-auto pr-1 custom-scrollbar">
-                      {utilityTerritories.slice(0, 3).map((u:any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                      {utilityTerritories.slice(0, 3).map((u:any) => (
                         <div key={u.eia_utility_id} className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-slate-700 truncate max-w-[120px]">{u.utility_name}</span>
-                          <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-1.5 rounded">{u.zip_count} ZIPs</span>
+                          <span className="font-semibold text-text-primary truncate max-w-[120px] font-sans">{u.utility_name}</span>
+                          <span className="text-[9px] font-bold text-text-secondary bg-bg-primary border border-border-hairline px-1.5 py-0.5 rounded-[4px]">{u.zip_count} ZIPs</span>
                         </div>
                       ))}
                     </div>
@@ -473,94 +459,89 @@ const GeoTab = () => {
               {!isDrilldown && (
                 <button 
                   onClick={() => setIsDrilldown(true)}
-                  className="w-full mt-6 bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 shadow-lg"
+                  className="w-full mt-6 bg-text-primary hover:bg-text-primary/90 text-white py-2 rounded-md text-xs font-semibold transition-all flex items-center justify-center gap-2 shadow-sm"
                 >
-                  Drill to ZIP Level <ArrowRight size={14} />
+                  Drill to ZIP level <ArrowRight size={12} />
                 </button>
               )}
             </div>
           )}
         </div>
 
-        {/* =========================================================================
-            SECTION 4 — RIGHT INTELLIGENCE PANEL
-            ========================================================================= */}
-        <div className="lg:col-span-4 bg-[#F8FAFC] overflow-y-auto max-h-[650px] p-6 space-y-6 custom-scrollbar border-l border-slate-200/50 shadow-inner">
+        {/* SECTION 4 — RIGHT INTELLIGENCE PANEL */}
+        <div className="lg:col-span-4 bg-bg-primary overflow-y-auto max-h-[650px] p-6 space-y-6 custom-scrollbar border-l border-border-hairline shadow-inner">
           
           {/* AI Insights Summary Card */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/60 relative overflow-hidden group hover:shadow-md transition-shadow">
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none transform group-hover:scale-110 transition-transform">
-              <Sparkles size={64} />
-            </div>
-            <div className="flex items-center gap-2 mb-4">
-              <div className="bg-blue-100 text-blue-600 p-1.5 rounded-lg"><Sparkles size={16} /></div>
-              <h3 className="text-sm font-black text-slate-900 tracking-tight">AI Regional Insights</h3>
+          <div className="panel-operational relative overflow-hidden group hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-2 mb-4 border-b border-border-hairline pb-2">
+              <div className="bg-primary-blue/10 text-primary-blue p-1 rounded-[4px]"><Info size={14} /></div>
+              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">AI regional insights</h3>
             </div>
             
             {insightsResult ? (
-              <div className="space-y-4 relative z-10">
-                <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              <div className="space-y-4 relative z-10 text-xs">
+                <p className="text-text-primary leading-relaxed font-semibold">
                   {insightsResult.state_trend?.trend_analysis || "Analysis complete. High volatility detected in regional markets."}
                 </p>
                 
                 {insightsResult.state_trend?.forecast_hint && (
-                  <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex gap-2 items-start">
-                    <Target size={14} className="text-blue-500 mt-0.5 shrink-0" />
-                    <p className="text-[10px] font-bold text-blue-900 leading-relaxed">
+                  <div className="bg-primary-blue/5 border border-primary-blue/10 rounded-md p-3 flex gap-2 items-start">
+                    <Target size={14} className="text-primary-blue mt-0.5 shrink-0" />
+                    <p className="text-[10px] font-bold text-primary-blue leading-relaxed">
                       {insightsResult.state_trend.forecast_hint}
                     </p>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="text-center py-6">
-                <p className="text-xs text-slate-400 font-semibold mb-3">Click AI Insights to generate analysis for this region.</p>
+              <div className="text-center py-4 text-xs font-semibold text-text-secondary">
+                <p className="mb-3">Click AI insights to generate analysis for this region.</p>
                 <button 
                   onClick={() => insightsMutation.mutate()} 
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black px-4 py-2 rounded-xl transition-colors"
+                  className="bg-bg-surface hover:bg-bg-primary text-text-primary text-xs font-semibold px-4 py-2 rounded-md transition-colors border border-border-hairline shadow-sm"
                 >
-                  Generate Now
+                  Generate now
                 </button>
               </div>
             )}
           </div>
 
           {/* PJM Grid Status Widget */}
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/60 hover:shadow-md transition-shadow">
-            <div className="flex justify-between items-center mb-5">
+          <div className="panel-operational hover:shadow-md transition-shadow">
+            <div className="flex justify-between items-center mb-4 border-b border-border-hairline pb-2">
               <div className="flex items-center gap-2">
-                <div className="bg-emerald-100 text-emerald-600 p-1.5 rounded-lg"><Activity size={16} /></div>
-                <h3 className="text-sm font-black text-slate-900 tracking-tight">Grid Operations</h3>
+                <div className="bg-savings-green/10 text-savings-green p-1 rounded-[4px]"><Activity size={14} /></div>
+                <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Grid operations</h3>
               </div>
-              <span className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md border border-emerald-100">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></span> Live PJM
+              <span className="flex items-center gap-1 bg-savings-green/10 text-savings-green text-[8px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-[4px] border border-savings-green/20">
+                <span className="w-1 h-1 bg-savings-green rounded-full animate-ping"></span> Live PJM
               </span>
             </div>
 
             {gridStatus ? (
-              <div className="space-y-4">
+              <div className="space-y-4 font-mono-numbers text-xs">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Current Load</span>
-                  <span className="text-xl font-black text-slate-900">{(gridStatus.current_demand_mwh / 1000).toFixed(1)} <span className="text-xs text-slate-400">GW</span></span>
+                  <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider font-sans">Current load</span>
+                  <span className="text-base font-bold text-text-primary">{(gridStatus.current_demand_mwh / 1000).toFixed(1)} <span className="text-[10px] font-sans font-normal text-text-secondary">GW</span></span>
                 </div>
                 {gridStatus.current_generation_mwh && (
                   <div className="flex items-baseline justify-between">
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Generation</span>
-                    <span className="text-lg font-black text-emerald-600">{(gridStatus.current_generation_mwh / 1000).toFixed(1)} <span className="text-xs text-emerald-400">GW</span></span>
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider font-sans">Generation</span>
+                    <span className="text-base font-bold text-savings-green">{(gridStatus.current_generation_mwh / 1000).toFixed(1)} <span className="text-[10px] font-sans font-normal">GW</span></span>
                   </div>
                 )}
                 
                 {gridStatus.fuel_mix && (
-                  <div className="pt-3 border-t border-slate-100 space-y-2">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Fuel Mix</p>
-                    {gridStatus.fuel_mix.slice(0, 3).map((f: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                      <div key={f.fuel_type} className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-600">{f.fuel_type_name}</span>
+                  <div className="pt-3 border-t border-border-hairline space-y-2">
+                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-1.5 font-sans">Fuel mix</p>
+                    {gridStatus.fuel_mix.slice(0, 3).map((f: any) => (
+                      <div key={f.fuel_type} className="flex justify-between items-center">
+                        <span className="font-semibold text-text-secondary font-sans">{f.fuel_type_name}</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${f.percentage}%` }}></div>
+                          <div className="w-16 h-1 bg-bg-primary rounded-full overflow-hidden border border-border-hairline">
+                            <div className="h-full bg-primary-blue rounded-full" style={{ width: `${f.percentage}%` }}></div>
                           </div>
-                          <span className="font-black text-slate-800 text-[10px] w-6 text-right">{f.percentage.toFixed(0)}%</span>
+                          <span className="font-bold text-text-primary text-[10px] w-6 text-right">{f.percentage.toFixed(0)}%</span>
                         </div>
                       </div>
                     ))}
@@ -568,39 +549,39 @@ const GeoTab = () => {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-400 py-4 justify-center">
-                <ZapOff size={14}/> Connecting to Grid...
+              <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary py-4 justify-center">
+                <ZapOff size={14}/> Connecting to grid...
               </div>
             )}
           </div>
 
           {/* Utility Intelligence */}
           {isDrilldown && zipStats && (
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200/60 hover:shadow-md transition-shadow space-y-4">
-               <div className="flex items-center gap-2 mb-2">
-                  <div className="bg-indigo-100 text-indigo-600 p-1.5 rounded-lg"><Building2 size={16} /></div>
-                  <h3 className="text-sm font-black text-slate-900 tracking-tight">Market Statistics</h3>
+            <div className="panel-operational hover:shadow-md transition-shadow space-y-4">
+               <div className="flex items-center gap-2 border-b border-border-hairline pb-2">
+                  <div className="bg-primary-blue/10 text-primary-blue p-1 rounded-[4px]"><Building2 size={14} /></div>
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Market statistics</h3>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/50">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">ZIPs Served</p>
-                    <p className="text-lg font-black text-slate-900">{zipStats.total_zips}</p>
+                <div className="grid grid-cols-2 gap-3 font-mono-numbers text-xs">
+                  <div className="bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-1 font-sans">ZIPs served</p>
+                    <p className="text-base font-bold text-text-primary">{zipStats.total_zips}</p>
                   </div>
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/50">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Rate Volatility</p>
-                    <p className="text-lg font-black text-slate-900">${zipStats.std_dev?.toFixed(4)}</p>
+                  <div className="bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-1 font-sans">Rate volatility</p>
+                    <p className="text-base font-bold text-text-primary">${zipStats.std_dev?.toFixed(4)}</p>
                   </div>
                 </div>
                 {zipStats.min_rate && (
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100/50 space-y-1.5">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Extremes</p>
-                    <div className="flex justify-between text-[10px] font-bold">
-                      <span className="text-slate-500">Low (ZIP {zipStats.min_rate.zip_code})</span>
-                      <span className="text-emerald-600">${zipStats.min_rate.rate?.toFixed(4)}</span>
+                  <div className="bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm space-y-1.5 text-[10px] font-mono-numbers">
+                    <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-1 font-sans">Extremes</p>
+                    <div className="flex justify-between font-bold">
+                      <span className="text-text-secondary font-sans font-normal">Low (ZIP {zipStats.min_rate.zip_code})</span>
+                      <span className="text-savings-green">${zipStats.min_rate.rate?.toFixed(4)}</span>
                     </div>
-                    <div className="flex justify-between text-[10px] font-bold">
-                      <span className="text-slate-500">High (ZIP {zipStats.max_rate.zip_code})</span>
-                      <span className="text-red-600">${zipStats.max_rate.rate?.toFixed(4)}</span>
+                    <div className="flex justify-between font-bold">
+                      <span className="text-text-secondary font-sans font-normal">High (ZIP {zipStats.max_rate.zip_code})</span>
+                      <span className="text-alert-red">${zipStats.max_rate.rate?.toFixed(4)}</span>
                     </div>
                   </div>
                 )}
@@ -610,80 +591,72 @@ const GeoTab = () => {
         </div>
       </div>
 
-      {/* =========================================================================
-          SECTION 5 — ANALYTICS DASHBOARD
-          ========================================================================= */}
+      {/* SECTION 5 — ANALYTICS DASHBOARD */}
       <div className="max-w-[1400px] mx-auto px-6 py-12 space-y-8">
         
-        <div className="flex items-center gap-2 mb-6">
-          <BarChart2 className="text-slate-400" size={20} />
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight">Deep Analytics & Trends</h2>
+        <div className="flex items-center gap-2 mb-6 border-b border-border-hairline pb-3">
+          <BarChart2 className="text-text-secondary" size={18} />
+          <h2 className="text-xl font-bold text-text-primary tracking-tight">Deep analytics & trends</h2>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
           {/* Trend Chart (reuses trendData) */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/60 shadow-sm hover:shadow-md transition-shadow">
+          <div className="panel-chart h-[340px] flex flex-col justify-between">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">{selectedState} Historical {viewMode === 'bill' ? 'Bill' : 'Rate'} Trend</h3>
-              <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-md ${trendData?.total_growth_pct > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                {trendData?.total_growth_pct > 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>} 
+              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">{selectedState} historical {viewMode === 'bill' ? 'bill' : 'rate'} trend</h3>
+              <div className={`flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-[4px] border font-mono-numbers ${trendData?.total_growth_pct > 0 ? 'bg-alert-red/10 text-alert-red border-alert-red/20' : 'bg-savings-green/10 text-savings-green border-savings-green/20'}`}>
+                {trendData?.total_growth_pct > 0 ? <TrendingUp size={10}/> : <TrendingDown size={10}/>} 
                 {trendData?.total_growth_pct > 0 ? '+' : ''}{trendData?.total_growth_pct}% YoY
               </div>
             </div>
             
-            <div className="h-[250px]">
+            <div className="flex-1 min-h-[220px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData?.months ? trendData.months.map((m:any,i:number) => ({ label: m, val: trendData.values[i] })) : []}> {/* eslint-disable-line @typescript-eslint/no-explicit-any */}
-                  <defs>
-                    <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fill: '#94A3B8', fontSize: 10, fontWeight: 600}} dy={10} minTickGap={30} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#94A3B8', fontSize: 10, fontWeight: 600}} tickFormatter={(v) => viewMode === 'bill' ? `$${v}` : `$${v}`} domain={['auto', 'auto']} />
+                <AreaChart data={trendData?.months ? trendData.months.map((m:any,i:number) => ({ label: m, val: trendData.values[i] })) : []} margin={{ left: -25, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fill: 'var(--text-secondary)', fontSize: 9, fontWeight: 600}} dy={10} minTickGap={30} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: 'var(--text-secondary)', fontSize: 9, fontFamily: 'IBM Plex Mono'}} tickFormatter={(v) => viewMode === 'bill' ? `$${v}` : `$${v}`} domain={['auto', 'auto']} />
                   <RechartsTooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '11px', fontWeight: 'bold' }} 
-                    formatter={(v:any) => [viewMode==='bill'? `$${Number(v).toFixed(2)}` : `$${Number(v).toFixed(4)}/kWh`, 'Average']} // eslint-disable-line @typescript-eslint/no-explicit-any
+                    contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }} 
+                    itemStyle={{ fontSize: '11px', color: 'var(--text-primary)' }}
+                    formatter={(v:any) => [viewMode==='bill'? `$${Number(v).toFixed(2)}` : `$${Number(v).toFixed(4)}/kWh`, 'Average']}
                   />
-                  <Area type="monotone" dataKey="val" stroke="#2563EB" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
+                  <Area type="monotone" dataKey="val" stroke="var(--primary-blue)" strokeWidth={2} fill="var(--primary-blue)" fillOpacity={0.08} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
           {/* AI Projected Forecast / Distribution */}
-          <div className="bg-white rounded-3xl p-6 border border-slate-200/60 shadow-sm hover:shadow-md transition-shadow flex flex-col">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6">Rate Distribution Analysis</h3>
+          <div className="panel-operational h-[340px] flex flex-col justify-between">
+            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-6 border-b border-border-hairline pb-2">Rate distribution analysis</h3>
             {zipStats ? (
-              <div className="flex-1 flex flex-col justify-center">
-                <div className="grid grid-cols-3 gap-2 mb-6">
-                  <div className="bg-slate-50 rounded-xl p-4 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">Bottom 10%</p>
-                    <p className="text-sm font-black text-emerald-600">${zipStats.min_rate?.rate?.toFixed(4)}</p>
+              <div className="flex-1 flex flex-col justify-between font-mono-numbers text-xs">
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-bg-primary border border-border-hairline rounded-md p-3 text-center shadow-sm">
+                    <p className="text-[9px] font-bold text-text-secondary mb-1 font-sans">Bottom 10%</p>
+                    <p className="text-xs font-bold text-savings-green">${zipStats.min_rate?.rate?.toFixed(4)}</p>
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-4 text-center border-b-2 border-blue-500">
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">Median Rate</p>
-                    <p className="text-base font-black text-slate-900">${zipStats.avg_rate?.toFixed(4)}</p>
+                  <div className="bg-bg-primary border border-primary-blue/30 rounded-md p-3 text-center shadow-sm">
+                    <p className="text-[9px] font-bold text-text-secondary mb-1 font-sans">Median rate</p>
+                    <p className="text-sm font-bold text-text-primary">${zipStats.avg_rate?.toFixed(4)}</p>
                   </div>
-                  <div className="bg-slate-50 rounded-xl p-4 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 mb-1">Top 10%</p>
-                    <p className="text-sm font-black text-red-600">${zipStats.max_rate?.rate?.toFixed(4)}</p>
+                  <div className="bg-bg-primary border border-border-hairline rounded-md p-3 text-center shadow-sm">
+                    <p className="text-[9px] font-bold text-text-secondary mb-1 font-sans">Top 10%</p>
+                    <p className="text-xs font-bold text-alert-red">${zipStats.max_rate?.rate?.toFixed(4)}</p>
                   </div>
                 </div>
-                <div className="h-[120px]">
-                  {/* Mock histogram purely for visual representation of spread using existing std_dev */}
+                <div className="h-[120px] flex-1">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={[
                       { range: 'Low', val: 20 }, { range: 'Mid-Low', val: 45 }, 
                       { range: 'Median', val: 80 }, { range: 'Mid-High', val: 35 }, { range: 'High', val: 15 }
                     ]}>
-                      <Bar dataKey="val" radius={[4,4,0,0]}>
+                      <Bar dataKey="val" radius={[2,2,0,0]}>
                         {
                           [0,1,2,3,4].map((i) => (
-                            <Cell key={i} fill={i === 2 ? '#3B82F6' : '#E2E8F0'} />
+                            <Cell key={i} fill={i === 2 ? 'var(--primary-blue)' : 'var(--border-hairline)'} />
                           ))
                         }
                       </Bar>
@@ -693,8 +666,8 @@ const GeoTab = () => {
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center">
-                <Layers className="text-slate-200 mb-2" size={32}/>
-                <p className="text-xs font-bold text-slate-400">Drill down to State/ZIP level to view rate distributions.</p>
+                <Layers className="text-text-secondary opacity-40 mb-2" size={28}/>
+                <p className="text-xs font-semibold text-text-secondary">Drill down to state/ZIP level to view rate distributions.</p>
               </div>
             )}
           </div>
@@ -702,7 +675,6 @@ const GeoTab = () => {
         </div>
       </div>
       
-      {/* Global CSS Overrides for scrollbars */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Sliders, ShieldAlert, Cpu } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { ShieldAlert, Cpu, Activity, RefreshCw } from 'lucide-react';
 
 const PRESETS = [
   { key: 'hot_summer', label: '🔥 Hot Summer', desc: 'High CDD temperatures and peak pricing (+25% bgs_rate)' },
@@ -11,8 +11,52 @@ const PRESETS = [
   { key: 'conservation', label: '🌳 Green Conservation', desc: 'Usage drops by 20% (-20% usage)' }
 ];
 
-import { Zap } from 'lucide-react';
-import { useEffect } from 'react';
+const COLORS = [
+  '#2F6BFF', // Primary blue
+  '#16A085', // Energy teal
+  '#2CA6FF', // Electric cyan
+  '#27AE60', // Savings green
+  '#F5B041', // Warning amber
+  '#D64545', // Alert red
+];
+
+// Flat modern SVG showing energy flow from grid to customer
+const EnergyFlowSVG = () => (
+  <div className="w-full bg-bg-primary rounded-md p-4 border border-border-hairline flex flex-col items-center">
+    <span className="text-[9px] uppercase tracking-widest text-text-secondary mb-3 font-semibold">Grid dispatch to customer flow telemetry</span>
+    <svg className="w-full max-w-lg h-14 text-text-secondary/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 320 40">
+      {/* Power Plant / Grid Tower */}
+      <g transform="translate(10, 5)" stroke="var(--primary-blue)" opacity="0.8">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 5l10 30M15 5L5 35M2 35h26M5 15h20M2 25h26" />
+        <text x="15" y="-2" textAnchor="middle" fontSize="6" fill="var(--text-secondary)" stroke="none" fontWeight="bold">GRID</text>
+      </g>
+      {/* Substation */}
+      <g transform="translate(110, 10)" stroke="var(--energy-teal)" opacity="0.8">
+        <rect x="5" y="5" width="20" height="20" rx="2" />
+        <path d="M15 5v20M5 15h20" />
+        <text x="15" y="-2" textAnchor="middle" fontSize="6" fill="var(--text-secondary)" stroke="none" fontWeight="bold">SUBSTATION</text>
+      </g>
+      {/* Smart Meter */}
+      <g transform="translate(210, 10)" stroke="var(--electric-cyan)" opacity="0.8">
+        <circle cx="15" cy="15" r="10" />
+        <path d="M10 15h10M15 10v10" />
+        <text x="15" y="-2" textAnchor="middle" fontSize="6" fill="var(--text-secondary)" stroke="none" fontWeight="bold">METER</text>
+      </g>
+      {/* Consumer Home */}
+      <g transform="translate(290, 8)" stroke="var(--text-primary)" opacity="0.8">
+        <path d="M5 25V13l10-8 10 8v12H5z" />
+        <path d="M12 25v-6h6v6" />
+        <text x="15" y="-2" textAnchor="middle" fontSize="6" fill="var(--text-secondary)" stroke="none" fontWeight="bold">HOME</text>
+      </g>
+      {/* Flowing connector arrows */}
+      <g stroke="var(--primary-blue)" strokeWidth="1" strokeDasharray="3 3" opacity="0.5">
+        <path d="M40 22h65" />
+        <path d="M140 22h65" />
+        <path d="M235 22h50" />
+      </g>
+    </svg>
+  </div>
+);
 
 const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiveTab?: (tab: string) => void }) => {
   const [kwh, setKwh] = useState<number>(750);
@@ -41,15 +85,15 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
 
   if (!uploadedBill) {
     return (
-      <div className="flex flex-col items-center justify-center p-16 card bg-slate-50 border-dashed border-2 border-slate-200 text-center max-w-xl mx-auto space-y-4 my-12">
-        <Zap size={48} className="text-slate-400 animate-bounce" />
-        <h3 className="text-xl font-bold text-slate-800">Simulator Locked</h3>
-        <p className="text-sm text-slate-500 max-w-sm">
+      <div className="panel-operational flex flex-col items-center justify-center p-16 text-center max-w-xl mx-auto space-y-4 my-12 border-dashed border border-border-hairline">
+        <Activity size={36} className="text-text-secondary opacity-60 animate-pulse" />
+        <h3 className="text-sm font-bold text-text-primary">Simulator locked</h3>
+        <p className="text-xs text-text-secondary max-w-sm">
           Please upload and analyze an electricity bill on the Bill Analysis page to use the What-If Engine.
         </p>
         <button 
           onClick={() => setActiveTab?.("Bill Analysis")}
-          className="bg-primary text-white hover:bg-primary-hover font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-primary/20 mt-4"
+          className="px-4 py-2.5 bg-bg-surface border border-border-hairline rounded-md text-xs font-semibold hover:bg-bg-primary transition-all shadow-sm"
         >
           Go to Bill Analysis
         </button>
@@ -83,7 +127,6 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
 
   const handleApplyPreset = (presetKey: string) => {
     setScenario(presetKey);
-    // Reset manual overrides when preset is applied to prevent confusion
     setBgsChange(0);
     setDistChange(0);
     setTransChange(0);
@@ -98,60 +141,60 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
     setTransChange(0);
     setSbcChange(0);
     setNugChange(0);
-    setKwh(750);
+    setKwh(uploadedBill?.usage_kwh || 750);
   };
 
   const getDecompositionData = (decomp: any) => {
     if (!decomp) return [];
     return [
-      { name: 'Direct Price Effect', value: decomp.direct_price_effect, fill: '#3B82F6' },
-      { name: 'Indirect Behavioral Effect', value: decomp.indirect_behavioral_effect, fill: '#10B981' },
-      { name: 'Weather Effect', value: decomp.weather_effect, fill: '#F59E0B' },
-      { name: 'Interaction Effect', value: decomp.interaction_effect, fill: '#8B5CF6' }
+      { name: 'Direct Price', value: decomp.direct_price_effect, fill: '#2F6BFF' },
+      { name: 'Indirect Behavior', value: decomp.indirect_behavioral_effect, fill: '#16A085' },
+      { name: 'Weather Effect', value: decomp.weather_effect, fill: '#F5B041' },
+      { name: 'Interaction', value: decomp.interaction_effect, fill: '#2CA6FF' }
     ];
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+    <div className="space-y-6 font-sans">
+      
       {/* ── Personalized What-If Scenarios ── */}
       {customerSimulations && (
-        <div className="card p-6 bg-slate-900 text-white relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10 mb-6">
+        <div className="panel-operational relative overflow-hidden bg-bg-surface">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-6">
             <div>
-              <span className="bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
-                Personalized What-If Scenarios
+              <span className="bg-primary-blue/10 text-primary-blue text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-[4px] border border-primary-blue/20">
+                Personalized what-if scenarios
               </span>
-              <h3 className="text-xl font-bold mt-2">Customer {customerId} What-If Simulator</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Simulated annual bill outcomes using customer history and weather variables</p>
+              <h3 className="text-sm font-bold mt-3 text-text-primary">Customer {customerId} what-if simulator</h3>
+              <p className="text-xs text-text-secondary mt-0.5">Simulated annual bill outcomes using customer history and weather variables</p>
             </div>
             
-            <div>
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Actual Annual Cost (Est)</span>
-              <span className="text-2xl font-black text-white">${customerSimulations[0]?.actual_annual_cost_estimate?.toFixed(2)}</span>
+            <div className="font-mono-numbers">
+              <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block font-sans">Actual annual cost (est)</span>
+              <span className="text-xl font-bold text-text-primary">${customerSimulations[0]?.actual_annual_cost_estimate?.toFixed(2)}</span>
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono-numbers">
             {customerSimulations.map((s: any, idx: number) => {
               const diff = s.difference_vs_actual;
               const isIncrease = diff > 0;
               return (
-                <div key={idx} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/30 flex flex-col justify-between">
+                <div key={idx} className="p-4 bg-bg-primary rounded-md border border-border-hairline flex flex-col justify-between shadow-sm">
                   <div>
-                    <span className="text-xs font-black text-blue-400 uppercase tracking-widest block mb-2">{s.scenario_name}</span>
-                    <div className="flex justify-between text-xs text-slate-400 mb-1">
-                      <span>Simulated Usage:</span>
-                      <span className="font-bold text-white">{s.simulated_annual_usage_kwh?.toLocaleString()} kWh</span>
+                    <span className="text-xs font-bold text-primary-blue uppercase tracking-wider block mb-2 font-sans">{s.scenario_name}</span>
+                    <div className="flex justify-between text-xs text-text-secondary mb-1">
+                      <span className="font-sans">Simulated usage:</span>
+                      <span className="font-bold text-text-primary">{s.simulated_annual_usage_kwh?.toLocaleString()} kWh</span>
                     </div>
-                    <div className="flex justify-between text-xs text-slate-400 mb-3">
-                      <span>Simulated Cost:</span>
-                      <span className="font-bold text-white">${s.simulated_annual_cost?.toFixed(2)}</span>
+                    <div className="flex justify-between text-xs text-text-secondary mb-3">
+                      <span className="font-sans">Simulated cost:</span>
+                      <span className="font-bold text-text-primary">${s.simulated_annual_cost?.toFixed(2)}</span>
                     </div>
                   </div>
-                  <div className="border-t border-slate-700/50 pt-2 flex justify-between items-baseline">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impact</span>
-                    <span className={`text-sm font-bold ${isIncrease ? 'text-red-400' : 'text-emerald-400'}`}>
+                  <div className="border-t border-border-hairline pt-2 flex justify-between items-baseline">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest font-sans">Impact</span>
+                    <span className={`text-sm font-bold ${isIncrease ? 'text-alert-red' : 'text-savings-green'}`}>
                       {isIncrease ? '+' : ''}${diff?.toFixed(2)}/yr
                     </span>
                   </div>
@@ -161,42 +204,51 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
           </div>
         </div>
       )}
-      <div className="flex justify-between items-end">
+
+      {/* Title block */}
+      <div className="flex justify-between items-end gap-4">
         <div>
-          <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <Sliders className="text-blue-600" size={36} /> Scenario Simulator
+          <span className="bg-primary-blue/10 text-primary-blue text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-[6px]">
+            What-if simulator
+          </span>
+          <h2 className="text-2xl font-bold text-text-primary tracking-tight mt-2 flex items-center gap-2">
+            Scenario simulator
           </h2>
-          <p className="text-slate-500 text-sm mt-2">
+          <p className="text-xs text-text-secondary mt-1">
             Build custom rate hikes or test preset macro scenarios to simulate the impact on your bill.
           </p>
         </div>
         <button 
           onClick={clearOverrides}
-          className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-xl text-xs transition-all"
+          className="bg-bg-surface hover:bg-bg-primary text-text-primary font-semibold px-4 py-2 rounded-md text-xs transition-all border border-border-hairline shadow-sm"
         >
-          Reset Simulator
+          Reset simulator
         </button>
       </div>
 
+      {/* Energy Flow Visualization */}
+      <EnergyFlowSVG />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
         {/* Left Control Panel */}
-        <div className="card p-8 bg-white shadow-xl shadow-slate-200/50 space-y-6">
-          <h3 className="text-sm font-black text-slate-950 uppercase tracking-wider border-b border-slate-100 pb-3">
-            Parameter Controls
+        <div className="panel-operational space-y-6">
+          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider border-b border-border-hairline pb-3">
+            Parameter controls
           </h3>
 
           {/* Presets */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Preset Scenarios</label>
+            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Preset scenarios</label>
             <div className="grid grid-cols-2 gap-2">
               {PRESETS.map((p) => (
                 <button
                   key={p.key}
                   onClick={() => handleApplyPreset(p.key)}
-                  className={`p-3 text-left rounded-xl border text-xs font-bold transition-all ${
+                  className={`p-3 text-left rounded-md border text-xs font-bold transition-all ${
                     scenario === p.key
-                      ? 'border-blue-600 bg-blue-50/50 text-blue-950'
-                      : 'border-slate-100 hover:bg-slate-50 text-slate-700'
+                      ? 'border-primary-blue bg-primary-blue/5 text-primary-blue'
+                      : 'border-border-hairline hover:bg-bg-primary text-text-secondary hover:text-text-primary'
                   }`}
                 >
                   {p.label}
@@ -205,13 +257,13 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
             </div>
           </div>
 
-          <div className="border-t border-slate-100 my-6"></div>
+          <div className="border-t border-border-hairline my-6"></div>
 
           {/* Usage Override */}
-          <div className="space-y-2">
+          <div className="space-y-2 font-mono-numbers">
             <div className="flex justify-between text-xs font-bold">
-              <span className="text-slate-500 uppercase tracking-wider text-[10px]">Monthly Consumption</span>
-              <span className="text-slate-950">{kwh} kWh</span>
+              <span className="text-text-secondary uppercase tracking-wider text-[10px] font-sans">Monthly consumption</span>
+              <span className="text-text-primary">{kwh} kWh</span>
             </div>
             <input
               type="range"
@@ -221,21 +273,21 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
               value={kwh}
               onChange={(e) => {
                 setKwh(parseInt(e.target.value));
-                setScenario(null); // Clear preset to indicate manual
+                setScenario(null);
               }}
-              className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              className="w-full h-1.5 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue border border-border-hairline"
             />
           </div>
 
           {/* Rate Sliders */}
           <div className="space-y-4 pt-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Manual Rate Adjustments</label>
+            <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block border-b border-border-hairline pb-1.5">Manual rate adjustments</label>
             
             {/* BGS */}
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-600">BGS Supply Charge</span>
-                <span className={bgsChange > 0 ? 'text-rose-600' : bgsChange < 0 ? 'text-emerald-600' : 'text-slate-500'}>
+              <div className="flex justify-between text-xs font-bold font-mono-numbers">
+                <span className="text-text-primary font-sans">BGS supply charge</span>
+                <span className={bgsChange > 0 ? 'text-alert-red' : bgsChange < 0 ? 'text-savings-green' : 'text-text-secondary'}>
                   {bgsChange > 0 ? '+' : ''}{bgsChange}%
                 </span>
               </div>
@@ -248,15 +300,15 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
                   setBgsChange(parseInt(e.target.value));
                   setScenario(null);
                 }}
-                className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
               />
             </div>
 
             {/* Distribution */}
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-600">Distribution Charge</span>
-                <span className={distChange > 0 ? 'text-rose-600' : distChange < 0 ? 'text-emerald-600' : 'text-slate-500'}>
+              <div className="flex justify-between text-xs font-bold font-mono-numbers">
+                <span className="text-text-primary font-sans">Distribution charge</span>
+                <span className={distChange > 0 ? 'text-alert-red' : distChange < 0 ? 'text-savings-green' : 'text-text-secondary'}>
                   {distChange > 0 ? '+' : ''}{distChange}%
                 </span>
               </div>
@@ -269,15 +321,15 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
                   setDistChange(parseInt(e.target.value));
                   setScenario(null);
                 }}
-                className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
               />
             </div>
 
             {/* Transmission */}
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-600">Transmission Charge</span>
-                <span className={transChange > 0 ? 'text-rose-600' : transChange < 0 ? 'text-emerald-600' : 'text-slate-500'}>
+              <div className="flex justify-between text-xs font-bold font-mono-numbers">
+                <span className="text-text-primary font-sans">Transmission charge</span>
+                <span className={transChange > 0 ? 'text-alert-red' : transChange < 0 ? 'text-savings-green' : 'text-text-secondary'}>
                   {transChange > 0 ? '+' : ''}{transChange}%
                 </span>
               </div>
@@ -290,15 +342,15 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
                   setTransChange(parseInt(e.target.value));
                   setScenario(null);
                 }}
-                className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
               />
             </div>
 
             {/* SBC */}
             <div className="space-y-2">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-slate-600">Societal Benefits Charge</span>
-                <span className={sbcChange > 0 ? 'text-rose-600' : sbcChange < 0 ? 'text-emerald-600' : 'text-slate-500'}>
+              <div className="flex justify-between text-xs font-bold font-mono-numbers">
+                <span className="text-text-primary font-sans">Societal benefits charge</span>
+                <span className={sbcChange > 0 ? 'text-alert-red' : sbcChange < 0 ? 'text-savings-green' : 'text-text-secondary'}>
                   {sbcChange > 0 ? '+' : ''}{sbcChange}%
                 </span>
               </div>
@@ -311,7 +363,7 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
                   setSbcChange(parseInt(e.target.value));
                   setScenario(null);
                 }}
-                className="w-full h-1 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
               />
             </div>
           </div>
@@ -320,51 +372,51 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
         {/* Results Panel */}
         <div className="lg:col-span-2 space-y-6">
           {isLoading ? (
-            <div className="card p-12 bg-white flex flex-col items-center justify-center min-h-[450px] space-y-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              <p className="text-slate-500 font-medium animate-pulse">Simulating 2,000 Monte Carlo Trials...</p>
+            <div className="panel-operational flex flex-col items-center justify-center min-h-[450px] space-y-4">
+              <RefreshCw size={24} className="animate-spin text-primary-blue" />
+              <p className="text-text-secondary font-semibold animate-pulse text-xs">Simulating 2,000 Monte Carlo trials...</p>
             </div>
           ) : isError ? (
-            <div className="card p-8 bg-rose-50 border border-rose-200 min-h-[450px] flex flex-col items-center justify-center text-center">
-              <ShieldAlert className="text-rose-600 mb-4" size={48} />
-              <h4 className="text-lg font-bold text-slate-900 mb-2">Simulation Run Failed</h4>
-              <p className="text-sm text-slate-500 max-w-md">Failed to retrieve simulation output from PJM physics model.</p>
+            <div className="panel-operational min-h-[450px] flex flex-col items-center justify-center text-center border-alert-red/30">
+              <ShieldAlert className="text-alert-red mb-4" size={40} />
+              <h4 className="text-sm font-bold text-text-primary mb-2">Simulation run failed</h4>
+              <p className="text-xs text-text-secondary max-w-sm">Failed to retrieve simulation output from PJM physics model.</p>
             </div>
-          ) : (
+          ) : data ? (
             <div className="space-y-6">
               {/* Core Indicators */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="card p-6 bg-white border border-slate-100 shadow-lg">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Base Monthly Bill</span>
-                  <div className="text-4xl font-black mt-2 text-slate-900">${data.base_bill.toFixed(2)}</div>
-                  <span className="text-xs text-slate-400 block mt-1">Estimated standard NJ tariff</span>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 font-mono-numbers">
+                <div className="panel-operational">
+                  <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest font-sans">Base monthly bill</span>
+                  <div className="text-3xl font-bold mt-2 text-text-primary">${data.base_bill.toFixed(2)}</div>
+                  <span className="text-[10px] text-text-secondary block mt-1 font-sans">Estimated standard NJ tariff</span>
                 </div>
 
-                <div className="card p-6 bg-blue-900 text-white shadow-xl shadow-blue-950/20 relative overflow-hidden">
-                  <div className="absolute -right-4 -top-4 w-24 h-24 bg-blue-600/30 rounded-full blur-2xl"></div>
-                  <span className="text-[10px] font-bold text-blue-300 uppercase tracking-widest">Simulated Bill Mean</span>
-                  <div className="text-4xl font-black mt-2">${data.simulated_bill.toFixed(2)}</div>
-                  <span className="text-xs text-blue-200 block mt-1">
+                <div className="panel-operational bg-primary-blue/5 border-primary-blue/20">
+                  <span className="text-[10px] font-bold text-primary-blue uppercase tracking-widest font-sans">Simulated bill mean</span>
+                  <div className="text-3xl font-bold mt-2 text-primary-blue">${data.simulated_bill.toFixed(2)}</div>
+                  <span className="text-[10px] text-primary-blue block mt-1 font-sans font-semibold">
                     95% Bounds: ${data.confidence_interval[0].toFixed(2)} - ${data.confidence_interval[1].toFixed(2)}
                   </span>
                 </div>
               </div>
 
               {/* Decomposition chart */}
-              <div className="card p-8 bg-white shadow-lg border border-slate-100">
-                <h3 className="text-sm font-black text-slate-950 uppercase tracking-wider mb-6">
-                  Causal Decomposition of Bill Shift ($)
-                </h3>
-                <div className="h-64">
+              <div className="panel-chart h-[320px] flex flex-col justify-between">
+                <div>
+                  <span className="text-xs uppercase tracking-wider text-text-secondary">Causal factors</span>
+                  <h3 className="text-sm font-bold text-text-primary mt-0.5 mb-4">Causal decomposition of bill shift ($)</h3>
+                </div>
+                <div className="flex-1 min-h-[220px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={getDecompositionData(data.decomposition)}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                      <XAxis dataKey="name" stroke="#94A3B8" fontSize={10} tickLine={false} />
-                      <YAxis stroke="#94A3B8" fontSize={11} />
+                    <BarChart data={getDecompositionData(data.decomposition)} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                      <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={10} tickLine={false} tick={{ fill: 'var(--text-secondary)' }} />
+                      <YAxis stroke="var(--text-secondary)" fontSize={10} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} />
                       <Tooltip />
-                      <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
-                        {getDecompositionData(data.decomposition).map((entry: any, index) => (
-                          <Bar key={`cell-${index}`} dataKey="value" fill={entry.fill} />
+                      <Bar dataKey="value" radius={[2, 2, 0, 0]} barSize={40}>
+                        {getDecompositionData(data.decomposition).map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
                       </Bar>
                     </BarChart>
@@ -374,33 +426,33 @@ const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
 
               {/* PJM Physics Data */}
               {data.pjm_physics && (
-                <div className="card p-6 bg-slate-50 border border-slate-200 shadow-md">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Cpu className="text-blue-600" size={20} />
-                    <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest">PJM Grid Physical State</h4>
+                <div className="panel-operational space-y-4">
+                  <div className="flex items-center gap-2 border-b border-border-hairline pb-2 mb-2">
+                    <Cpu className="text-primary-blue" size={16} />
+                    <h4 className="text-[10px] font-bold text-text-secondary uppercase tracking-widest font-sans">PJM grid physical state</h4>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono-numbers">
                     <div>
-                      <span className="text-slate-400 block mb-0.5">Marginal Cost</span>
-                      <strong className="text-slate-800">${data.pjm_physics.marginal_cost.toFixed(2)}/MWh</strong>
+                      <span className="text-text-secondary block mb-0.5 font-sans">Marginal cost</span>
+                      <strong className="text-text-primary">${data.pjm_physics.marginal_cost.toFixed(2)}/MWh</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block mb-0.5">PSEG LMP (DA)</span>
-                      <strong className="text-slate-800">${data.pjm_physics.lmp.toFixed(2)}/MWh</strong>
+                      <span className="text-text-secondary block mb-0.5 font-sans">PSEG LMP (DA)</span>
+                      <strong className="text-text-primary">${data.pjm_physics.lmp.toFixed(2)}/MWh</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block mb-0.5">Loss Factor</span>
-                      <strong className="text-slate-800">{(data.pjm_physics.loss_factor * 100).toFixed(1)}%</strong>
+                      <span className="text-text-secondary block mb-0.5 font-sans">Loss factor</span>
+                      <strong className="text-text-primary">{(data.pjm_physics.loss_factor * 100).toFixed(1)}%</strong>
                     </div>
                     <div>
-                      <span className="text-slate-400 block mb-0.5">DA Demand Cost</span>
-                      <strong className="text-slate-800">${data.pjm_physics.da_charge.toFixed(2)}</strong>
+                      <span className="text-text-secondary block mb-0.5 font-sans">DA demand cost</span>
+                      <strong className="text-text-primary">${data.pjm_physics.da_charge.toFixed(2)}</strong>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

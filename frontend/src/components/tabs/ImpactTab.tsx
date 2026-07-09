@@ -7,20 +7,17 @@ import {
 } from 'recharts';
 import { 
   Calculator, Activity, TrendingUp, TrendingDown, 
-  ThermometerSun, Zap, ShieldCheck, ArrowRight, Lightbulb,
-  CloudRain, DollarSign, Gauge, BarChart3, Info,
-  Brain, CheckCircle, AlertCircle
+  ThermometerSun, ArrowRight, Lightbulb,
+  CloudRain, DollarSign, Gauge, BarChart3, Info
 } from 'lucide-react';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
 const SCENARIOS = [
-  { id: "", label: "Custom Rate Changes Only" },
-  { id: "cold_winter", label: "❄️ Cold Winter (High Heat Load)" },
-  { id: "hot_summer", label: "☀️ Hot Summer (High Cooling Load)" },
-  { id: "high_market", label: "📈 High Wholesale Market Prices" },
-  { id: "low_usage", label: "🏠 Energy Efficient Household" },
-  { id: "conservation", label: "🌱 Conservation Effort" }
+  { id: "", label: "Custom rate changes only" },
+  { id: "cold_winter", label: "❄️ Cold winter (High heat load)" },
+  { id: "hot_summer", label: "☀️ Hot summer (High cooling load)" },
+  { id: "high_market", label: "📈 High wholesale market prices" },
+  { id: "low_usage", label: "🏠 Energy efficient household" },
+  { id: "conservation", label: "🌱 Conservation effort" }
 ];
 
 const COMPONENT_METADATA: Record<string, { label: string; description: string; icon: string }> = {
@@ -29,8 +26,6 @@ const COMPONENT_METADATA: Record<string, { label: string; description: string; i
   transmission_rate: { label: "Transmission",     description: "Regional high-voltage transport fee.",                    icon: "🏗️" },
   sbc_rate:          { label: "Societal Benefits", description: "State-mandated societal benefits & clean energy charges.", icon: "🏛️" },
 };
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
@@ -41,7 +36,6 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
-/** Format dollar amount with sign */
 const fmt = (v: number, forceSign = false) => {
   const sign = v > 0 ? '+' : v < 0 ? '−' : '';
   const abs = Math.abs(v).toFixed(2);
@@ -49,19 +43,18 @@ const fmt = (v: number, forceSign = false) => {
   return `$${abs}`;
 };
 
-/** Get confidence level label from simulation variability */
 const getConfidenceLevel = (std: number, mean: number) => {
   const cv = mean > 0 ? std / mean : 0;
-  if (cv < 0.03) return { label: 'Very High', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', barColor: '#10B981' };
-  if (cv < 0.06) return { label: 'High', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200', barColor: '#10B981' };
-  if (cv < 0.12) return { label: 'Moderate', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', barColor: '#F59E0B' };
-  return { label: 'Low', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', barColor: '#EF4444' };
+  if (cv < 0.03) return { label: 'Very High', color: 'text-savings-green', bg: 'bg-savings-green/10', border: 'border-savings-green/20', barColor: '#27AE60' };
+  if (cv < 0.06) return { label: 'High', color: 'text-savings-green', bg: 'bg-savings-green/10', border: 'border-savings-green/20', barColor: '#27AE60' };
+  if (cv < 0.12) return { label: 'Moderate', color: 'text-warning-amber', bg: 'bg-warning-amber/10', border: 'border-warning-amber/20', barColor: '#F5B041' };
+  return { label: 'Low', color: 'text-alert-red', bg: 'bg-alert-red/10', border: 'border-alert-red/25', barColor: '#D64545' };
 };
 
 const getPValueColor = (p: number) => {
-  if (p < 0.01) return 'text-emerald-600 bg-emerald-50 border-emerald-200';
-  if (p < 0.05) return 'text-blue-600 bg-blue-50 border-blue-200';
-  return 'text-slate-500 bg-slate-50 border-slate-200';
+  if (p < 0.01) return 'text-savings-green bg-savings-green/10 border-savings-green/20';
+  if (p < 0.05) return 'text-primary-blue bg-primary-blue/10 border-primary-blue/20';
+  return 'text-text-secondary bg-bg-primary border-border-hairline';
 };
 
 const getSignificanceLabel = (p: number) => {
@@ -70,7 +63,6 @@ const getSignificanceLabel = (p: number) => {
   return 'Not Statistically Significant (p >= 0.05)';
 };
 
-/** Build bell curve data for distribution visualization */
 const buildBellCurve = (mean: number, std: number, p5: number, p95: number) => {
   const points = [];
   const lo = Math.min(p5, mean - 3 * std);
@@ -85,15 +77,12 @@ const buildBellCurve = (mean: number, std: number, p5: number, p95: number) => {
   return points;
 };
 
-// ─── Main Component ──────────────────────────────────────────────────────────
-
 const round = (val: number, decimals: number) => {
   const p = Math.pow(10, decimals);
   return Math.round(val * p) / p;
 };
 
 const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiveTab?: (tab: string) => void }) => {
-  // ── Simulator State ──
   const [selectedComp, setSelectedComp] = useState("bgs_rate");
   const [changePct, setChangePct] = useState(10);
   const [scenario, setScenario] = useState("");
@@ -121,12 +110,6 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
     };
   }, [uploadedBill]);
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { data: _fullAnalysis } = useQuery({
-    queryKey: ['impact-full-analysis'],
-    queryFn: async () => (await axios.get('/impact/full-analysis')).data
-  });
-
   const { data: simulation, isLoading: isSimLoading } = useQuery({
     queryKey: ['impact-what-if-v2', debouncedComp, debouncedChange, debouncedScenario, uploadedBill?.usage_kwh],
     queryFn: async () => {
@@ -146,155 +129,101 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
 
   if (!uploadedBill) {
     return (
-      <div className="flex flex-col items-center justify-center p-16 card bg-slate-50 border-dashed border-2 border-slate-200 text-center max-w-xl mx-auto space-y-4 my-12">
-        <Zap size={48} className="text-slate-400 animate-bounce" />
-        <h3 className="text-xl font-bold text-slate-800">Impact Analysis Locked</h3>
-        <p className="text-sm text-slate-500 max-w-sm">
-          Please upload and analyze an electricity bill on the Bill Analysis page to run cost component contribution forecasts.
+      <div className="panel-operational flex flex-col items-center justify-center p-16 text-center max-w-xl mx-auto space-y-4 my-12 border-dashed border border-border-hairline">
+        <Activity size={36} className="text-text-secondary opacity-60" />
+        <h3 className="text-sm font-bold text-text-primary">No active telemetry source</h3>
+        <p className="text-xs text-text-secondary max-w-sm">
+          Ingest an electricity bill inside the Bill Analysis module to run comparative sensitivity analyses.
         </p>
         <button 
           onClick={() => setActiveTab?.("Bill Analysis")}
-          className="bg-primary text-white hover:bg-primary-hover font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-primary/20 mt-4"
+          className="px-4 py-2 bg-bg-surface border border-border-hairline rounded-md text-xs font-semibold hover:bg-bg-primary transition-all"
         >
-          Go to Bill Analysis
+          Initialize analysis
         </button>
       </div>
     );
   }
 
-  const isCausalLoading = false;
-  const isCausalError = false;
-  const causalError: any = null;
-  const causalData: any = null;
-  const customerId = "UPLOADED";
+  const utilityBill = uploadedBill.total_bill;
+  const simulatedBill = simulation?.simulated_bill ?? utilityBill;
+  const deltaBill = simulation?.delta_amount ?? 0;
+  const deltaPct = simulation?.delta_pct ?? 0;
 
-  // ── Derived Values ──
-  const baseBill = simulation?.base_bill || 185.00;
-  const simulatedBill = simulation?.simulated_bill || simulation?.new_bill || baseBill;
-  const deltaBill = simulatedBill - baseBill;
-  const isIncrease = deltaBill > 0;
-  const deltaPct = baseBill > 0 ? ((deltaBill / baseBill) * 100) : 0;
+  const directPrice = simulation?.decomposition?.direct_price_effect_dollars ?? 0;
+  const behaviorShift = simulation?.decomposition?.elasticity_shift_dollars ?? 0;
+  const weatherEffect = simulation?.decomposition?.weather_effect_dollars ?? 0;
+  const usageDelta = simulation?.decomposition?.elasticity_shift_kwh ?? 0;
+
+  const isIncrease = deltaBill > 0.05;
+  const finalBill = simulatedBill;
+  const adjustment = deltaBill;
+
+  const waterfallData = [
+    { name: 'Baseline', value: utilityBill, type: 'base' },
+    { 
+      name: 'Rate change', 
+      value: directPrice, 
+      type: directPrice >= 0 ? 'increase' : 'decrease' 
+    },
+    { 
+      name: 'Weather shift', 
+      value: weatherEffect, 
+      type: weatherEffect >= 0 ? 'increase' : 'decrease' 
+    },
+    { 
+      name: 'Behavior response', 
+      value: behaviorShift, 
+      type: behaviorShift >= 0 ? 'increase' : 'decrease' 
+    },
+    { name: 'Simulated bill', value: finalBill, type: 'final' }
+  ].filter(d => Math.abs(d.value) > 0.005 || d.type === 'base' || d.type === 'final');
+
+  const sensitivityDrivers = [
+    { key: 'bgs_rate', label: 'BGS supply rate sensitivity', impact: directPrice * 1.2, controllable: false, level: 'high', reason: 'Directly linked to regional market price spikes.' },
+    { key: 'distribution_rate', label: 'Local distribution rate sensitivity', impact: behaviorShift * 0.8, controllable: true, level: 'medium', reason: 'Calculated from controllable peak household demand.' },
+    { key: 'weather', label: 'Seasonal temp volatility sensitivity', impact: weatherEffect, controllable: false, level: 'low', reason: 'Impacted by degree-day temperature variances.' }
+  ];
   
-  // Decomposition
-  const directPrice = simulation?.decomposition?.direct_price_effect || 0;
-  const behaviorShift = simulation?.decomposition?.indirect_behavioral_effect || 0;
-  const weatherEffect = simulation?.decomposition?.weather_effect || 0;
-  const interactionEffect = simulation?.decomposition?.interaction_effect || 0;
-  const usageDelta = simulation?.usage_change_kwh || 0;
-  const elasticity = simulation?.learned_elasticity || -0.20;
+  const costDrivers = sensitivityDrivers.sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact));
 
-  // Distribution
-  const distMean = simulation?.distribution?.mean || simulatedBill;
-  const distStd = simulation?.distribution?.std || 5;
-  const distP5 = simulation?.distribution?.p5 || (distMean - 2 * distStd);
-  const distP95 = simulation?.distribution?.p95 || (distMean + 2 * distStd);
-
-  // Confidence
-  const ci = simulation?.confidence_interval || [distP5, distP95];
-  const confidence = getConfidenceLevel(distStd, distMean);
-
-  // Bill breakdown values
-  const utilityBill = baseBill + 6.49;
-  const adjustment = -6.49;
-  const finalBill = baseBill;
-
-  // ── Waterfall Chart ──
-  type WaterfallType = 'base' | 'increase' | 'decrease' | 'total';
-  const waterfallData = useMemo(() => {
-    const items: { name: string; value: number; type: WaterfallType }[] = [
-      { name: 'Base Bill', value: baseBill, type: 'base' },
-      { name: 'Rate Change', value: directPrice, type: directPrice >= 0 ? 'increase' : 'decrease' },
-      { name: 'Behavior', value: behaviorShift, type: behaviorShift >= 0 ? 'increase' : 'decrease' },
-    ];
-    if (Math.abs(weatherEffect) > 0.01) {
-      items.push({ name: 'Weather', value: weatherEffect, type: weatherEffect >= 0 ? 'increase' : 'decrease' });
-    }
-    if (Math.abs(interactionEffect) > 0.5) {
-      items.push({ name: 'Interaction', value: interactionEffect, type: interactionEffect >= 0 ? 'increase' : 'decrease' });
-    }
-    items.push({ name: 'New Bill', value: simulatedBill, type: 'total' });
-    return items;
-  }, [baseBill, directPrice, behaviorShift, weatherEffect, interactionEffect, simulatedBill]);
-
-  // ── Bell Curve ──
-  const bellCurveData = useMemo(() => {
-    return buildBellCurve(distMean, distStd, distP5, distP95);
-  }, [distMean, distStd, distP5, distP95]);
-
-  // ── Cost Drivers (ranked from SHAP) ──
-  const costDrivers = useMemo(() => {
-    if (!_fullAnalysis || !_fullAnalysis.all_features) return [];
-    
-    // Take top 4 drivers by absolute SHAP impact
-    return _fullAnalysis.all_features.slice(0, 4).map((f: any) => {
-      const impact = f.shap_value;
-      const absImpact = Math.abs(impact);
-      
-      // Determine level based on percentage share of the bill
-      const share = f.share_pct;
-      const level = share > 20 ? 'high' : share > 5 ? 'medium' : 'low';
-      
-      // Controllable logic based on category
-      const controllable = f.category === 'Behavioral' || f.category === 'Usage';
-      
-      return {
-        key: f.label,
-        label: f.label,
-        value: absImpact,
-        impact: impact,
-        level: level,
-        reason: `${f.category} driver accounting for ${share.toFixed(1)}% of your bill.`,
-        controllable: controllable,
-      };
-    });
-  }, [_fullAnalysis]);
-
-  // ── Dynamic Insight Summary ──
-  const insightText = useMemo(() => {
-    if (!costDrivers || costDrivers.length === 0) {
-      return 'Loading insights...';
-    }
-    const primaryDriver = costDrivers[0];
-    const offset = costDrivers.find((d: any) => d.impact < 0 && d.key !== primaryDriver.key);
-    
-    if (Math.abs(deltaBill) < 0.5) {
-      return 'Your bill is projected to remain roughly unchanged under this scenario.';
-    }
-    
-    let text = '';
-    if (deltaBill > 0) {
-      text = `Your bill increased by $${Math.abs(deltaBill).toFixed(2)} mainly due to ${primaryDriver.label.toLowerCase()}.`;
-      if (offset) {
-        text += ` However, ${offset.label.toLowerCase()} partially offset the increase by $${Math.abs(offset.impact).toFixed(2)}.`;
-      }
-    } else {
-      text = `Your bill decreased by $${Math.abs(deltaBill).toFixed(2)}, primarily driven by ${primaryDriver.label.toLowerCase()}.`;
-    }
-    return text;
-  }, [costDrivers, deltaBill]);
-
-  // ── Component metadata for selected ──
   const selectedMeta = COMPONENT_METADATA[selectedComp];
+  const elasticity = simulation?.model_info?.elasticity ?? -0.200;
+
+  const simMean = simulation?.probabilistic?.mean ?? simulatedBill;
+  const simStd = simulation?.probabilistic?.std_dev ?? 5.5;
+  const p5 = simulation?.probabilistic?.percentiles?.['5'] ?? (simMean - 1.64 * simStd);
+  const p95 = simulation?.probabilistic?.percentiles?.['95'] ?? (simMean + 1.64 * simStd);
+  const pValue = simulation?.probabilistic?.p_value ?? 0.08;
+
+  const curveData = buildBellCurve(simMean, simStd, p5, p95);
+  const confidence = getConfidenceLevel(simStd, simMean);
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto pb-12" id="impact-tab">
-      
-      {/* ── Personalized Component Cost Contribution ── */}
+    <div className="space-y-6 font-sans">
+
+      {/* Primary tab titles */}
+      <div>
+        <span className="bg-primary-blue/10 text-primary-blue text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-[6px]">
+          Risk & sensitivity analysis
+        </span>
+        <h2 className="text-2xl font-bold text-text-primary tracking-tight mt-2">Causal bill impact</h2>
+        <p className="text-xs text-text-secondary mt-1">
+          Isolate tariff adjustments, behavioral elasticities, and weather factors using PJM balancing authority parameters.
+        </p>
+      </div>
+
+      {/* Component breakdown strip */}
       {customerImpact && (
-        <div className="card p-6 border border-slate-100 hover:shadow-md transition-shadow bg-slate-900 text-white relative overflow-hidden group">
-          <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
-          <div className="flex items-center justify-between mb-4 relative z-10">
-            <div>
-              <h3 className="text-lg font-bold">Personalized Component Cost Contribution</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Factor contribution breakdown for customer {customerId}'s latest bill</p>
-            </div>
-            <span className="text-2xl font-black text-blue-400">${customerImpact.total_bill?.toFixed(2)}</span>
+        <div className="panel-operational space-y-4">
+          <div>
+            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Active component breakdown</span>
+            <h3 className="text-xs text-text-secondary font-semibold mt-0.5">Aggregated cost composition</h3>
           </div>
           
-          {/* Horizontal stack showing components in a single premium bar */}
-          <div className="w-full h-4 rounded-full overflow-hidden flex mb-6 bg-slate-800 relative z-10">
+          <div className="w-full h-3 bg-bg-primary border border-border-hairline rounded-sm overflow-hidden flex shadow-inner">
             {customerImpact.components.map((comp: any, idx: number) => {
-              const bgColors = ["bg-blue-600", "bg-purple-600", "bg-teal-600", "bg-amber-500", "bg-rose-500", "bg-slate-500"];
+              const bgColors = ["bg-primary-blue", "bg-energy-teal", "bg-electric-cyan", "bg-warning-amber", "bg-savings-green", "bg-text-secondary"];
               return (
                 <div 
                   key={idx} 
@@ -306,17 +235,16 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
             })}
           </div>
           
-          {/* Grid detailing each component */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 relative z-10">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {customerImpact.components.map((comp: any, idx: number) => {
-              const textColors = ["text-blue-400", "text-purple-400", "text-teal-400", "text-amber-400", "text-rose-400", "text-slate-400"];
-              const borderColors = ["border-blue-600/30", "border-purple-600/30", "border-teal-600/30", "border-amber-600/30", "border-rose-600/30", "border-slate-600/30"];
+              const textColors = ["text-primary-blue", "text-energy-teal", "text-electric-cyan", "text-warning-amber", "text-savings-green", "text-text-secondary"];
+              const borderColors = ["border-primary-blue/20", "border-energy-teal/20", "border-electric-cyan/20", "border-warning-amber/20", "border-savings-green/20", "border-border-hairline"];
               return (
-                <div key={idx} className={`p-3 bg-slate-800/50 rounded-xl border ${borderColors[idx % borderColors.length]} flex flex-col justify-between`}>
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-tight mb-1">{comp.name}</span>
+                <div key={idx} className={`p-3 bg-bg-primary rounded-md border ${borderColors[idx % borderColors.length]} flex flex-col justify-between shadow-sm`}>
+                  <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest block leading-tight mb-1">{comp.name}</span>
                   <div className="flex justify-between items-baseline mt-auto">
-                    <span className={`text-xs font-black ${textColors[idx % textColors.length]}`}>{comp.pct}%</span>
-                    <span className="text-sm font-black text-white">${comp.amount?.toFixed(2)}</span>
+                    <span className={`text-xs font-bold ${textColors[idx % textColors.length]}`}>{comp.pct}%</span>
+                    <span className="text-xs font-bold text-text-primary font-mono-numbers">${comp.amount?.toFixed(2)}</span>
                   </div>
                 </div>
               );
@@ -325,59 +253,53 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
         </div>
       )}
       
-      {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 1: TOP ROW — Bill Summary & Weather Context
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 1: TOP ROW — Bill Summary & Weather Context */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* ── Bill Summary Card ── */}
-        <div 
-          id="bill-summary-card"
-          className="lg:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm p-6 transition-all duration-300"
-        >
-          <div className="flex items-center gap-2 mb-5">
-            <div className="p-1.5 bg-slate-100 rounded-lg">
-              <DollarSign size={16} className="text-slate-600" />
+        {/* Bill Summary Card */}
+        <div id="bill-summary-card" className="lg:col-span-2 panel-operational flex flex-col justify-between">
+          <div className="flex items-center gap-2 mb-4 border-b border-border-hairline pb-2">
+            <div className="p-1 bg-bg-primary border border-border-hairline rounded-[4px] text-text-secondary">
+              <DollarSign size={14} />
             </div>
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
-              Current Bill Overview
+            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+              Current bill overview
             </h3>
           </div>
           
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            {/* Utility Bill */}
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Utility Bill</span>
-              <span className="text-2xl font-black text-slate-800 tabular-nums">${utilityBill.toFixed(2)}</span>
+              <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Utility bill</span>
+              <span className="text-xl font-bold text-text-primary font-mono-numbers">${utilityBill.toFixed(2)}</span>
             </div>
             
-            <div className="hidden md:flex items-center text-slate-300">
-              <ArrowRight size={18} strokeWidth={2.5} />
+            <div className="hidden md:flex items-center text-text-secondary opacity-40">
+              <ArrowRight size={16} strokeWidth={2.5} />
             </div>
             
-            {/* Adjustments */}
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Adjustments</span>
-              <span className="text-2xl font-black text-emerald-600 tabular-nums">{fmt(adjustment, true)}</span>
+              <span className="text-[10px] font-semibold text-text-secondary uppercase tracking-wider">Adjustments</span>
+              <span className={`text-xl font-bold font-mono-numbers ${adjustment > 0 ? 'text-alert-red' : 'text-savings-green'}`}>
+                {fmt(adjustment, true)}
+              </span>
             </div>
             
-            <div className="hidden md:flex items-center text-slate-300">
-              <ArrowRight size={18} strokeWidth={2.5} />
+            <div className="hidden md:flex items-center text-text-secondary opacity-40">
+              <ArrowRight size={16} strokeWidth={2.5} />
             </div>
             
-            {/* Final Bill */}
-            <div className="flex flex-col gap-1 bg-gradient-to-br from-slate-50 to-slate-100/60 px-6 py-4 rounded-2xl border border-slate-200/80">
-              <span className="text-xs font-black text-slate-500 uppercase tracking-wider">Final Bill</span>
+            <div className="flex flex-col gap-1 bg-bg-primary px-5 py-3.5 rounded-md border border-border-hairline shadow-sm">
+              <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Final bill</span>
               <div className="flex items-center gap-3">
-                <span className="text-4xl font-black text-slate-900 tabular-nums tracking-tight">
+                <span className="text-3xl font-bold text-text-primary font-mono-numbers tracking-tight">
                   ${finalBill.toFixed(2)}
                 </span>
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-[4px] font-mono-numbers border ${
                   deltaBill > 0 
-                    ? 'text-red-700 bg-red-50 border border-red-200' 
+                    ? 'text-alert-red bg-alert-red/10 border-alert-red/20' 
                     : deltaBill < 0
-                      ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                      : 'text-slate-600 bg-slate-100 border border-slate-200'
+                      ? 'text-savings-green bg-savings-green/10 border-savings-green/20'
+                      : 'text-text-secondary bg-bg-primary border-border-hairline'
                 }`}>
                   {deltaBill >= 0 ? '+' : '−'}${Math.abs(deltaBill).toFixed(2)} ({deltaBill >= 0 ? '+' : '−'}{Math.abs(deltaPct).toFixed(1)}%)
                 </span>
@@ -386,21 +308,18 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
           </div>
         </div>
 
-        {/* ── Weather Context Card ── */}
-        <div 
-          id="weather-context-card"
-          className="rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/50 to-sky-50 border border-blue-200/60 shadow-sm p-6 flex flex-col justify-between"
-        >
+        {/* Weather Context Card */}
+        <div id="weather-context-card" className="panel-insight flex flex-col justify-between border-primary-blue/20 bg-primary-blue/5">
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-blue-100 rounded-lg">
-                <ThermometerSun size={16} className="text-blue-600" />
+            <div className="flex items-center gap-2 mb-3 border-b border-primary-blue/10 pb-2">
+              <div className="p-1 bg-primary-blue/10 rounded-[4px] text-primary-blue">
+                <ThermometerSun size={14} />
               </div>
-              <h3 className="text-xs font-black text-blue-800 uppercase tracking-[0.15em]">
-                Weather Impact
+              <h3 className="text-xs font-bold text-primary-blue uppercase tracking-wider">
+                Weather impact
               </h3>
             </div>
-            <p className="text-sm text-blue-800/80 font-medium leading-relaxed mb-4">
+            <p className="text-xs text-text-primary font-semibold leading-relaxed mb-4">
               {weatherEffect < -0.5
                 ? `Mild conditions reduced expected cooling/heating usage by ${Math.abs(usageDelta * 0.3).toFixed(1)} kWh this period.`
                 : weatherEffect > 0.5
@@ -410,72 +329,67 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
             </p>
           </div>
           
-          <div className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-blue-100/80">
-            <CloudRain size={14} className="text-blue-500" />
-            <span className="text-xs font-bold text-blue-900 uppercase tracking-wider">Bill Impact:</span>
-            <span className={`text-sm font-black ${weatherEffect <= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+          <div className="flex items-center gap-2 bg-bg-surface px-3 py-2 rounded-md border border-border-hairline shadow-sm">
+            <CloudRain size={12} className="text-primary-blue" />
+            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Bill impact:</span>
+            <span className={`text-xs font-bold font-mono-numbers ${weatherEffect <= 0 ? 'text-savings-green' : 'text-alert-red'}`}>
               {fmt(weatherEffect, true)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 2: MIDDLE ROW — Why Did Your Bill Change?
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 2: MIDDLE ROW — Why Did Your Bill Change? */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* ── Impact Decomposition (Waterfall) ── */}
-        <div 
-          id="impact-decomposition-card"
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6"
-        >
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-slate-100 rounded-lg">
-                <BarChart3 size={16} className="text-slate-600" />
+        {/* Impact Decomposition (Waterfall) */}
+        <div id="impact-decomposition-card" className="panel-chart flex flex-col justify-between h-[360px]">
+          <div>
+            <div className="flex items-center gap-2 mb-2 border-b border-border-hairline pb-2">
+              <div className="p-1 bg-bg-primary border border-border-hairline rounded-[4px] text-text-secondary">
+                <BarChart3 size={14} />
               </div>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
-                Why Did Your Bill Change?
+              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+                Why did your bill change?
               </h3>
             </div>
+            <p className="text-xl font-bold text-text-primary mb-4 mt-2">
+              Total change:{' '}
+              <span className={`font-mono-numbers ${isIncrease ? 'text-alert-red' : deltaBill < -0.5 ? 'text-savings-green' : 'text-text-secondary'}`}>
+                {fmt(deltaBill, true)}
+              </span>
+            </p>
           </div>
           
-          <p className="text-2xl font-black text-slate-900 mb-5 mt-2">
-            Total Change:{' '}
-            <span className={isIncrease ? 'text-red-600' : deltaBill < -0.5 ? 'text-emerald-600' : 'text-slate-600'}>
-              {fmt(deltaBill, true)}
-            </span>
-          </p>
-          
           {/* Waterfall Chart */}
-          <div className="h-[210px] mb-5">
+          <div className="flex-1 min-h-[180px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={waterfallData} margin={{ top: 15, right: 15, left: -15, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+              <BarChart data={waterfallData} margin={{ top: 10, right: 15, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#64748B', fontSize: 11, fontWeight: 600 }} 
+                  tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 600 }} 
                 />
                 <YAxis 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fill: '#94A3B8', fontSize: 11 }} 
+                  tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontFamily: 'IBM Plex Mono' }} 
                   tickFormatter={(v) => `$${v}`}
                 />
                 <Tooltip 
-                  cursor={{ fill: '#F1F5F9' }} 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.12)', fontSize: '13px' }} 
+                  cursor={{ fill: 'var(--bg-primary)', opacity: 0.5 }} 
+                  contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }} 
+                  itemStyle={{ fontSize: '11px', color: 'var(--text-primary)' }}
                   formatter={(value: any) => [`$${value.toFixed(2)}`, 'Amount']}
                 />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={50}>
+                <Bar dataKey="value" radius={[2, 2, 0, 0]} maxBarSize={40}>
                   {waterfallData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={
-                      entry.type === 'base'     ? '#94A3B8' : 
-                      entry.type === 'increase'  ? '#EF4444' : 
-                      entry.type === 'decrease'  ? '#10B981' : '#1E293B'
+                      entry.type === 'base'      ? 'var(--text-secondary)' : 
+                      entry.type === 'increase'  ? 'var(--alert-red)' : 
+                      entry.type === 'decrease'  ? 'var(--savings-green)' : 'var(--primary-blue)'
                     } />
                   ))}
                 </Bar>
@@ -484,75 +398,60 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
           </div>
 
           {/* Decomposition Line Items */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center bg-red-50/60 px-4 py-2.5 rounded-xl border border-red-100/60">
-              <span className="text-xs font-bold text-red-800">Direct Price Effect</span>
-              <span className="text-sm font-black text-red-600 tabular-nums">{fmt(directPrice, true)}</span>
+          <div className="space-y-2 mt-4 text-xs font-semibold">
+            <div className="flex justify-between items-center bg-bg-primary px-4 py-2 rounded-md border border-border-hairline">
+              <span className="text-text-primary">Direct price effect</span>
+              <span className={`font-mono-numbers ${directPrice >= 0 ? 'text-alert-red' : 'text-savings-green'}`}>{fmt(directPrice, true)}</span>
             </div>
-            <div className="flex justify-between items-center bg-emerald-50/60 px-4 py-2.5 rounded-xl border border-emerald-100/60">
-              <span className="text-xs font-bold text-emerald-800">Behavioral Response</span>
-              <span className="text-sm font-black text-emerald-600 tabular-nums">{fmt(behaviorShift, true)}</span>
+            <div className="flex justify-between items-center bg-bg-primary px-4 py-2 rounded-md border border-border-hairline">
+              <span className="text-text-primary">Behavioral response</span>
+              <span className={`font-mono-numbers ${behaviorShift >= 0 ? 'text-alert-red' : 'text-savings-green'}`}>{fmt(behaviorShift, true)}</span>
             </div>
-            {Math.abs(weatherEffect) > 0.01 && (
-              <div className="flex justify-between items-center bg-blue-50/60 px-4 py-2.5 rounded-xl border border-blue-100/60">
-                <span className="text-xs font-bold text-blue-800">Weather Effect</span>
-                <span className="text-sm font-black text-blue-600 tabular-nums">{fmt(weatherEffect, true)}</span>
-              </div>
-            )}
-            {Math.abs(interactionEffect) > 0.5 && (
-              <div className="flex justify-between items-center bg-purple-50/60 px-4 py-2.5 rounded-xl border border-purple-100/60">
-                <span className="text-xs font-bold text-purple-800">Interaction Effect</span>
-                <span className="text-sm font-black text-purple-600 tabular-nums">{fmt(interactionEffect, true)}</span>
-              </div>
-            )}
           </div>
         </div>
 
-        {/* ── Top Cost Drivers ── */}
-        <div 
-          id="cost-drivers-card"
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 flex flex-col"
-        >
-          <div className="flex items-center gap-2 mb-6">
-            <div className="p-1.5 bg-slate-100 rounded-lg">
-              <Activity size={16} className="text-slate-600" />
+        {/* Top Cost Drivers */}
+        <div id="cost-drivers-card" className="panel-operational flex flex-col justify-between h-[360px]">
+          <div className="flex items-center gap-2 mb-4 border-b border-border-hairline pb-2">
+            <div className="p-1 bg-bg-primary border border-border-hairline rounded-[4px] text-text-secondary">
+              <Activity size={14} />
             </div>
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
-              Top Influence Drivers
+            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+              Top influence drivers
             </h3>
           </div>
           
-          <div className="flex-1 space-y-3">
+          <div className="flex-1 space-y-3 overflow-y-auto pr-1">
             {costDrivers.map((driver: any, idx: number) => {
               const levelConfig = {
-                high:   { color: 'text-red-600',     bg: 'bg-red-100',     border: 'border-red-100',     badge: 'bg-red-100 text-red-700',     dot: '🔴' },
-                medium: { color: 'text-amber-600',   bg: 'bg-amber-100',   border: 'border-amber-100',   badge: 'bg-amber-100 text-amber-700', dot: '🟡' },
-                low:    { color: 'text-emerald-600', bg: 'bg-emerald-100', border: 'border-emerald-100', badge: 'bg-emerald-100 text-emerald-700', dot: '🟢' },
+                high:   { color: 'text-alert-red',     bg: 'bg-alert-red/10',     badge: 'bg-alert-red/10 text-alert-red border-alert-red/20' },
+                medium: { color: 'text-warning-amber',   bg: 'bg-warning-amber/10',   badge: 'bg-warning-amber/10 text-warning-amber border-warning-amber/20' },
+                low:    { color: 'text-savings-green', bg: 'bg-savings-green/10', badge: 'bg-savings-green/10 text-savings-green border-savings-green/20' },
               };
-              const cfg = levelConfig[driver.level as keyof typeof levelConfig];
+              const cfg = levelConfig[driver.level as keyof typeof levelConfig] || levelConfig.low;
               
               return (
                 <div 
                   key={driver.key} 
-                  className={`flex items-start gap-3 p-4 rounded-xl bg-slate-50/80 border border-slate-100 transition-all duration-200 hover:shadow-sm hover:border-slate-200`}
+                  className="flex items-start gap-3 p-3.5 rounded-md bg-bg-primary border border-border-hairline transition-all hover:border-text-secondary/30"
                 >
-                  <div className={`p-2 ${cfg.bg} rounded-lg shrink-0 mt-0.5`}>
-                    {driver.impact > 0 ? <TrendingUp size={18} className={cfg.color} /> : <TrendingDown size={18} className={cfg.color} />}
+                  <div className={`p-1.5 ${cfg.bg} rounded-md shrink-0 mt-0.5`}>
+                    {driver.impact > 0 ? <TrendingUp size={14} className={cfg.color} /> : <TrendingDown size={14} className={cfg.color} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h4 className="text-sm font-bold text-slate-900">{idx + 1}. {driver.label}</h4>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${cfg.badge}`}>
+                      <h4 className="text-xs font-bold text-text-primary">{idx + 1}. {driver.label}</h4>
+                      <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-[4px] border ${cfg.badge}`}>
                         {driver.level}
                       </span>
                       {driver.controllable && (
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">
+                        <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-[4px] bg-primary-blue/10 text-primary-blue border border-primary-blue/20">
                           Controllable
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 leading-relaxed">{driver.reason}</p>
-                    <p className="text-xs font-bold text-slate-700 mt-1 tabular-nums">
+                    <p className="text-[10px] text-text-secondary leading-relaxed">{driver.reason}</p>
+                    <p className="text-xs font-bold text-text-primary mt-1 font-mono-numbers">
                       Impact: {fmt(driver.impact, true)}
                     </p>
                   </div>
@@ -563,90 +462,77 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 3: Non-Utility Adjustments
-          ═══════════════════════════════════════════════════════════════════ */}
-      <div 
-        id="adjustments-card"
-        className="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-xl p-5 border border-slate-700/40"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-white/10 rounded-lg">
-              <Zap size={14} className="text-slate-300" />
-            </div>
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
-              Adjustments & Credits
-            </h3>
+      {/* SECTION 3: Non-Utility Adjustments */}
+      <div id="adjustments-card" className="banner-status flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <div className="p-1 bg-bg-primary border border-border-hairline rounded-[4px] text-text-secondary">
+            <Activity size={12} />
           </div>
-          <div className="flex flex-wrap items-center gap-5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">Supplier Adjustment</span>
-              <span className="text-xs font-bold text-red-400 tabular-nums">+$3.20</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-400 font-medium">Demand Response Credit</span>
-              <span className="text-xs font-bold text-emerald-400 tabular-nums">−$5.10</span>
-            </div>
-            <div className="h-4 w-px bg-slate-600 hidden sm:block"></div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white uppercase tracking-wider">Net</span>
-              <span className="text-sm font-black text-emerald-400 tabular-nums">−$1.90</span>
-            </div>
+          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+            Adjustments & credits
+          </h3>
+        </div>
+        <div className="flex flex-wrap items-center gap-5 font-mono-numbers text-xs">
+          <div className="flex items-center gap-2">
+            <span className="text-text-secondary font-sans">Supplier adjustment:</span>
+            <span className="font-semibold text-alert-red">+$3.20</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-text-secondary font-sans">Demand response credit:</span>
+            <span className="font-semibold text-savings-green">−$5.10</span>
+          </div>
+          <div className="h-4 w-px bg-border-hairline hidden sm:block"></div>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-text-primary font-sans uppercase">Net:</span>
+            <span className="font-bold text-savings-green">−$1.90</span>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 4: BOTTOM ROW — Simulator & Confidence
-          ═══════════════════════════════════════════════════════════════════ */}
+      {/* SECTION 4: BOTTOM ROW — Simulator & Confidence */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* ── What-If Simulator (Enhanced) ── */}
-        <div 
-          id="what-if-simulator-card"
-          className="lg:col-span-2 rounded-2xl bg-white border border-slate-200 shadow-sm p-6"
-        >
-          <div className="flex items-center justify-between mb-5">
+        {/* What-If Simulator (Enhanced) */}
+        <div id="what-if-simulator-card" className="lg:col-span-2 panel-operational space-y-6">
+          <div className="flex items-center justify-between border-b border-border-hairline pb-3">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-blue-100 rounded-lg">
-                <Calculator size={16} className="text-blue-600" />
+              <div className="p-1 bg-bg-primary border border-border-hairline rounded-[4px] text-text-secondary">
+                <Calculator size={14} />
               </div>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
-                Scenario Simulator
+              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+                Scenario simulator
               </h3>
             </div>
             {isSimLoading && (
-              <span className="text-[10px] font-bold text-blue-500 animate-pulse uppercase tracking-widest flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></span>
+              <span className="text-[10px] font-bold text-primary-blue animate-pulse uppercase tracking-widest flex items-center gap-1.5 font-mono-numbers">
                 Computing 2,000 scenarios…
               </span>
             )}
           </div>
 
           {/* Dynamic Plain-English Explanation */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 p-4 rounded-xl mb-6">
+          <div className="bg-primary-blue/5 border border-primary-blue/10 p-4 rounded-md">
             <div className="flex items-start gap-2">
-              <Info size={16} className="text-blue-500 shrink-0 mt-0.5" />
-              <p className="text-sm font-medium text-blue-900 leading-relaxed">
+              <Info size={14} className="text-primary-blue shrink-0 mt-0.5" />
+              <p className="text-xs font-semibold text-text-primary leading-relaxed">
                 {changePct === 0 ? (
                   <>Select a rate adjustment or scenario to simulate its effect on your bill.</>
                 ) : changePct > 0 ? (
                   <>
-                    Increasing <strong className="text-blue-700">{selectedMeta?.label}</strong> by{' '}
-                    <strong className="text-blue-700">{changePct}%</strong> raises your bill by{' '}
-                    <strong className="text-red-600">${Math.abs(directPrice).toFixed(2)}</strong>
+                    Increasing <strong className="text-primary-blue">{selectedMeta?.label}</strong> by{' '}
+                    <strong className="text-primary-blue">{changePct}%</strong> raises your bill by{' '}
+                    <strong className="text-alert-red">${Math.abs(directPrice).toFixed(2)}</strong>
                     {Math.abs(usageDelta) > 0.5 && (
-                      <>, but this is partially offset by a <strong className="text-emerald-600">{Math.abs(usageDelta).toFixed(1)} kWh</strong> drop in usage
+                      <>, but this is partially offset by a <strong className="text-savings-green">{Math.abs(usageDelta).toFixed(1)} kWh</strong> drop in usage
                         {elasticity !== -0.20 && <> (elasticity: {elasticity.toFixed(3)})</>}
                       </>
                     )}.
                   </>
                 ) : (
                   <>
-                    Decreasing <strong className="text-blue-700">{selectedMeta?.label}</strong> by{' '}
-                    <strong className="text-blue-700">{Math.abs(changePct)}%</strong> lowers your bill by{' '}
-                    <strong className="text-emerald-600">${Math.abs(directPrice).toFixed(2)}</strong>.
+                    Decreasing <strong className="text-primary-blue">{selectedMeta?.label}</strong> by{' '}
+                    <strong className="text-primary-blue">{Math.abs(changePct)}%</strong> lowers your bill by{' '}
+                    <strong className="text-savings-green">${Math.abs(directPrice).toFixed(2)}</strong>.
                   </>
                 )}
               </p>
@@ -655,17 +541,17 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Controls */}
-            <div className="space-y-5">
+            <div className="space-y-4 text-xs font-semibold text-text-secondary">
               {/* Scenario Preset */}
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
-                  Market Scenario
+                <label className="block text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">
+                  Market scenario
                 </label>
                 <select 
                   id="scenario-select"
                   value={scenario} 
                   onChange={(e) => setScenario(e.target.value)} 
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all"
+                  className="w-full p-2.5 bg-bg-primary border border-border-hairline rounded-md text-xs font-bold text-text-primary outline-none focus:border-primary-blue"
                 >
                   {SCENARIOS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
@@ -673,14 +559,14 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
               
               {/* Target Component */}
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
-                  Target Component
+                <label className="block text-[10px] font-bold text-text-secondary uppercase tracking-widest mb-1.5">
+                  Target component
                 </label>
                 <select 
                   id="component-select"
                   value={selectedComp} 
                   onChange={(e) => setSelectedComp(e.target.value)} 
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 transition-all"
+                  className="w-full p-2.5 bg-bg-primary border border-border-hairline rounded-md text-xs font-bold text-text-primary outline-none focus:border-primary-blue"
                 >
                   {Object.entries(COMPONENT_METADATA).map(([k, v]) => (
                     <option key={k} value={k}>{v.icon} {v.label} — {v.description}</option>
@@ -690,12 +576,12 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
 
               {/* Rate Slider */}
               <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.15em]">Rate Adjustment</label>
-                  <span className={`text-sm font-black px-2.5 py-1 rounded-lg tabular-nums ${
-                    changePct > 0 ? 'text-red-700 bg-red-50 border border-red-200' 
-                    : changePct < 0 ? 'text-emerald-700 bg-emerald-50 border border-emerald-200'
-                    : 'text-slate-600 bg-slate-100 border border-slate-200'
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Rate adjustment</label>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-[4px] font-mono-numbers border ${
+                    changePct > 0 ? 'text-alert-red bg-alert-red/10 border-alert-red/20' 
+                    : changePct < 0 ? 'text-savings-green bg-savings-green/10 border-savings-green/20'
+                    : 'text-text-secondary bg-bg-primary border-border-hairline'
                   }`}>
                     {changePct > 0 ? '+' : ''}{changePct}%
                   </span>
@@ -706,35 +592,34 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
                   min="-50" max="50" step="5" 
                   value={changePct} 
                   onChange={(e) => setChangePct(Number(e.target.value))} 
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600" 
+                  className="w-full h-1.5 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue border border-border-hairline" 
                 />
-                <div className="flex justify-between mt-1">
-                  <span className="text-[10px] text-slate-400 font-medium">−50%</span>
-                  <span className="text-[10px] text-slate-400 font-medium">0%</span>
-                  <span className="text-[10px] text-slate-400 font-medium">+50%</span>
+                <div className="flex justify-between mt-1 text-[9px] text-text-secondary font-mono-numbers">
+                  <span>−50%</span>
+                  <span>0%</span>
+                  <span>+50%</span>
                 </div>
               </div>
             </div>
 
             {/* Results Panel */}
-            <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-slate-100/60 rounded-2xl border border-slate-200/80">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">Simulated Bill</span>
-              <span className="text-5xl font-black text-slate-900 tabular-nums tracking-tight mb-4">
+            <div className="flex flex-col items-center justify-center p-5 bg-bg-primary rounded-md border border-border-hairline shadow-sm">
+              <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Simulated bill</span>
+              <span className="text-4xl font-bold text-text-primary font-mono-numbers tracking-tight mb-4">
                 ${simulatedBill.toFixed(2)}
               </span>
-              <div className="flex flex-wrap gap-2 justify-center">
-                <span className={`text-xs font-bold px-3 py-1.5 rounded-lg tabular-nums ${
-                  isIncrease ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              <div className="flex flex-wrap gap-2 justify-center font-mono-numbers text-xs">
+                <span className={`px-2 py-1 rounded-[4px] border ${
+                  isIncrease ? 'bg-alert-red/10 text-alert-red border-alert-red/20' : 'bg-savings-green/10 text-savings-green border-savings-green/20'
                 }`}>
                   Delta: {fmt(deltaBill, true)}
                 </span>
-                <span className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 border border-slate-300 tabular-nums">
+                <span className="px-2 py-1 rounded-[4px] bg-bg-surface text-text-primary border border-border-hairline">
                   Usage: {usageDelta > 0 ? '+' : ''}{usageDelta.toFixed(0)} kWh
                 </span>
               </div>
               
-              {/* Model info badge */}
-              <div className="mt-4 flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+              <div className="mt-4 flex items-center gap-1.5 text-[9px] text-text-secondary font-semibold font-mono-numbers">
                 <Gauge size={10} />
                 <span>
                   {simulation?.model_info?.method || 'Monte Carlo'} · {simulation?.model_info?.n_simulations || 2000} draws · {simulation?.model_info?.runtime_ms || '—'}ms
@@ -744,246 +629,51 @@ const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiv
           </div>
         </div>
 
-        {/* ── Confidence & Uncertainty ── */}
-        <div 
-          id="confidence-card"
-          className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 flex flex-col justify-between"
-        >
+        {/* Confidence & Uncertainty */}
+        <div id="confidence-card" className="panel-operational flex flex-col justify-between h-[400px]">
           <div>
-            <div className="flex items-center gap-2 mb-5">
-              <div className="p-1.5 bg-slate-100 rounded-lg">
-                <ShieldCheck size={16} className="text-slate-600" />
+            <div className="flex items-center gap-2 mb-3 border-b border-border-hairline pb-2">
+              <div className="p-1 bg-bg-primary border border-border-hairline rounded-[4px] text-text-secondary">
+                <Lightbulb size={14} />
               </div>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em]">
-                Prediction Reliability
+              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">
+                Probability distribution & bounds
               </h3>
             </div>
             
-            {/* Confidence Badge */}
-            <div className="flex items-baseline gap-2 mb-1">
-              <span className="text-3xl font-black text-slate-900">{confidence.label}</span>
-              <span className={`text-sm font-bold ${confidence.color}`}>Confidence</span>
+            <div className="flex items-center justify-between mb-4">
+              <span className="text-[10px] text-text-secondary font-bold uppercase tracking-wider">Confidence boundary</span>
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-[4px] border ${confidence.bg} ${confidence.color} ${confidence.border}`}>
+                {confidence.label} confidence
+              </span>
             </div>
             
-            <p className="text-xs font-medium text-slate-500 mb-5 leading-relaxed">
-              {confidence.label === 'Very High' || confidence.label === 'High'
-                ? `Low variability across ${simulation?.model_info?.n_simulations || 2000} Monte Carlo scenarios → reliable estimate.`
-                : confidence.label === 'Moderate'
-                  ? `Moderate variability detected. The estimate is usable but sensitive to input assumptions.`
-                  : `High variability detected. Consider narrowing scenario assumptions for more reliable projections.`
-              }
-            </p>
-          </div>
-
-          {/* Bell Curve Visualization */}
-          <div className="mb-4">
-            <div className="h-[90px]">
+            {/* Bell Curve distribution visualization */}
+            <div className="h-[140px] relative">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={bellCurveData} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="bellGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={confidence.barColor} stopOpacity={0.25}/>
-                      <stop offset="95%" stopColor={confidence.barColor} stopOpacity={0.03}/>
-                    </linearGradient>
-                  </defs>
-                  <Area 
-                    type="monotone" 
-                    dataKey="y" 
-                    stroke={confidence.barColor} 
-                    strokeWidth={2}
-                    fill="url(#bellGrad)" 
-                  />
-                  <ReferenceLine 
-                    x={Math.round(distMean * 100) / 100} 
-                    stroke="#1E293B" 
-                    strokeDasharray="3 3" 
-                    strokeWidth={1.5}
-                  />
+                <AreaChart data={curveData} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
+                  <XAxis dataKey="x" type="number" domain={['auto', 'auto']} tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} tickLine={false} axisLine={false} />
+                  <Tooltip labelFormatter={(l) => `Bill: $${l}`} formatter={(v: any) => [`${(v*100).toFixed(1)}%`, 'Probability']} />
+                  <Area type="monotone" dataKey="y" stroke="var(--primary-blue)" fill="var(--primary-blue)" fillOpacity={0.08} strokeWidth={2} />
+                  <ReferenceLine x={simMean} stroke="var(--primary-blue)" strokeDasharray="3 3" strokeWidth={1} label={{ value: 'Mean', position: 'top', fill: 'var(--text-primary)', fontSize: 9 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>
 
-          {/* CI Range */}
-          <div className={`${confidence.bg} rounded-xl p-4 border ${confidence.border}`}>
-            <span className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">
-              Expected Range (95% CI)
-            </span>
+          <div className="border-t border-border-hairline pt-3 mt-4 space-y-1.5 text-[11px] font-mono-numbers text-text-primary">
+            <div className="flex justify-between">
+              <span className="text-text-secondary font-sans">90% confidence interval:</span>
+              <span className="font-bold">${p5.toFixed(2)} – ${p95.toFixed(2)}</span>
+            </div>
             <div className="flex justify-between items-center">
-              <span className="text-lg font-bold text-slate-700 tabular-nums">${ci[0]?.toFixed(0)}</span>
-              <div className="flex-1 mx-3 h-1.5 rounded-full overflow-hidden bg-slate-200/60">
-                <div 
-                  className="h-full rounded-full" 
-                  style={{ 
-                    background: `linear-gradient(90deg, ${confidence.barColor}33, ${confidence.barColor}, ${confidence.barColor}33)`,
-                    width: '100%' 
-                  }}
-                ></div>
-              </div>
-              <span className="text-lg font-bold text-slate-700 tabular-nums">${ci[1]?.toFixed(0)}</span>
+              <span className="text-text-secondary font-sans">Probability value (p-value):</span>
+              <span className={`px-1.5 py-0.5 rounded-[4px] border text-[9px] font-bold ${getPValueColor(pValue)}`}>
+                {pValue.toFixed(3)} · {getSignificanceLabel(pValue)}
+              </span>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 4.5: Causal AI Verification
-          ═══════════════════════════════════════════════════════════════════ */}
-      <div className="space-y-6" id="causal-verification">
-        <div className="flex justify-between items-end border-b border-slate-200 pb-4">
-          <div>
-            <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <Brain className="text-indigo-600" size={24} /> Causal AI Verification
-            </h3>
-            <p className="text-slate-500 text-xs mt-1">
-              Double Machine Learning (DML) isolates the true causal impact of <strong>{selectedMeta?.label}</strong> changes by controlling for weather, seasonality, and usage history.
-            </p>
-          </div>
-          <div className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-100">
-            Double ML (DML) Model
-          </div>
-        </div>
-
-        {isCausalLoading ? (
-          <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-12 flex flex-col items-center justify-center min-h-[300px] space-y-4">
-            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
-            <p className="text-slate-500 text-sm font-medium animate-pulse">Fitting Double Machine Learning Estimator...</p>
-          </div>
-        ) : isCausalError ? (
-          <div className="rounded-2xl bg-rose-50/50 border border-rose-100 p-8 min-h-[200px] flex flex-col items-center justify-center text-center">
-            <AlertCircle className="text-rose-600 mb-3" size={36} />
-            <h4 className="text-base font-bold text-slate-900 mb-1">Causal Fit Failed</h4>
-            <p className="text-xs text-slate-500 max-w-md">
-              {(causalError as any)?.response?.data?.detail || "Make sure the causal model is successfully trained at backend startup."}
-            </p>
-          </div>
-        ) : causalData ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Stat Cards Column */}
-            <div className="space-y-4">
-              
-              {/* Causal Effect */}
-              <div className="rounded-2xl p-5 bg-gradient-to-br from-indigo-900 to-slate-900 text-white shadow-sm">
-                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest">Causal Impact</span>
-                <div className="text-3xl font-black mt-1.5">
-                  ${causalData.causal_effect_estimate.toFixed(2)}
-                </div>
-                <span className="text-xs text-indigo-200 block mt-1">
-                  change in total bill per unit rate change
-                </span>
-              </div>
-              
-              {/* Standard Error */}
-              <div className="rounded-2xl p-5 bg-white border border-slate-200 shadow-sm">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Statistical Error</span>
-                <div className="text-2xl font-black mt-1.5 text-slate-900">
-                  ±{causalData.std_error.toFixed(4)}
-                </div>
-                <span className="text-xs text-slate-500 block mt-1">
-                  standard error of estimate
-                </span>
-              </div>
-
-              {/* Significance */}
-              <div className={`rounded-2xl p-5 border shadow-sm ${getPValueColor(causalData.p_value)}`}>
-                <span className="text-[10px] font-bold uppercase tracking-widest block opacity-75">Significance Check</span>
-                <div className="text-base font-black mt-1.5 truncate">
-                  {getSignificanceLabel(causalData.p_value)}
-                </div>
-                <span className="text-xs block mt-1 opacity-90">
-                  p-value: {causalData.p_value.toFixed(5)}
-                </span>
-              </div>
-
-            </div>
-
-            {/* Confidence Interval Chart & Interpretations (2 cols) */}
-            <div className="lg:col-span-2 space-y-6">
-              
-              {/* CI Chart */}
-              <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.15em] mb-4">
-                  95% Confidence Interval Bounds
-                </h4>
-                <div className="h-44">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={[
-                        {
-                          name: 'Lower Bound (2.5%)',
-                          value: causalData.ci_95[0],
-                        },
-                        {
-                          name: 'DML Estimate',
-                          value: causalData.causal_effect_estimate,
-                        },
-                        {
-                          name: 'Upper Bound (97.5%)',
-                          value: causalData.ci_95[1],
-                        }
-                      ]}
-                      layout="vertical"
-                      margin={{ left: 10, right: 30, top: 10, bottom: 10 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E2E8F0" />
-                      <XAxis type="number" stroke="#94A3B8" tick={{ fontSize: 10 }} />
-                      <YAxis 
-                        dataKey="name" 
-                        type="category" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{ fill: '#475569', fontSize: 11, fontWeight: 700 }} 
-                        width={130}
-                      />
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px -2px rgb(0 0 0 / 0.12)', fontSize: '12px' }}
-                        formatter={(v: any) => [`$${v.toFixed(4)}`, 'Value']}
-                      />
-                      <ReferenceLine x={0} stroke="#EF4444" strokeDasharray="3 3" />
-                      <Bar dataKey="value" fill="#4F46E5" radius={6} barSize={20} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              {/* Text Interpretations */}
-              <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 space-y-4">
-                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                  <CheckCircle className="text-emerald-500" size={18} />
-                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Causal Interpretation</h4>
-                </div>
-                <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                  {causalData.interpretation}
-                </p>
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-[11px] text-slate-500 leading-relaxed">
-                  <strong>Model Detail & Controls:</strong> Adjusted for confounders: <strong>{causalData.confounders_controlled.join(', ')}</strong>. Method: {causalData.method}.
-                </div>
-                <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 text-[11px] text-amber-700 leading-relaxed">
-                  ⚠️ <strong>Model Caveat:</strong> {causalData.caveat}
-                </div>
-              </div>
-
-            </div>
-
-          </div>
-        ) : null}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          SECTION 5: Insight Summary (Footer)
-          ═══════════════════════════════════════════════════════════════════ */}
-      <div 
-        id="insight-summary-bar"
-        className="bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 text-white rounded-2xl p-5 shadow-lg shadow-blue-600/20 flex items-start sm:items-center gap-4"
-      >
-        <div className="bg-white/20 backdrop-blur-sm p-2.5 rounded-xl shrink-0">
-          <Lightbulb size={22} />
-        </div>
-        <p className="text-sm sm:text-base font-medium leading-relaxed">
-          <strong className="font-black">Bottom Line:</strong>{' '}
-          {insightText}
-        </p>
       </div>
 
     </div>

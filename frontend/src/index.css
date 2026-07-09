@@ -1,14 +1,56 @@
+:root {
+  --bg-primary: #F6F8FB;
+  --bg-surface: #FFFFFF;
+  --border-hairline: #E6EAF0;
+  --text-primary: #18212F;
+  --text-secondary: #697487;
+  --primary-blue: #2F6BFF;
+  --energy-teal: #16A085;
+  --electric-cyan: #2CA6FF;
+  --warning-amber: #F5B041;
+  --savings-green: #27AE60;
+  --alert-red: #D64545;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-background text-slate-900 font-sans antialiased;
+    @apply bg-bg-primary text-text-primary font-sans antialiased;
   }
 }
 
 @layer components {
+  /* Reusable enterprise components */
+  .panel-operational {
+    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all;
+  }
+  
+  .panel-chart {
+    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all;
+  }
+  
+  .panel-insight {
+    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all;
+  }
+  
+  .panel-control {
+    @apply flex items-center gap-1 bg-bg-primary border border-border-hairline p-0.5 rounded-md text-xs;
+  }
+
+  .banner-status {
+    @apply bg-bg-surface border border-border-hairline p-4 rounded-md flex items-center gap-3 text-text-primary shadow-sm;
+  }
+
+  /* Monospace figures */
+  .font-mono-numbers {
+    font-family: 'IBM Plex Mono', 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Legacy components */
   .card {
     @apply bg-white border border-border shadow-sm rounded-xl p-6;
   }

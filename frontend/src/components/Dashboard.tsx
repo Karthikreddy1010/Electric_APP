@@ -20,32 +20,32 @@ interface DashboardProps {
 }
 
 const SettingsTab = () => (
-  <div className="card p-8 bg-white border border-slate-200 rounded-2xl max-w-2xl mx-auto space-y-6">
+  <div className="panel-operational max-w-2xl mx-auto space-y-6 bg-bg-surface border border-border-hairline shadow-sm">
     <div>
-      <h2 className="text-2xl font-black text-slate-900">System Settings</h2>
-      <p className="text-slate-500 text-xs mt-1">Configure your AI Electricity Bill Assistant environment</p>
+      <h2 className="text-xl font-bold text-text-primary">System settings</h2>
+      <p className="text-text-secondary text-xs mt-1">Configure your AI Electricity Bill Assistant environment</p>
     </div>
-    <div className="space-y-4 pt-4 border-t border-slate-100">
-      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+    <div className="space-y-4 pt-4 border-t border-border-hairline">
+      <div className="flex items-center justify-between p-4 bg-bg-primary rounded-md border border-border-hairline shadow-sm">
         <div>
-          <h4 className="text-sm font-bold text-slate-800">Double Machine Learning (DML)</h4>
-          <p className="text-xs text-slate-500">Enable causal impact modeling using EconML/DoWhy estimators</p>
+          <h4 className="text-sm font-bold text-text-primary">Double machine learning (DML)</h4>
+          <p className="text-xs text-text-secondary">Enable causal impact modeling using EconML/DoWhy estimators</p>
         </div>
-        <input type="checkbox" defaultChecked className="w-4 h-4 text-primary bg-slate-100 border-slate-300 rounded focus:ring-primary" />
+        <input type="checkbox" defaultChecked className="w-4 h-4 accent-primary-blue rounded focus:ring-primary-blue bg-bg-surface border-border-hairline" aria-label="Toggle DML" />
       </div>
-      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+      <div className="flex items-center justify-between p-4 bg-bg-primary rounded-md border border-border-hairline shadow-sm">
         <div>
-          <h4 className="text-sm font-bold text-slate-800">Local LLM Acceleration</h4>
-          <p className="text-xs text-slate-500">Redirect bill explanations to local Ollama server running qwen3:4b</p>
+          <h4 className="text-sm font-bold text-text-primary">Local LLM acceleration</h4>
+          <p className="text-xs text-text-secondary">Redirect bill explanations to local Ollama server running qwen3:4b</p>
         </div>
-        <input type="checkbox" defaultChecked className="w-4 h-4 text-primary bg-slate-100 border-slate-300 rounded focus:ring-primary" />
+        <input type="checkbox" defaultChecked className="w-4 h-4 accent-primary-blue rounded focus:ring-primary-blue bg-bg-surface border-border-hairline" aria-label="Toggle Local LLM Acceleration" />
       </div>
-      <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+      <div className="flex items-center justify-between p-4 bg-bg-primary rounded-md border border-border-hairline shadow-sm">
         <div>
-          <h4 className="text-sm font-bold text-slate-800">OCR Scanner Animation</h4>
-          <p className="text-xs text-slate-500">Show sweeping scanline and typing logger during bill parsing</p>
+          <h4 className="text-sm font-bold text-text-primary">OCR scanner animation</h4>
+          <p className="text-xs text-text-secondary">Show sweeping scanline and typing logger during bill parsing</p>
         </div>
-        <input type="checkbox" defaultChecked className="w-4 h-4 text-primary bg-slate-100 border-slate-300 rounded focus:ring-primary" />
+        <input type="checkbox" defaultChecked className="w-4 h-4 accent-primary-blue rounded focus:ring-primary-blue bg-bg-surface border-border-hairline" aria-label="Toggle OCR Scanner Animation" />
       </div>
     </div>
   </div>

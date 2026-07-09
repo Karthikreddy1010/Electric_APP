@@ -67,10 +67,11 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary">
         <Header 
           activeTab={activeTab} 
           setActiveTab={setActiveTab} 
+          uploadedBill={uploadedBill}
         />
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">
           <Dashboard 
