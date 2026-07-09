@@ -117,3 +117,6 @@ logs/
 data/pipeline.log
 
 data/test_synthetic_bills/
+
+documents/*.docx
+*.pdf
