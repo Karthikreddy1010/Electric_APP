@@ -44,6 +44,12 @@ from database.models import (
     EIA930Subregion,
     EIA930Interchange,
     UtilityServiceTerritory,
+    CustomerProfile,
+    CustomerBill,
+    CustomerUsageHistory,
+    CustomerForecast,
+    CustomerSimulation,
+    CustomerBillOCR,
 )
 
 logger = logging.getLogger(__name__)
@@ -321,6 +327,7 @@ def run_seed(force: bool = False) -> dict:
     results["openei_utilities"] = seed_openei_utilities(force)
     results["eia930_initial"] = seed_eia930_initial(force)
     results["utility_service_territories"] = seed_utility_service_territories(force)
+    results["customer_data"] = seed_customer_data(force)
 
     logger.info(f"Seed complete: {results}")
     return results
@@ -836,6 +843,183 @@ def seed_utility_service_territories(force: bool = False) -> int:
     return len(df)
 
 
+def seed_customer_data(force: bool = False) -> int:
+    """Seeds synthetic customer profiles, bills, usage history, and simulated OCR data."""
+    syn_dir = PROJECT_ROOT / "data" / "synthetic_bills"
+    if not (syn_dir / "json").exists():
+        syn_dir = PROJECT_ROOT / "data" / "test_synthetic_bills"
+        
+    if not (syn_dir / "json").exists():
+        logger.warning(f"No synthetic customer bill JSON files found at {syn_dir} — skipping")
+        return 0
+
+    json_dir = syn_dir / "json"
+    files = [f.name for f in json_dir.glob("*.json")]
+    
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(CustomerProfile.customer_id)).scalar()
+            if count > 0:
+                logger.info(f"customer_profiles already has {count} rows — skipping")
+                return count
+        else:
+            try:
+                session.query(CustomerBillOCR).delete()
+                session.query(CustomerForecast).delete()
+                session.query(CustomerSimulation).delete()
+                session.query(CustomerUsageHistory).delete()
+                session.query(CustomerBill).delete()
+                session.query(CustomerProfile).delete()
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to clear customer database tables: {e}")
+
+        # Seed profiles, bills, history, and OCR
+        import json
+        import random
+        
+        profiles = {}
+        bills = []
+        histories = []
+        ocr_runs = []
+        
+        for fname in files:
+            path = json_dir / fname
+            if not path.exists() or path.stat().st_size == 0:
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    bill_data = json.load(f)
+            except Exception as e:
+                logger.warning(f"Skipping corrupted JSON file {fname}: {e}")
+                continue
+                
+            cust_id = bill_data["customer_id"]
+            
+            # Create unique customer profile
+            if cust_id not in profiles:
+                profiles[cust_id] = CustomerProfile(
+                    customer_id=cust_id,
+                    utility=bill_data["utility"],
+                    zip_code=bill_data.get("zip_code", "07102"),
+                    rate_schedule=bill_data["rate_schedule"],
+                    meter_number=bill_data["meter_number"]
+                )
+            
+            # Load ground truth OCR text
+            base_name = fname.replace(".json", "")
+            ocr_text_path = syn_dir / "ocr" / f"{base_name}.txt"
+            ocr_txt = ""
+            if ocr_text_path.exists():
+                with open(ocr_text_path, "r", encoding="utf-8", errors="ignore") as ocr_f:
+                    ocr_txt = ocr_f.read()
+                    
+            bill_date = pd.to_datetime(bill_data["bill_date"]).date()
+            
+            # Add bill
+            bill_record = CustomerBill(
+                customer_id=cust_id,
+                bill_date=bill_date,
+                billing_period=bill_data["billing_period"],
+                days=bill_data["days"],
+                previous_reading=bill_data["previous_reading"],
+                current_reading=bill_data["current_reading"],
+                usage_kwh=bill_data["usage_kwh"],
+                monthly_service_charge=bill_data["monthly_service_charge"],
+                delivery_charge=bill_data["delivery_charge"],
+                supply_charge=bill_data["supply_charge"],
+                tax=bill_data["tax"],
+                total_bill=bill_data["total_bill"],
+                average_daily_usage=bill_data["average_daily_usage"],
+                average_daily_cost=bill_data["average_daily_cost"],
+                utility_message=bill_data["utility_message"],
+                weather_message=bill_data["weather_message"],
+                energy_assistance_message=bill_data["energy_assistance_message"],
+                net_metering_message=bill_data["net_metering_message"],
+                ocr_text=ocr_txt,
+                json_path=str(path)
+            )
+            bills.append(bill_record)
+            
+            # Add 12-month usage history
+            for hist in bill_data.get("usage_history", []):
+                histories.append(CustomerUsageHistory(
+                    customer_id=cust_id,
+                    month_label=hist["month_label"],
+                    usage_kwh=float(hist["usage_kwh"]),
+                    avg_temp_f=float(hist["avg_temp_f"])
+                ))
+                
+            # Simulate OCR run evaluation
+            bbox_path = syn_dir / "annotations" / "bboxes" / f"{base_name}_bboxes.json"
+            bboxes = []
+            if bbox_path.exists():
+                with open(bbox_path, "r", encoding="utf-8", errors="ignore") as bbox_f:
+                    bboxes = json.load(bbox_f)
+            
+            ocr_fields = [
+                ("total_bill", str(bill_data["total_bill"])),
+                ("usage_kwh", str(bill_data["usage_kwh"])),
+                ("bill_date", str(bill_data["bill_date"])),
+                ("due_date", str(bill_data["due_date"])),
+                ("meter_number", str(bill_data["meter_number"])),
+                ("monthly_service_charge", str(bill_data["monthly_service_charge"])),
+                ("delivery_charge", str(bill_data["delivery_charge"])),
+                ("supply_charge", str(bill_data["supply_charge"]))
+            ]
+            
+            for field, gt_val in ocr_fields:
+                box_str = ""
+                for box in bboxes:
+                    if box["field"] == field:
+                        box_str = str(box["bbox"])
+                        break
+                        
+                has_error = random.random() < 0.02
+                ext_val = gt_val
+                conf = round(random.uniform(0.92, 0.99), 2)
+                
+                if has_error:
+                    conf = round(random.uniform(0.40, 0.75), 2)
+                    if "." in gt_val:
+                        parts = gt_val.split(".")
+                        ext_val = parts[0] + "." + str(random.randint(0, 9))
+                    else:
+                        ext_val = gt_val[:-1] + random.choice(["B", "O", "1", "9"])
+                
+                ocr_runs.append(CustomerBillOCR(
+                    customer_id=cust_id,
+                    bill_date=bill_date,
+                    field_name=field,
+                    ground_truth_value=gt_val,
+                    extracted_value=ext_val,
+                    confidence=conf,
+                    ocr_error_flag=has_error,
+                    bbox=box_str
+                ))
+                
+        # Save profiles
+        session.add_all(profiles.values())
+        session.commit()
+        
+        # Save bills in chunks
+        for i in range(0, len(bills), 1000):
+            session.add_all(bills[i:i+1000])
+            session.commit()
+            
+        # Save history in chunks
+        for i in range(0, len(histories), 5000):
+            session.add_all(histories[i:i+5000])
+            session.commit()
+            
+        # Save OCR runs in chunks
+        for i in range(0, len(ocr_runs), 5000):
+            session.add_all(ocr_runs[i:i+5000])
+            session.commit()
+            
+    logger.info(f"Seeded customer data from {len(files)} synthetic bills")
+    return len(files)
 
 
 if __name__ == "__main__":
@@ -843,3 +1027,4 @@ if __name__ == "__main__":
     parser.add_argument("--force", action="store_true", help="Re-seed even if tables have data")
     args = parser.parse_args()
     run_seed(force=args.force)
+

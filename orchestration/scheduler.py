@@ -107,7 +107,7 @@ class BackgroundScheduler:
             job.name: {
                 "target": job.target,
                 "interval": job.interval_seconds,
-                "last_run": datetime.min
+                "last_run": datetime.now()
             }
             for job in self._jobs
         }

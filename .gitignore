@@ -1,40 +1,119 @@
+# =========================
 # Python
+# =========================
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
 .eggs/
+build/
+dist/
 
-# Environment
+# =========================
+# Virtual Environments
+# =========================
 .env
 .venv/
 venv/
 env/
 
+# =========================
 # Data (generated)
+# =========================
 data/raw/
 data/processed/
 data/parquet/
 
-# Models
+# SQLite database
+data/electricity.db
+
+# Logs
+data/pipeline.log
+*.log
+
+# Synthetic bill annotations (generated)
+data/synthetic_bills/annotations/
+
+# Optional: generated OCR labels
+data/synthetic_bills/**/annotations/
+
+# =========================
+# ML Models
+# =========================
 models/artifacts/
 mlruns/
+*.pkl
+*.joblib
+*.h5
+*.pt
+*.pth
+*.ckpt
 
+# =========================
+# Cache
+# =========================
+.cache/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# =========================
 # IDE
+# =========================
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# =========================
+# Operating System
+# =========================
 .DS_Store
 Thumbs.db
 
+# =========================
 # Docker
+# =========================
 .docker/
 
-# Testing
-.pytest_cache/
-htmlcov/
-.coverage
+# Databases
+data/electricity.db
+
+# Logs
+data/pipeline.log
+logs/
+*.log
+
+# Synthetic bill annotations
+data/synthetic_bills/annotations/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+# Node
+node_modules/
+# Database
+data/electricity.db
+# Logs
+data/pipeline.log
+# Annotation data
+annotations/
+**/annotations/
+# Cache
+.cache/
+
+# Generated synthetic bill data
+data/synthetic_bills/
+
+# If you also generate data here
+data_pipeline/synthetic_bills/
+
+# Database
+data/electricity.db
+
+# Logs
+logs/
+*.log
+data/pipeline.log
+
+data/test_synthetic_bills/

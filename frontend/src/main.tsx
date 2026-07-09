@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import axios from 'axios'
 import App from './App.tsx'
 import './index.css'
-
+import 'leaflet/dist/leaflet.css'
 // Unwrap the StandardResponseMiddleware envelope { success: true, data: {...} }
 // so every component can read res.data directly instead of res.data.data
 axios.interceptors.response.use((response) => {

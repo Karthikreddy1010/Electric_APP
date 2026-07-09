@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
-import { ComposableMap, Geographies, Geography } from 'react-simple-maps';
+import { useMemo, memo, useEffect } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import { scaleQuantile, scaleOrdinal } from 'd3-scale';
+import L from 'leaflet';
 
 interface StateZipMapProps {
   geoJsonData: any;
@@ -21,6 +22,34 @@ const UTILITY_COLORS = [
   "#14B8A6", // Teal
 ];
 
+// Helper component to auto-fit map bounds to the GeoJSON layer
+const MapFitter = ({ geoJsonData, selectedZip }: { geoJsonData: any, selectedZip?: string | null }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (geoJsonData && geoJsonData.features && geoJsonData.features.length > 0) {
+      const geojsonLayer = L.geoJSON(geoJsonData);
+      const bounds = geojsonLayer.getBounds();
+      
+      if (bounds.isValid()) {
+        if (selectedZip) {
+          // Find the specific feature and fly to its bounds with some padding
+          const selectedFeature = geoJsonData.features.find((f: any) => f.properties.zip_code === selectedZip);
+          if (selectedFeature) {
+            const selectedLayer = L.geoJSON(selectedFeature);
+            map.flyToBounds(selectedLayer.getBounds(), { padding: [50, 50], duration: 1.5 });
+            return;
+          }
+        }
+        // Default fit to entire state
+        map.flyToBounds(bounds, { padding: [20, 20], duration: 1.5 });
+      }
+    }
+  }, [geoJsonData, selectedZip, map]);
+
+  return null;
+};
+
 const StateZipMap = ({
   geoJsonData,
   viewMode,
@@ -28,58 +57,6 @@ const StateZipMap = ({
   onZipClick,
   onZipHover
 }: StateZipMapProps) => {
-  
-  // Calculate center and scale dynamically to fit the state's GeoJSON bounding box
-  const projectionParams = useMemo(() => {
-    if (!geoJsonData || !geoJsonData.features || geoJsonData.features.length === 0) {
-      return { center: [-74.4057, 40.0583] as [number, number], scale: 8000 };
-    }
-    
-    let minLon = 180, maxLon = -180;
-    let minLat = 90, maxLat = -90;
-    
-    geoJsonData.features.forEach((feature: any) => {
-      if (!feature.geometry) return;
-      const coords = feature.geometry.coordinates;
-      const type = feature.geometry.type;
-      
-      const processCoord = (coord: number[]) => {
-        const [lon, lat] = coord;
-        if (lon < minLon) minLon = lon;
-        if (lon > maxLon) maxLon = lon;
-        if (lat < minLat) minLat = lat;
-        if (lat > maxLat) maxLat = lat;
-      };
-      
-      if (type === "Polygon") {
-        coords[0].forEach(processCoord);
-      } else if (type === "MultiPolygon") {
-        coords.forEach((polygon: any) => {
-          if (polygon[0]) {
-            polygon[0].forEach(processCoord);
-          }
-        });
-      }
-    });
-    
-    if (minLon > maxLon || minLat > maxLat) {
-      return { center: [-74.4057, 40.0583] as [number, number], scale: 8000 };
-    }
-    
-    const center: [number, number] = [
-      (minLon + maxLon) / 2,
-      (minLat + maxLat) / 2
-    ];
-    
-    const dLon = maxLon - minLon;
-    const dLat = maxLat - minLat;
-    const maxDiff = Math.max(dLon, dLat);
-    
-    // Scale heuristic for geoMercator with standard SVG dimensions
-    const scale = (450 / (maxDiff || 0.1)) * 55;
-    
-    return { center, scale };
-  }, [geoJsonData]);
 
   // Compute color scales based on rate values or utility identifiers
   const colorScale = useMemo(() => {
@@ -111,52 +88,90 @@ const StateZipMap = ({
     }
   }, [geoJsonData, viewMode]);
 
+  if (!geoJsonData || !geoJsonData.features) {
+    return <div className="w-full h-full min-h-[500px] flex items-center justify-center bg-slate-50 text-slate-400 font-bold">Loading Boundary Data...</div>;
+  }
+
   return (
-    <div className="w-full h-full min-h-[500px] flex items-center justify-center relative">
-      <ComposableMap
-        projection="geoMercator"
-        projectionConfig={{
-          center: projectionParams.center,
-          scale: projectionParams.scale
-        }}
-        className="w-full h-full max-h-[550px]"
+    <div className="w-full h-full min-h-[500px] relative z-0">
+      <MapContainer 
+        center={[40.0583, -74.4057]} // Default NJ center
+        zoom={7} 
+        className="w-full h-full absolute inset-0"
+        style={{ background: '#F8FAFC' }}
+        zoomControl={true}
       >
-        <Geographies geography={geoJsonData}>
-          {({ geographies }) =>
-            geographies.map((geo) => {
-              const zip = geo.properties.zip_code;
-              const rate = geo.properties.residential_rate;
-              const utility = geo.properties.primary_utility;
-              const isSelected = selectedZip === zip;
-              
-              let fillVal = "#E2E8F0";
-              if (colorScale) {
-                fillVal = viewMode === 'utility' ? colorScale(utility) : colorScale(rate);
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        />
+        
+        <MapFitter geoJsonData={geoJsonData} selectedZip={selectedZip} />
+        
+        <GeoJSON
+          key={`${viewMode}-${selectedZip}`} // Force re-render of styles on mode change
+          data={geoJsonData}
+          style={(feature) => {
+            const zip = feature?.properties?.zip_code;
+            const rate = feature?.properties?.residential_rate;
+            const utility = feature?.properties?.primary_utility;
+            const isSelected = selectedZip === zip;
+            
+            let fillVal = "#E2E8F0";
+            if (colorScale) {
+              fillVal = viewMode === 'utility' ? colorScale(utility) : colorScale(rate);
+            }
+            
+            return {
+              fillColor: fillVal,
+              weight: isSelected ? 3 : 0.5,
+              opacity: 1,
+              color: isSelected ? "#EF4444" : "#FFFFFF",
+              fillOpacity: isSelected ? 0.9 : 0.65
+            };
+          }}
+          onEachFeature={(feature, layer) => {
+            const zip = feature.properties.zip_code;
+            
+            layer.on({
+              mouseover: (e) => {
+                const l = e.target;
+                l.setStyle({
+                  fillOpacity: 0.9,
+                  weight: 2,
+                  color: "#F87171"
+                });
+                l.bringToFront();
+                if (onZipHover) onZipHover(zip);
+              },
+              mouseout: (e) => {
+                const l = e.target;
+                const isSelected = selectedZip === zip;
+                l.setStyle({
+                  weight: isSelected ? 3 : 0.5,
+                  color: isSelected ? "#EF4444" : "#FFFFFF",
+                  fillOpacity: isSelected ? 0.9 : 0.65
+                });
+                if (!isSelected) {
+                  l.bringToBack();
+                }
+                if (onZipHover) onZipHover(null);
+              },
+              click: () => {
+                if (onZipClick) onZipClick(zip);
               }
-              
-              return (
-                <Geography
-                  key={geo.rsmKey}
-                  geography={geo}
-                  onClick={() => onZipClick?.(zip)}
-                  onMouseEnter={() => onZipHover?.(zip)}
-                  onMouseLeave={() => onZipHover?.(null)}
-                  fill={fillVal}
-                  stroke={isSelected ? "#EF4444" : "#FFFFFF"}
-                  strokeWidth={isSelected ? 1.5 : 0.2}
-                  style={{
-                    default: { outline: "none", transition: "all 150ms ease" },
-                    hover: { fill: "#F87171", stroke: "#EF4444", strokeWidth: 1, outline: "none", cursor: "pointer" },
-                    pressed: { outline: "none" },
-                  }}
-                />
-              );
-            })
-          }
-        </Geographies>
-      </ComposableMap>
+            });
+          }}
+        />
+      </MapContainer>
     </div>
   );
 };
 
-export default StateZipMap;
+export default memo(StateZipMap, (prev, next) => {
+  return (
+    prev.geoJsonData === next.geoJsonData &&
+    prev.viewMode === next.viewMode &&
+    prev.selectedZip === next.selectedZip
+  );
+});

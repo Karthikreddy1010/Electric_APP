@@ -87,7 +87,12 @@ const buildBellCurve = (mean: number, std: number, p5: number, p95: number) => {
 
 // ─── Main Component ──────────────────────────────────────────────────────────
 
-const ImpactTab = () => {
+const round = (val: number, decimals: number) => {
+  const p = Math.pow(10, decimals);
+  return Math.round(val * p) / p;
+};
+
+const ImpactTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiveTab?: (tab: string) => void }) => {
   // ── Simulator State ──
   const [selectedComp, setSelectedComp] = useState("bgs_rate");
   const [changePct, setChangePct] = useState(10);
@@ -97,7 +102,25 @@ const ImpactTab = () => {
   const debouncedComp = useDebounce(selectedComp, 300);
   const debouncedScenario = useDebounce(scenario, 300);
 
-  // ── Data Fetching ──
+  const customerImpact = useMemo(() => {
+    if (!uploadedBill) return null;
+    const fixed = uploadedBill.monthly_service_charge;
+    const supply = uploadedBill.supply_charge;
+    const tax = uploadedBill.tax;
+    const total = uploadedBill.total_bill;
+    const delivery = round(uploadedBill.delivery_charge - fixed, 2);
+    
+    return {
+      total_bill: total,
+      components: [
+        {"name": "Fixed Customer Service Charge", "amount": fixed, "pct": round(fixed/total*100, 1)},
+        {"name": "Grid Delivery Infrastructure", "amount": delivery, "pct": round(delivery/total*100, 1)},
+        {"name": "Standard Supply Generation", "amount": supply, "pct": round(supply/total*100, 1)},
+        {"name": "State Sales Taxes (6.625%)", "amount": tax, "pct": round(tax/total*100, 1)}
+      ]
+    };
+  }, [uploadedBill]);
+
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: _fullAnalysis } = useQuery({
     queryKey: ['impact-full-analysis'],
@@ -105,25 +128,45 @@ const ImpactTab = () => {
   });
 
   const { data: simulation, isLoading: isSimLoading } = useQuery({
-    queryKey: ['impact-what-if-v2', debouncedComp, debouncedChange, debouncedScenario],
+    queryKey: ['impact-what-if-v2', debouncedComp, debouncedChange, debouncedScenario, uploadedBill?.usage_kwh],
     queryFn: async () => {
       const changes: Record<string, number> = {};
       if (debouncedChange !== 0) changes[debouncedComp] = debouncedChange;
-      const payload: any = { changes, n_simulations: 2000 };
+      const payload: any = { 
+        changes, 
+        n_simulations: 2000,
+        kwh: uploadedBill?.usage_kwh || 750
+      };
       if (debouncedScenario) payload.scenario = debouncedScenario;
       return (await axios.post('/impact/what-if-v2', payload)).data;
     },
+    enabled: !!uploadedBill,
     placeholderData: (prev) => prev
   });
 
-  const { data: causalData, isLoading: isCausalLoading, isError: isCausalError, error: causalError } = useQuery({
-    queryKey: ['causal-impact', debouncedComp],
-    queryFn: async () => {
-      const res = await axios.post('/impact/causal-v2', { treatment: debouncedComp });
-      return res.data;
-    },
-    enabled: !!debouncedComp,
-  });
+  if (!uploadedBill) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 card bg-slate-50 border-dashed border-2 border-slate-200 text-center max-w-xl mx-auto space-y-4 my-12">
+        <Zap size={48} className="text-slate-400 animate-bounce" />
+        <h3 className="text-xl font-bold text-slate-800">Impact Analysis Locked</h3>
+        <p className="text-sm text-slate-500 max-w-sm">
+          Please upload and analyze an electricity bill on the Bill Analysis page to run cost component contribution forecasts.
+        </p>
+        <button 
+          onClick={() => setActiveTab?.("Bill Analysis")}
+          className="bg-primary text-white hover:bg-primary-hover font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-primary/20 mt-4"
+        >
+          Go to Bill Analysis
+        </button>
+      </div>
+    );
+  }
+
+  const isCausalLoading = false;
+  const isCausalError = false;
+  const causalError: any = null;
+  const causalData: any = null;
+  const customerId = "UPLOADED";
 
   // ── Derived Values ──
   const baseBill = simulation?.base_bill || 185.00;
@@ -235,6 +278,52 @@ const ImpactTab = () => {
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto pb-12" id="impact-tab">
+      
+      {/* ── Personalized Component Cost Contribution ── */}
+      {customerImpact && (
+        <div className="card p-6 border border-slate-100 hover:shadow-md transition-shadow bg-slate-900 text-white relative overflow-hidden group">
+          <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div>
+              <h3 className="text-lg font-bold">Personalized Component Cost Contribution</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Factor contribution breakdown for customer {customerId}'s latest bill</p>
+            </div>
+            <span className="text-2xl font-black text-blue-400">${customerImpact.total_bill?.toFixed(2)}</span>
+          </div>
+          
+          {/* Horizontal stack showing components in a single premium bar */}
+          <div className="w-full h-4 rounded-full overflow-hidden flex mb-6 bg-slate-800 relative z-10">
+            {customerImpact.components.map((comp: any, idx: number) => {
+              const bgColors = ["bg-blue-600", "bg-purple-600", "bg-teal-600", "bg-amber-500", "bg-rose-500", "bg-slate-500"];
+              return (
+                <div 
+                  key={idx} 
+                  style={{ width: `${comp.pct}%` }} 
+                  className={`${bgColors[idx % bgColors.length]} h-full transition-all`}
+                  title={`${comp.name}: ${comp.pct}%`}
+                />
+              );
+            })}
+          </div>
+          
+          {/* Grid detailing each component */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 relative z-10">
+            {customerImpact.components.map((comp: any, idx: number) => {
+              const textColors = ["text-blue-400", "text-purple-400", "text-teal-400", "text-amber-400", "text-rose-400", "text-slate-400"];
+              const borderColors = ["border-blue-600/30", "border-purple-600/30", "border-teal-600/30", "border-amber-600/30", "border-rose-600/30", "border-slate-600/30"];
+              return (
+                <div key={idx} className={`p-3 bg-slate-800/50 rounded-xl border ${borderColors[idx % borderColors.length]} flex flex-col justify-between`}>
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-tight mb-1">{comp.name}</span>
+                  <div className="flex justify-between items-baseline mt-auto">
+                    <span className={`text-xs font-black ${textColors[idx % textColors.length]}`}>{comp.pct}%</span>
+                    <span className="text-sm font-black text-white">${comp.amount?.toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       
       {/* ═══════════════════════════════════════════════════════════════════
           SECTION 1: TOP ROW — Bill Summary & Weather Context

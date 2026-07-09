@@ -11,7 +11,10 @@ const PRESETS = [
   { key: 'conservation', label: '🌳 Green Conservation', desc: 'Usage drops by 20% (-20% usage)' }
 ];
 
-const WhatIfTab = () => {
+import { Zap } from 'lucide-react';
+import { useEffect } from 'react';
+
+const WhatIfTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiveTab?: (tab: string) => void }) => {
   const [kwh, setKwh] = useState<number>(750);
   const [bgsChange, setBgsChange] = useState<number>(0);
   const [distChange, setDistChange] = useState<number>(0);
@@ -19,6 +22,42 @@ const WhatIfTab = () => {
   const [sbcChange, setSbcChange] = useState<number>(0);
   const [nugChange, setNugChange] = useState<number>(0);
   const [scenario, setScenario] = useState<string | null>(null);
+
+  // Sync kwh with uploaded bill
+  useEffect(() => {
+    if (uploadedBill?.usage_kwh) {
+      setKwh(uploadedBill.usage_kwh);
+    }
+  }, [uploadedBill]);
+
+  const { data: customerSimulations } = useQuery({
+    queryKey: ['customer-simulations', uploadedBill],
+    queryFn: async () => {
+      const res = await axios.post('/bill/simulation', uploadedBill);
+      return res.data.scenarios;
+    },
+    enabled: !!uploadedBill
+  });
+
+  if (!uploadedBill) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 card bg-slate-50 border-dashed border-2 border-slate-200 text-center max-w-xl mx-auto space-y-4 my-12">
+        <Zap size={48} className="text-slate-400 animate-bounce" />
+        <h3 className="text-xl font-bold text-slate-800">Simulator Locked</h3>
+        <p className="text-sm text-slate-500 max-w-sm">
+          Please upload and analyze an electricity bill on the Bill Analysis page to use the What-If Engine.
+        </p>
+        <button 
+          onClick={() => setActiveTab?.("Bill Analysis")}
+          className="bg-primary text-white hover:bg-primary-hover font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-primary/20 mt-4"
+        >
+          Go to Bill Analysis
+        </button>
+      </div>
+    );
+  }
+
+  const customerId = "UPLOADED";
 
   // Assemble modifications payload
   const changes: Record<string, number> = {};
@@ -74,6 +113,54 @@ const WhatIfTab = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in zoom-in-95 duration-500">
+      {/* ── Personalized What-If Scenarios ── */}
+      {customerSimulations && (
+        <div className="card p-6 bg-slate-900 text-white relative overflow-hidden group">
+          <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10 mb-6">
+            <div>
+              <span className="bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
+                Personalized What-If Scenarios
+              </span>
+              <h3 className="text-xl font-bold mt-2">Customer {customerId} What-If Simulator</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Simulated annual bill outcomes using customer history and weather variables</p>
+            </div>
+            
+            <div>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Actual Annual Cost (Est)</span>
+              <span className="text-2xl font-black text-white">${customerSimulations[0]?.actual_annual_cost_estimate?.toFixed(2)}</span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+            {customerSimulations.map((s: any, idx: number) => {
+              const diff = s.difference_vs_actual;
+              const isIncrease = diff > 0;
+              return (
+                <div key={idx} className="p-4 bg-slate-800/50 rounded-xl border border-slate-700/30 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-black text-blue-400 uppercase tracking-widest block mb-2">{s.scenario_name}</span>
+                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                      <span>Simulated Usage:</span>
+                      <span className="font-bold text-white">{s.simulated_annual_usage_kwh?.toLocaleString()} kWh</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400 mb-3">
+                      <span>Simulated Cost:</span>
+                      <span className="font-bold text-white">${s.simulated_annual_cost?.toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-700/50 pt-2 flex justify-between items-baseline">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Impact</span>
+                    <span className={`text-sm font-bold ${isIncrease ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {isIncrease ? '+' : ''}${diff?.toFixed(2)}/yr
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">

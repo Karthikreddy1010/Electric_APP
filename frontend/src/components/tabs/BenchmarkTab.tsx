@@ -14,8 +14,7 @@ const REGION_COLORS: Record<string, string> = {
   Midwest: '#10B981',
   West: '#EF4444',
 };
-
-const BenchmarkTab = () => {
+const BenchmarkTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiveTab?: (tab: string) => void }) => {
   const [selectedYear, setSelectedYear] = useState('2025');
   const [hoveredState, setHoveredState] = useState<string | null>(null);
   const [comparisonState, setComparisonState] = useState<string | null>(null);
@@ -27,6 +26,82 @@ const BenchmarkTab = () => {
       return res.data;
     }
   });
+
+  const round = (val: number, decimals: number) => {
+    const p = Math.pow(10, decimals);
+    return Math.round(val * p) / p;
+  };
+
+  const customerBenchmark = useMemo(() => {
+    if (!uploadedBill || !data) return null;
+    const state_avg_bill = 120.0;
+    const state_avg_usage = 750.0;
+    
+    const national_avg_bill = data.national_avg || 135.0;
+    const national_avg_usage = 890.0;
+    
+    const regional_avg_bill = 128.0;
+    const regional_avg_usage = 800.0;
+    
+    const cust_usage = uploadedBill.usage_kwh;
+    const cust_bill = uploadedBill.total_bill;
+    
+    const erf = (x: number) => {
+      const a1 =  0.254829592;
+      const a2 = -0.284496736;
+      const a3 =  1.421413741;
+      const a4 = -1.453152027;
+      const a5 =  1.061405429;
+      const p  =  0.3275911;
+
+      const sign = (x < 0) ? -1 : 1;
+      const t = Math.abs(x);
+
+      const a = t / (1.0 + p * t);
+      const y = 1.0 - (((((a5 * a + a4) * a) + a3) * a + a2) * a + a1) * a * Math.exp(-t * t);
+
+      return sign * y;
+    };
+    
+    const std_dev = state_avg_usage * 0.35;
+    const z = (cust_usage - state_avg_usage) / (std_dev * Math.sqrt(2));
+    const percentile = round((0.5 * (1 + erf(z))) * 100, 1);
+    
+    const savings_opp = Math.max(0, cust_bill - state_avg_bill);
+    const savings = savings_opp === 0 ? cust_bill * 0.10 : savings_opp;
+    
+    return {
+      customer: {
+        monthly_bill: cust_bill,
+        monthly_usage_kwh: cust_usage,
+        percentile: percentile
+      },
+      comparisons: [
+        {"name": "State Average (NJ)", "avg_bill": state_avg_bill, "avg_usage_kwh": state_avg_usage, "diff_bill": round(cust_bill - state_avg_bill, 2)},
+        {"name": "Regional Average (Mid-Atlantic)", "avg_bill": regional_avg_bill, "avg_usage_kwh": regional_avg_usage, "diff_bill": round(cust_bill - regional_avg_bill, 2)},
+        {"name": "National Average (US)", "avg_bill": national_avg_bill, "avg_usage_kwh": national_avg_usage, "diff_bill": round(cust_bill - national_avg_bill, 2)}
+      ],
+      savings_opportunity: round(savings, 2)
+    };
+  }, [uploadedBill, data]);
+
+  if (!uploadedBill) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 card bg-slate-50 border-dashed border-2 border-slate-200 text-center max-w-xl mx-auto space-y-4 my-12">
+        <Zap size={48} className="text-slate-400 animate-bounce" />
+        <h3 className="text-xl font-bold text-slate-800">Benchmark Locked</h3>
+        <p className="text-sm text-slate-500 max-w-sm">
+          Please upload and analyze an electricity bill on the Bill Analysis page to run benchmark comparison algorithms.
+        </p>
+        <button 
+          onClick={() => setActiveTab?.("Bill Analysis")}
+          className="bg-primary text-white hover:bg-primary-hover font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-primary/20 mt-4"
+        >
+          Go to Bill Analysis
+        </button>
+      </div>
+    );
+  }
 
   // Fetch EIA-861M Monthly Trends
   const { data: monthlyTrends } = useQuery({
@@ -89,6 +164,59 @@ const BenchmarkTab = () => {
 
   return (
     <div className="space-y-6">
+      {/* ── Personalized Benchmarking Summary ── */}
+      {customerBenchmark && (
+        <div className="card p-6 bg-slate-900 text-white relative overflow-hidden group">
+          <div className="absolute -right-4 -top-4 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10 mb-6">
+            <div>
+              <span className="bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
+                Personalized Benchmarking
+              </span>
+              <h3 className="text-xl font-bold mt-2">Your Bill Performance Comparison</h3>
+              <p className="text-xs text-slate-400 mt-0.5">Comparing customer consumption against state, regional, and national residential benchmarks</p>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Percentile Rank</span>
+                <span className="text-2xl font-black text-amber-400">{customerBenchmark.customer.percentile}th</span>
+              </div>
+              <div className="border-l border-slate-800 pl-6">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Savings Opportunity</span>
+                <span className="text-2xl font-black text-emerald-400">${customerBenchmark.savings_opportunity?.toFixed(2)}<span className="text-xs font-normal text-slate-400">/mo</span></span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+            {customerBenchmark.comparisons.map((c: any, idx: number) => {
+              const above = c.diff_bill > 0;
+              return (
+                <div key={idx} className="p-4 bg-slate-800/50 rounded-xl border border-slate-755/30 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-slate-300 block mb-2">{c.name}</span>
+                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                      <span>Avg Bill:</span>
+                      <span className="font-bold text-white">${c.avg_bill?.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-400 mb-3">
+                      <span>Avg Usage:</span>
+                      <span className="font-bold text-white">{c.avg_usage_kwh} kWh</span>
+                    </div>
+                  </div>
+                  <div className="border-t border-slate-700/50 pt-2 flex justify-between items-baseline">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Difference</span>
+                    <span className={`text-sm font-bold ${above ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {above ? '+' : ''}${c.diff_bill?.toFixed(2)}/mo
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       {/* ── KPI Banner ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-2 card p-8">

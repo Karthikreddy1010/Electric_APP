@@ -6,7 +6,18 @@ interface HeaderProps {
 }
 
 const Header = ({ activeTab, setActiveTab }: HeaderProps) => {
-  const tabs = ['Overview', 'Forecast', 'Impact', 'What-If Scenario', 'Benchmark', 'Geo Insights', 'Plans', 'Utility Intelligence'];
+  const tabs = [
+    'Overview', 
+    'Bill Analysis', 
+    'Forecast', 
+    'Bill Impact', 
+    'What-If Simulator', 
+    'Benchmark', 
+    'Geo Insights', 
+    'Plans', 
+    'Utility Intelligence', 
+    'Settings'
+  ];
 
   return (
     <header className="bg-white border-b border-border sticky top-0 z-50">
@@ -35,7 +46,9 @@ const Header = ({ activeTab, setActiveTab }: HeaderProps) => {
         </nav>
 
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200"></div>
+          <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-black uppercase px-3 py-1 rounded-full shadow-sm">
+            AI Engine Online
+          </span>
         </div>
       </div>
     </header>

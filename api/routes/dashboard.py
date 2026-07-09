@@ -50,15 +50,24 @@ async def get_geo(month: Optional[str] = None, view_mode: str = "bill"):
 
 @router.get("/plans", response_model=PlanSimResponse)
 @cached(ttl=300)
-async def get_plans():
+async def get_plans(customer_id: str = None):
     from api.services.simulation_service import run_plan_simulation
     from api.schemas import PlanSimRequest
+    from database.connection import get_sync_session
+    from database.models import CustomerBill
     
     plans_df = app_state.get("plans_df")
     billing_df = app_state.get("billing_df")
     
+    monthly_usage = 750.0
+    if customer_id:
+        with get_sync_session() as session:
+            bills = session.query(CustomerBill).filter(CustomerBill.customer_id == customer_id).all()
+            if bills:
+                monthly_usage = sum(b.usage_kwh for b in bills) / len(bills)
+    
     req = PlanSimRequest(
-        monthly_usage_kwh=750,
+        monthly_usage_kwh=round(monthly_usage, 2),
         usage_growth_pct=0.0,
         horizon_months=12,
         n_simulations=1000

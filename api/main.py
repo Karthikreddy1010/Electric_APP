@@ -328,6 +328,8 @@ from api.routes.geo_boundaries import router as geo_boundaries_router
 from api.routes.metrics import router as metrics_router
 from api.routes.tariffs import router as tariffs_router
 from api.routes.service_territory import router as service_territory_router
+from api.routes.customers import router as customers_router
+from api.routes.bill import router as bill_router
 
 app.include_router(health_router)
 app.include_router(dashboard_router)
@@ -352,6 +354,8 @@ app.include_router(geo_boundaries_router)
 app.include_router(metrics_router)
 app.include_router(tariffs_router)
 app.include_router(service_territory_router)
+app.include_router(customers_router)
+app.include_router(bill_router)
 
 
 

@@ -759,3 +759,115 @@ class UtilityServiceTerritory(Base):
         Index("ix_ust_state_county", "state", "county"),
     )
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  CUSTOMER-LEVEL DATA TABLES (SYNTHETIC BILLS ARCHITECTURE)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CustomerProfile(Base):
+    """
+    Synthetic customer master profiles representing simulated customers.
+    """
+    __tablename__ = "customer_profiles"
+
+    customer_id = Column(String(30), primary_key=True)
+    utility = Column(String(50), nullable=False)
+    zip_code = Column(String(10), nullable=False)
+    rate_schedule = Column(String(50), nullable=False)
+    meter_number = Column(String(30), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+class CustomerBill(Base):
+    """
+    Simulated customer utility bills (electric only).
+    Contains structural metrics and raw texts for OCR training.
+    """
+    __tablename__ = "customer_bills"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(30), ForeignKey("customer_profiles.customer_id"), nullable=False, index=True)
+    bill_date = Column(Date, nullable=False, index=True)
+    billing_period = Column(String(100))
+    days = Column(Integer)
+    previous_reading = Column(Integer)
+    current_reading = Column(Integer)
+    usage_kwh = Column(Float)
+    monthly_service_charge = Column(Float)
+    delivery_charge = Column(Float)
+    supply_charge = Column(Float)
+    tax = Column(Float)
+    total_bill = Column(Float)
+    average_daily_usage = Column(Float)
+    average_daily_cost = Column(Float)
+    utility_message = Column(Text)
+    weather_message = Column(Text)
+    energy_assistance_message = Column(Text)
+    net_metering_message = Column(Text)
+    ocr_text = Column(Text)
+    json_path = Column(String(255))
+
+
+class CustomerUsageHistory(Base):
+    """
+    Historical monthly electricity usage (12-month sequence) per synthetic customer.
+    Used for forecasting and baseline comparisons.
+    """
+    __tablename__ = "customer_usage_history"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(30), ForeignKey("customer_profiles.customer_id"), nullable=False, index=True)
+    month_label = Column(String(15), nullable=False)
+    usage_kwh = Column(Float, nullable=False)
+    avg_temp_f = Column(Float)
+
+
+class CustomerForecast(Base):
+    """
+    Personalized forecast runs (30, 90, 365 days) for synthetic customer usage/costs.
+    """
+    __tablename__ = "customer_forecasts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(30), ForeignKey("customer_profiles.customer_id"), nullable=False, index=True)
+    forecast_date = Column(Date, nullable=False)
+    days_ahead = Column(Integer, nullable=False)
+    predicted_usage_kwh = Column(Float)
+    predicted_cost = Column(Float)
+    confidence_lower = Column(Float)
+    confidence_upper = Column(Float)
+    generated_at = Column(DateTime, server_default=func.now())
+
+
+class CustomerSimulation(Base):
+    """
+    Personalized 'what-if' tariff rate and behavioral impact scenarios per customer.
+    """
+    __tablename__ = "customer_simulations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(30), ForeignKey("customer_profiles.customer_id"), nullable=False, index=True)
+    scenario_name = Column(String(100), nullable=False)
+    simulated_annual_usage_kwh = Column(Float)
+    simulated_annual_cost = Column(Float)
+    difference_vs_actual = Column(Float)
+    generated_at = Column(DateTime, server_default=func.now())
+
+
+class CustomerBillOCR(Base):
+    """
+    Ground-truth and OCR-extracted field confidence evaluation runs.
+    """
+    __tablename__ = "customer_bill_ocr"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(30), ForeignKey("customer_profiles.customer_id"), nullable=False, index=True)
+    bill_date = Column(Date, nullable=False)
+    field_name = Column(String(50), nullable=False)
+    ground_truth_value = Column(String(100))
+    extracted_value = Column(String(100))
+    confidence = Column(Float)
+    ocr_error_flag = Column(Boolean, default=False)
+    bbox = Column(String(100))
+
+

@@ -6,13 +6,19 @@ import {
 } from 'recharts';
 import { ShieldCheck, Zap, ArrowRight, TrendingUp } from 'lucide-react';
 
-const PlansTab = () => {
+const PlansTab = ({ uploadedBill, setActiveTab }: { uploadedBill: any, setActiveTab?: (tab: string) => void }) => {
   const { data, isLoading } = useQuery({
-    queryKey: ['plans'],
+    queryKey: ['plans', uploadedBill?.usage_kwh],
     queryFn: async () => {
-      const res = await axios.get('/plans');
+      const res = await axios.post('/plan-simulation', {
+        monthly_usage_kwh: uploadedBill?.usage_kwh || 750,
+        usage_growth_pct: 0.0,
+        horizon_months: 12,
+        n_simulations: 10000
+      });
       return res.data;
-    }
+    },
+    enabled: !!uploadedBill
   });
 
   const { data: bgsData } = useQuery({
@@ -30,6 +36,24 @@ const PlansTab = () => {
       return res.data;
     }
   });
+
+  if (!uploadedBill) {
+    return (
+      <div className="flex flex-col items-center justify-center p-16 card bg-slate-50 border-dashed border-2 border-slate-200 text-center max-w-xl mx-auto space-y-4 my-12">
+        <Zap size={48} className="text-slate-400 animate-bounce" />
+        <h3 className="text-xl font-bold text-slate-800">Retail Plans Locked</h3>
+        <p className="text-sm text-slate-500 max-w-sm">
+          Please upload and analyze an electricity bill on the Bill Analysis page to generate retail plan savings opportunities.
+        </p>
+        <button 
+          onClick={() => setActiveTab?.("Bill Analysis")}
+          className="bg-primary text-white hover:bg-primary-hover font-bold px-6 py-2.5 rounded-xl transition-all shadow-lg shadow-primary/20 mt-4"
+        >
+          Go to Bill Analysis
+        </button>
+      </div>
+    );
+  }
 
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center p-20 space-y-4">

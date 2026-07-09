@@ -131,3 +131,4 @@ const ForecastTab = () => {
 };
 
 export default ForecastTab;
+// Force IDE cache refresh for ForecastTab types
