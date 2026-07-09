@@ -45,6 +45,7 @@ redis>=5.0.0
 # Reports & AI
 reportlab>=4.0.0
 ollama>=0.1.0
+pymupdf>=1.22.0
 
 # Monitoring / Logging
 prometheus-client>=0.17.0
