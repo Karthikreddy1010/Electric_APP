@@ -5,4 +5,17 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: '/app/',
+  server: {
+    proxy: {
+      // Forward all API paths to the FastAPI backend
+      '/auth': { target: 'http://localhost:8000', changeOrigin: true },
+      '/users': { target: 'http://localhost:8000', changeOrigin: true },
+      '/bill': { target: 'http://localhost:8000', changeOrigin: true },
+      '/overview': { target: 'http://localhost:8000', changeOrigin: true },
+      '/forecast': { target: 'http://localhost:8000', changeOrigin: true },
+      '/plans': { target: 'http://localhost:8000', changeOrigin: true },
+      '/health': { target: 'http://localhost:8000', changeOrigin: true },
+      '/metrics': { target: 'http://localhost:8000', changeOrigin: true },
+    },
+  },
 })

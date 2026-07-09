@@ -118,6 +118,14 @@ async def init_db() -> None:
     async with _async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Handle SQLite/existing DB migrations: add active_bill_id if missing in a separate transaction
+    try:
+        async with _async_engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE auth_users ADD COLUMN active_bill_id VARCHAR(36)"))
+        logger.info("Migrated: added active_bill_id to auth_users")
+    except Exception:
+        pass
+
     logger.info("Database initialized — all tables created/verified")
 
 

@@ -285,7 +285,12 @@ app.add_middleware(RateLimiterMiddleware, requests_limit=100, window_seconds=60)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",   # Vite dev server
+        "http://localhost:8000",   # FastAPI serving frontend
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -304,6 +309,7 @@ async def add_security_headers(request: Request, call_next):
 
 # ── Register modular routers ────────────────────────────────────────────────
 from api.routes.health import router as health_router
+from api.routes.auth_router import router as auth_router
 from api.routes.dashboard import router as dashboard_router
 from api.routes.billing import router as billing_router
 from api.routes.geo_insights import router as geo_insights_router
@@ -318,6 +324,7 @@ from api.routes.eia861 import router as eia861_router
 from api.routes.monitoring import router as monitoring_router
 
 # New routers
+from api.routes.users import router as users_router
 from api.routes.eia861m import router as eia861m_router
 from api.routes.openei import router as openei_router
 from api.routes.eia930 import router as eia930_router
@@ -332,6 +339,8 @@ from api.routes.customers import router as customers_router
 from api.routes.bill import router as bill_router
 
 app.include_router(health_router)
+app.include_router(auth_router)
+app.include_router(users_router)
 app.include_router(dashboard_router)
 app.include_router(billing_router)
 app.include_router(geo_insights_router)
@@ -360,9 +369,37 @@ app.include_router(bill_router)
 
 
 # ── Serve frontend static files ─────────────────────────────────────────────
-frontend_dir = PROJECT_ROOT / "frontend" / "dist"
-if frontend_dir.exists():
-    app.mount("/app", StaticFiles(directory=str(frontend_dir), html=True), name="frontend")
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+
+# Redirect bare root and /app to the SPA entry point
+@app.get("/")
+async def redirect_root():
+    return RedirectResponse(url="/app/", status_code=302)
+
+@app.get("/app")
+async def redirect_app():
+    return RedirectResponse(url="/app/", status_code=302)
+
+@app.get("/app/{path:path}")
+async def serve_frontend_spa(path: str):
+    frontend_dir = PROJECT_ROOT / "frontend" / "dist"
+    if not frontend_dir.exists():
+        return HTMLResponse("Frontend build not found.", status_code=503)
+        
+    file_path = frontend_dir / path
+    if file_path.is_file():
+        return FileResponse(str(file_path))
+        
+    index_file = frontend_dir / "index.html"
+    if index_file.exists():
+        headers = {
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
+        return HTMLResponse(content=index_file.read_text(encoding="utf-8"), headers=headers)
+        
+    return HTMLResponse("Index file not found.", status_code=404)
 
 
 if __name__ == "__main__":

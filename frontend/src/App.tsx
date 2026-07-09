@@ -1,91 +1,168 @@
-import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { BillContextProvider } from './context/BillContext.tsx';
+import { NavigationProvider } from './context/NavigationContext.tsx';
+import { AuthContextProvider, useAuth } from './context/AuthContext.tsx';
+
+import LandingPage from './pages/LandingPage.tsx';
+import LoginPage from './pages/LoginPage.tsx';
+import SignupPage from './pages/SignupPage.tsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.tsx';
+import DemoPage from './pages/DemoPage.tsx';
+import VerifyEmailPage from './pages/VerifyEmailPage.tsx';
+import ResetPasswordPage from './pages/ResetPasswordPage.tsx';
+
+import OverviewPage from './pages/OverviewPage.tsx';
+import BillPage from './pages/BillPage.tsx';
+import ImpactPage from './pages/ImpactPage.tsx';
+import RegionalPage from './pages/RegionalPage.tsx';
+import ForecastPage from './pages/ForecastPage.tsx';
+import PlansPage from './pages/PlansPage.tsx';
+import SettingsPage from './pages/SettingsPage.tsx';
+
 import Header from './components/Header.tsx';
-import Dashboard from './components/Dashboard.tsx';
+import WelcomeWizard from './components/Auth/WelcomeWizard.tsx';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { retry: (failureCount, error: unknown) => {
+      // Don't retry on 401
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) return false;
+      return failureCount < 2;
+    }},
+  },
+});
 
-const defaultBill = {
-  customer_id: "EXAMPLE-BILL",
-  utility: "PSE&G",
-  zip_code: "07102",
-  rate_schedule: "RS",
-  meter_number: "PSEG-9876543",
-  bill_date: "2026-06-30",
-  billing_period: "2026-06-01 to 2026-06-30",
-  days: 30,
-  previous_reading: 12450,
-  current_reading: 13200,
-  usage_kwh: 750.0,
-  monthly_service_charge: 8.24,
-  delivery_charge: 41.25,
-  supply_charge: 81.00,
-  tax: 8.41,
-  total_bill: 138.90,
-  average_daily_usage: 25.0,
-  average_daily_cost: 4.63,
-  effective_rate: 0.1852
-};
+// Route Guard for Protected Dashboard Pages
+function ProtectedRoute() {
+  const { status, isOnboarded } = useAuth();
 
-const defaultOcr = [
-  {"field_name": "utility", "ground_truth_value": "PSE&G", "extracted_value": "PSE&G", "confidence": 0.99, "ocr_error_flag": false, "bbox": "80,45,210,65"},
-  {"field_name": "billing_period", "ground_truth_value": "2026-06-01 to 2026-06-30", "extracted_value": "2026-06-01 to 2026-06-30", "confidence": 0.97, "ocr_error_flag": false, "bbox": "80,75,320,95"},
-  {"field_name": "usage_kwh", "ground_truth_value": "750.0", "extracted_value": "750.0", "confidence": 0.99, "ocr_error_flag": false, "bbox": "410,195,460,215"},
-  {"field_name": "total_bill", "ground_truth_value": "138.90", "extracted_value": "138.90", "confidence": 0.98, "ocr_error_flag": false, "bbox": "410,340,490,360"}
-];
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-primary">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary-blue border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs text-text-secondary font-mono">Restoring session...</span>
+        </div>
+      </div>
+    );
+  }
 
-const defaultExplanation = `### 📝 Bill Summary
-Your total bill from **PSE&G** for the billing period **2026-06-01 to 2026-06-30** is **$138.90** for **750.0 kWh** of electricity. This averages to about **$4.63 per day** at an effective rate of **$0.1852 per kWh**.
+  if (status === 'unauthenticated') {
+    return <Navigate to="/login" replace />;
+  }
 
----
-
-### 🔍 Charge Breakdown & Controllability
-1. **Supply Charges (Generation): $81.00 (58.3%)** — *Controllable.* This pays for the actual electricity consumed. Lowering your overall consumption will directly reduce this amount.
-2. **Delivery Charges (Distribution & Transmission): $41.25 (29.7%)** — *Partially Controllable.* This includes a fixed service charge of **$8.24** (5.9%) for connection maintenance and variable fees for local line infrastructure.
-3. **State Taxes & Adjustments: $8.41 (6.1%)** — *Uncontrollable.* Mandatory state sales tax of 6.625%.
-
----
-
-### 📈 Why Your Bill Changed
-Based on seasonal heating and cooling trends:
-- **Weather Impact**: Higher outdoor temperatures increase cooling loads, causing high air conditioning demand. Air conditioning accounts for approximately **18% to 25%** of summer usage spikes.
-- **Wholesale Jitter**: Supply rates fluctuated slightly based on grid congestion, but the standard tariff rate remains stable at the fixed BGS rate schedule.
-
----
-
-### 💡 Savings Opportunities & Recommendations
-- **Peak Hours Shift**: High transmission costs occur during peak grid hours. Shift laundry, dishwasher loads, and EV charging to off-peak times (typically 10 PM to 8 AM) to mitigate grid strain.
-- **Thermostat Adjustments**: Setting the cooling thermostat to 78°F instead of 72°F can reduce supply charges by **8-12%** during peak summer months.
-- **Smart Thermostat Program**: Enrolling in the PSE&G smart energy program provides a one-time bill credit and automatic peak usage trimming.
-`;
-
-function App() {
-  const [activeTab, setActiveTab] = useState('Bill Analysis');
-  const [uploadedBill, setUploadedBill] = useState<any>(defaultBill);
-  const [ocrRuns, setOcrRuns] = useState<any[] | null>(defaultOcr);
-  const [billExplanation, setBillExplanation] = useState<string | null>(defaultExplanation);
+  // Unverified users get redirected to a pending verification page
+  if (status === 'unverified') {
+    return <Navigate to="/verify-pending" replace />;
+  }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
+      {!isOnboarded && <WelcomeWizard />}
       <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary">
-        <Header 
-          activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
-          uploadedBill={uploadedBill}
-        />
+        {sessionStorage.getItem('is_demo_mode') === 'true' && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-500 text-[10px] sm:text-xs px-4 py-2 flex items-center justify-center gap-2 font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+            <span>Demo Workspace — Read Only Mode. Sign up to upload your own bills and save configurations.</span>
+            <Link to="/signup" className="underline ml-2 hover:text-amber-600">Sign Up Now</Link>
+          </div>
+        )}
+        <Header />
         <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">
-          <Dashboard 
-            activeTab={activeTab} 
-            setActiveTab={setActiveTab}
-            uploadedBill={uploadedBill} 
-            setUploadedBill={setUploadedBill}
-            ocrRuns={ocrRuns}
-            setOcrRuns={setOcrRuns}
-            billExplanation={billExplanation}
-            setBillExplanation={setBillExplanation}
-          />
+          <Outlet />
         </main>
       </div>
+    </>
+  );
+}
+
+// Route Guard for Public Auth Pages (Redirect to dashboard if already logged in)
+function PublicAuthRoute() {
+  const { status } = useAuth();
+
+  if (status === 'loading') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-bg-primary">
+        <div className="w-6 h-6 border-2 border-primary-blue border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (status === 'authenticated') {
+    return <Navigate to="/overview" replace />;
+  }
+
+  return <Outlet />;
+}
+
+// Email Verification Pending Page (inline — simple banner)
+function VerifyPendingPage() {
+  const { logout } = useAuth();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-bg-primary px-4">
+      <div className="max-w-md w-full bg-bg-surface border border-border-hairline rounded-lg p-8 text-center space-y-4">
+        <div className="w-14 h-14 bg-warning-amber/10 rounded-full flex items-center justify-center mx-auto">
+          <span className="text-2xl">✉️</span>
+        </div>
+        <h2 className="text-xl font-bold text-text-primary">Check your inbox</h2>
+        <p className="text-sm text-text-secondary">
+          We sent a verification link to your email address. Click the link to activate your account and access the dashboard.
+        </p>
+        <p className="text-xs text-text-secondary">Didn't get the email? Check your spam folder.</p>
+        <button
+          onClick={async () => { await logout(); }}
+          className="text-xs text-text-secondary hover:text-text-primary underline"
+        >
+          Back to Login
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter basename="/app">
+        <AuthContextProvider>
+          <BillContextProvider>
+            <NavigationProvider>
+              <Routes>
+                {/* Public General Routes */}
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/demo" element={<DemoPage />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/verify-pending" element={<VerifyPendingPage />} />
+
+                {/* Public Auth Routes */}
+                <Route element={<PublicAuthRoute />}>
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignupPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                </Route>
+
+                {/* Protected Dashboard Routes */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/dashboard" element={<Navigate to="/overview" replace />} />
+                  <Route path="/overview" element={<OverviewPage />} />
+                  <Route path="/bill-analysis" element={<BillPage />} />
+                  <Route path="/impact" element={<ImpactPage />} />
+                  <Route path="/regional-insights" element={<RegionalPage />} />
+                  <Route path="/forecast" element={<ForecastPage />} />
+                  <Route path="/plans" element={<PlansPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                </Route>
+
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </NavigationProvider>
+          </BillContextProvider>
+        </AuthContextProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }

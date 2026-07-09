@@ -871,3 +871,9 @@ class CustomerBillOCR(Base):
     bbox = Column(String(100))
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  AUTH MODELS — imported here so Base.metadata.create_all includes them
+# ─────────────────────────────────────────────────────────────────────────────
+# This import must remain at the bottom to avoid a circular import
+# (auth_models.py imports Base from this file).
+import database.auth_models as _auth_models  # noqa: E402, F401

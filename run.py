@@ -10,6 +10,10 @@ import logging
 import argparse
 from pathlib import Path
 
+# Load .env BEFORE anything reads os.environ
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s: %(message)s",

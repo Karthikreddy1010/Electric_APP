@@ -248,16 +248,16 @@ def generate_mock_bill(filename: Optional[str] = None) -> dict:
 def generate_ocr_runs(bill: dict) -> list:
     """Generate field-level OCR bounding box confidence values."""
     return [
-        {"field_name": "utility", "ground_truth_value": bill["utility"], "extracted_value": bill["utility"], "confidence": 0.99, "ocr_error_flag": False, "bbox": "80,45,210,65"},
-        {"field_name": "billing_period", "ground_truth_value": bill["billing_period"], "extracted_value": bill["billing_period"], "confidence": 0.97, "ocr_error_flag": False, "bbox": "80,75,320,95"},
-        {"field_name": "usage_kwh", "ground_truth_value": str(bill["usage_kwh"]), "extracted_value": str(bill["usage_kwh"]), "confidence": 0.99, "ocr_error_flag": False, "bbox": "410,195,460,215"},
-        {"field_name": "total_bill", "ground_truth_value": str(bill["total_bill"]), "extracted_value": str(bill["total_bill"]), "confidence": 0.98, "ocr_error_flag": False, "bbox": "410,340,490,360"},
-        {"field_name": "meter_number", "ground_truth_value": bill["meter_number"], "extracted_value": bill["meter_number"], "confidence": 0.95, "ocr_error_flag": False, "bbox": "80,120,200,135"},
-        {"field_name": "zip_code", "ground_truth_value": bill["zip_code"], "extracted_value": bill["zip_code"], "confidence": 0.98, "ocr_error_flag": False, "bbox": "150,150,220,165"},
-        {"field_name": "customer_charge", "ground_truth_value": str(bill["monthly_service_charge"]), "extracted_value": str(bill["monthly_service_charge"]), "confidence": 0.95, "ocr_error_flag": False, "bbox": "410,230,490,250"},
-        {"field_name": "supply_charge", "ground_truth_value": str(bill["supply_charge"]), "extracted_value": str(bill["supply_charge"]), "confidence": 0.96, "ocr_error_flag": False, "bbox": "410,260,490,280"},
-        {"field_name": "delivery_charge", "ground_truth_value": str(bill["delivery_charge"]), "extracted_value": str(bill["delivery_charge"]), "confidence": 0.95, "ocr_error_flag": False, "bbox": "410,290,490,310"},
-        {"field_name": "tax", "ground_truth_value": str(bill["tax"]), "extracted_value": str(bill["tax"]), "confidence": 0.97, "ocr_error_flag": False, "bbox": "410,320,490,340"}
+        {"field_name": "utility", "ground_truth_value": bill.get("utility", "PSE&G"), "extracted_value": bill.get("utility", "PSE&G"), "confidence": 0.99, "ocr_error_flag": False, "bbox": "80,45,210,65"},
+        {"field_name": "billing_period", "ground_truth_value": bill.get("billing_period", "N/A"), "extracted_value": bill.get("billing_period", "N/A"), "confidence": 0.97, "ocr_error_flag": False, "bbox": "80,75,320,95"},
+        {"field_name": "usage_kwh", "ground_truth_value": str(bill.get("usage_kwh", 0.0)), "extracted_value": str(bill.get("usage_kwh", 0.0)), "confidence": 0.99, "ocr_error_flag": False, "bbox": "410,195,460,215"},
+        {"field_name": "total_bill", "ground_truth_value": str(bill.get("total_bill", 0.0)), "extracted_value": str(bill.get("total_bill", 0.0)), "confidence": 0.98, "ocr_error_flag": False, "bbox": "410,340,490,360"},
+        {"field_name": "meter_number", "ground_truth_value": bill.get("meter_number", "N/A"), "extracted_value": bill.get("meter_number", "N/A"), "confidence": 0.95, "ocr_error_flag": False, "bbox": "80,120,200,135"},
+        {"field_name": "zip_code", "ground_truth_value": bill.get("zip_code", "07102"), "extracted_value": bill.get("zip_code", "07102"), "confidence": 0.98, "ocr_error_flag": False, "bbox": "150,150,220,165"},
+        {"field_name": "customer_charge", "ground_truth_value": str(bill.get("monthly_service_charge", 0.0)), "extracted_value": str(bill.get("monthly_service_charge", 0.0)), "confidence": 0.95, "ocr_error_flag": False, "bbox": "410,230,490,250"},
+        {"field_name": "supply_charge", "ground_truth_value": str(bill.get("supply_charge", 0.0)), "extracted_value": str(bill.get("supply_charge", 0.0)), "confidence": 0.96, "ocr_error_flag": False, "bbox": "410,260,490,280"},
+        {"field_name": "delivery_charge", "ground_truth_value": str(bill.get("delivery_charge", 0.0)), "extracted_value": str(bill.get("delivery_charge", 0.0)), "confidence": 0.95, "ocr_error_flag": False, "bbox": "410,290,490,310"},
+        {"field_name": "tax", "ground_truth_value": str(bill.get("tax", 0.0)), "extracted_value": str(bill.get("tax", 0.0)), "confidence": 0.97, "ocr_error_flag": False, "bbox": "410,320,490,340"}
     ]
 
 

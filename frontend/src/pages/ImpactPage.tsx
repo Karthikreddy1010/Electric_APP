@@ -1,12 +1,27 @@
+/**
+ * Impact & Simulation Page
+ *
+ * Architecture responsibility: explains and simulates.
+ * This page owns: component breakdown, sensitivity driver analysis,
+ * interactive what-if rate simulators, probability area bounds, and priority clean energy options.
+ *
+ * JSDoc:
+ * @module ImpactPage
+ * @description Operational workspace for analyzing rates, weather stress, and capital investment scenarios.
+ */
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
-import { 
+import { useBill } from '../context/BillContext.tsx';
+import { useNavigation } from '../context/NavigationContext.tsx';
+import useDebounce from '../hooks/useDebounce.ts';
+import EmptyBillState from '../components/shared/EmptyBillState.tsx';
+import {
   BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell, Tooltip, CartesianGrid,
   AreaChart, Area, ReferenceLine, ComposedChart, Line
 } from 'recharts';
-import { 
-  Calculator, Activity, TrendingUp, TrendingDown, 
+import {
+  Calculator, Activity, TrendingUp, TrendingDown,
   ThermometerSun, Lightbulb, BarChart3, Info,
   Cpu, RefreshCw, ShieldCheck, ShieldAlert
 } from 'lucide-react';
@@ -28,19 +43,12 @@ const COMPONENT_METADATA: Record<string, { label: string; description: string; i
 const COLORS = [
   '#2F6BFF', // Primary blue
   '#16A085', // Energy teal
-  '#F5B041', // Warning amber
   '#2CA6FF', // Electric cyan
+  '#27AE60', // Savings green
+  '#F5B041', // Warning amber
   '#D64545', // Alert red
+  '#697487'  // Text secondary
 ];
-
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-  useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
 
 const fmt = (v: number, forceSign = false) => {
   const sign = v > 0 ? '+' : v < 0 ? '−' : '';
@@ -56,8 +64,6 @@ const getConfidenceLevel = (std: number, mean: number) => {
   if (cv < 0.12) return { label: 'Moderate', color: 'text-warning-amber', bg: 'bg-warning-amber/10', border: 'border-warning-amber/20', barColor: '#F5B041' };
   return { label: 'Low', color: 'text-alert-red', bg: 'bg-alert-red/10', border: 'border-alert-red/25', barColor: '#D64545' };
 };
-
-
 
 const buildBellCurve = (mean: number, std: number, p5: number, p95: number) => {
   const points = [];
@@ -80,9 +86,9 @@ const round = (val: number, decimals: number) => {
 
 // SVG Flow Illustration
 const EnergyFlowSVG = () => (
-  <div className="w-full bg-bg-primary rounded-md p-4 border border-border-hairline flex flex-col items-center">
-    <span className="text-[9px] uppercase tracking-widest text-text-secondary mb-3 font-semibold">Grid dispatch to customer flow telemetry</span>
-    <svg className="w-full max-w-lg h-14 text-text-secondary/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 320 40">
+  <div className="w-full bg-bg-secondary rounded-md p-5 border border-border-hairline flex flex-col items-center">
+    <span className="text-[9px] uppercase tracking-widest text-text-secondary mb-4 font-semibold">Grid dispatch to customer flow telemetry</span>
+    <svg className="w-full max-w-lg h-14 text-text-secondary/30" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 320 40" aria-hidden="true">
       <g transform="translate(10, 5)" stroke="var(--primary-blue)" opacity="0.8">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 5l10 30M15 5L5 35M2 35h26M5 15h20M2 25h26" />
         <text x="15" y="-2" textAnchor="middle" fontSize="6" fill="var(--text-secondary)" stroke="none" fontWeight="bold">GRID</text>
@@ -111,7 +117,10 @@ const EnergyFlowSVG = () => (
   </div>
 );
 
-const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBill: any, setActiveTab?: (tab: string) => void, billExplanation?: string | null }) => {
+const ImpactPage = () => {
+  const { uploadedBill, billExplanation } = useBill();
+  const navigate = useNavigation();
+
   // Simulator States
   const [kwh, setKwh] = useState<number>(750);
   const [bgsChange, setBgsChange] = useState<number>(0);
@@ -187,19 +196,12 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
 
   if (!uploadedBill) {
     return (
-      <div className="panel-operational flex flex-col items-center justify-center p-16 text-center max-w-xl mx-auto space-y-4 my-12 border-dashed border border-border-hairline">
-        <Activity size={36} className="text-text-secondary opacity-60" />
-        <h3 className="text-sm font-bold text-text-primary">No active telemetry source</h3>
-        <p className="text-xs text-text-secondary max-w-sm">
-          Ingest an electricity bill inside the Bill Analysis module to run comparative sensitivity analyses.
-        </p>
-        <button 
-          onClick={() => setActiveTab?.("Bill Analysis")}
-          className="px-4 py-2 bg-bg-surface border border-border-hairline rounded-md text-xs font-semibold hover:bg-bg-primary transition-all"
-        >
-          Initialize analysis
-        </button>
-      </div>
+      <EmptyBillState
+        title="Impact analysis locked"
+        description="Ingest an electricity bill inside the Bill Analysis module to run comparative sensitivity analyses."
+        ctaLabel="Go to Bill Analysis"
+        ctaTab="Bill Analysis"
+      />
     );
   }
 
@@ -208,7 +210,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
   const simulatedBill = simulation?.simulated_bill ?? utilityBill;
   const deltaBill = simulation?.total_impact ?? (simulatedBill - utilityBill);
   const deltaPct = utilityBill > 0 ? (deltaBill / utilityBill) * 100 : 0;
-  
+
   // Previous Bill estimate (using index seasonal multiplier offset)
   const previousBill = utilityBill * 0.92;
   const billDifference = utilityBill - previousBill;
@@ -306,44 +308,42 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
   });
 
   return (
-    <div className="space-y-10 font-sans">
-      
+    <div className="space-y-10 font-sans pb-16">
+
       {/* HEADER BANNER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-border-hairline pb-6">
         <div>
           <span className="bg-primary-blue/10 text-primary-blue text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-[6px]">
-            Electric Bill Intelligence Studio
+            Engineering Analysis Workspace
           </span>
-          <h2 className="text-3xl font-extrabold text-text-primary tracking-tight mt-3">Impact & Simulation</h2>
+          <h2 className="text-3xl font-bold text-text-primary tracking-tight mt-3">Impact & Simulation</h2>
           <p className="text-xs text-text-secondary mt-1 max-w-xl">
             Isolate physical weather drivers, rate tariffs, and behavioral elasticities, and then simulate forward risk bounds using real PJM balancing telemetry.
           </p>
         </div>
-        <button 
+        <button
           onClick={clearOverrides}
-          className="px-4 py-2 bg-bg-surface hover:bg-bg-primary text-text-primary border border-border-hairline rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+          className="px-4 py-2 bg-white hover:bg-bg-secondary text-text-primary border border-border-hairline rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
         >
           <RefreshCw size={12} />
           Reset studio
         </button>
       </div>
 
-      {/* ====================================================
-          SECTION 1: Current Bill Summary
-          ==================================================== */}
+      {/* SECTION 1: Current Bill Summary */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        
+
         {/* Bill comparison card */}
-        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-bg-surface to-bg-primary">
+        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-white to-[#F9FAFC]">
           <div>
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Active billing cost</span>
             <div className="text-3xl font-bold mt-2 font-mono-numbers text-text-primary">${utilityBill.toFixed(2)}</div>
           </div>
-          <div className="flex justify-between items-center border-t border-border-hairline/50 pt-2 mt-4 text-xs font-semibold text-text-secondary">
+          <div className="flex justify-between items-center border-t border-border-hairline pt-3 mt-4 text-xs font-semibold text-text-secondary">
             <span>Previous: ${previousBill.toFixed(2)}</span>
             <span className={`px-2 py-0.5 rounded-[4px] font-mono-numbers text-[10px] font-bold border ${
-              billDifference > 0 
-                ? 'text-alert-red bg-alert-red/10 border-alert-red/20' 
+              billDifference > 0
+                ? 'text-alert-red bg-alert-red/10 border-alert-red/20'
                 : 'text-savings-green bg-savings-green/10 border-savings-green/20'
             }`}>
               {billDifference >= 0 ? '+' : '−'}${Math.abs(billDifference).toFixed(2)} ({billDiffPct >= 0 ? '+' : ''}{billDiffPct.toFixed(1)}%)
@@ -352,25 +352,25 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
         </div>
 
         {/* Effective Rate card */}
-        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-bg-surface to-bg-primary">
+        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-white to-[#F9FAFC]">
           <div>
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Effective Tariff Rate</span>
             <div className="text-3xl font-bold mt-2 font-mono-numbers text-text-primary">${uploadedBill.effective_rate?.toFixed(4)}</div>
           </div>
-          <span className="text-[10px] text-text-secondary block border-t border-border-hairline/50 pt-2 mt-4">
+          <span className="text-[10px] text-text-secondary block border-t border-border-hairline pt-3 mt-4 font-medium">
             Total cost divided by {uploadedBill.usage_kwh} kWh consumption
           </span>
         </div>
 
         {/* Monthly usage */}
-        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-bg-surface to-bg-primary">
+        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-white to-[#F9FAFC]">
           <div>
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Billing cycle usage</span>
             <div className="text-3xl font-bold mt-2 font-mono-numbers text-text-primary">{uploadedBill.usage_kwh?.toLocaleString()} kWh</div>
           </div>
-          <div className="flex justify-between border-t border-border-hairline/50 pt-2 mt-4 text-xs text-text-secondary">
+          <div className="flex justify-between border-t border-border-hairline pt-3 mt-4 text-xs text-text-secondary">
             <span>Cycle duration:</span>
-            <span className="font-mono-numbers font-semibold text-text-primary">{uploadedBill.days || 30} days</span>
+            <span className="font-mono-numbers font-bold text-text-primary">{uploadedBill.days || 30} days</span>
           </div>
         </div>
 
@@ -392,12 +392,10 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
 
       </div>
 
-      {/* ====================================================
-          SECTION 2: Bill Driver Analysis (READ-ONLY)
-          ==================================================== */}
+      {/* SECTION 2: Bill Driver Analysis */}
       <div className="space-y-6">
         <div className="border-l-4 border-primary-blue pl-3">
-          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Part I: Bill Driver Analysis</h3>
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part I: Bill Driver Analysis</h3>
           <p className="text-xs text-text-secondary">Audit actual historical variances and component sensitivities before modeling adjustments.</p>
         </div>
 
@@ -407,21 +405,21 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Aggregated Cost Composition</span>
             <h4 className="text-xs text-text-secondary font-semibold mt-0.5">Component splits on current bill</h4>
           </div>
-          
-          <div className="w-full h-3 bg-bg-primary border border-border-hairline rounded-sm overflow-hidden flex shadow-inner">
+
+          <div className="w-full h-3 bg-bg-secondary border border-border-hairline rounded-sm overflow-hidden flex shadow-inner">
             {componentsList.map((comp, idx) => (
-              <div 
-                key={idx} 
-                style={{ width: `${comp.pct}%` }} 
-                className={`${COLORS[idx % COLORS.length]} h-full transition-all`}
+              <div
+                key={idx}
+                className="h-full transition-all"
+                style={{ width: `${comp.pct}%`, backgroundColor: COLORS[idx % COLORS.length] }}
                 title={`${comp.name}: ${comp.pct}%`}
               />
             ))}
           </div>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {componentsList.map((comp, idx) => (
-              <div key={idx} className="p-3.5 bg-bg-primary rounded-md border border-border-hairline flex flex-col justify-between shadow-sm">
+              <div key={idx} className="p-3.5 bg-bg-secondary rounded-md border border-border-hairline flex flex-col justify-between shadow-sm">
                 <span className="text-[9px] font-bold text-text-secondary uppercase tracking-widest block leading-tight mb-1">{comp.name}</span>
                 <div className="flex justify-between items-baseline mt-auto">
                   <span className="text-xs font-bold text-text-secondary">{comp.pct}%</span>
@@ -432,43 +430,43 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
           </div>
         </div>
 
-        {/* Historical waterfall & top cost drivers */}
+        {/* Historical waterfall & drivers */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
+
           {/* Waterfall variance chart */}
           <div className="panel-chart flex flex-col justify-between h-[360px]">
             <div>
               <span className="text-xs uppercase tracking-wider text-text-secondary block mb-1">Causal Variance Breakdown</span>
               <h4 className="text-sm font-bold text-text-primary">Actual cost shift drivers relative to baseline</h4>
             </div>
-            
+
             <div className="flex-1 min-h-[180px] mt-4">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={baseWaterfallData} margin={{ top: 10, right: 15, left: -25, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
-                  <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 600 }} 
+                  <XAxis
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 600 }}
                   />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontFamily: 'IBM Plex Mono' }} 
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontFamily: 'IBM Plex Mono' }}
                     tickFormatter={(v) => `$${v}`}
                   />
-                  <Tooltip 
-                    cursor={{ fill: 'var(--bg-primary)', opacity: 0.5 }} 
-                    contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }} 
+                  <Tooltip
+                    cursor={{ fill: 'var(--bg-secondary)', opacity: 0.5 }}
+                    contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }}
                     itemStyle={{ fontSize: '11px', color: 'var(--text-primary)' }}
                     formatter={(value: any) => [`$${value.toFixed(2)}`, 'Amount']}
                   />
                   <Bar dataKey="value" radius={[2, 2, 0, 0]} maxBarSize={40}>
                     {baseWaterfallData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={
-                        entry.type === 'base'      ? 'var(--text-secondary)' : 
-                        entry.type === 'increase'  ? 'var(--alert-red)' : 
+                        entry.type === 'base'      ? 'var(--text-secondary)' :
+                        entry.type === 'increase'  ? 'var(--alert-red)' :
                         entry.type === 'decrease'  ? 'var(--savings-green)' : 'var(--primary-blue)'
                       } />
                     ))}
@@ -489,7 +487,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               <Activity size={14} className="text-text-secondary" />
               <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">Top influence sensitivities</span>
             </div>
-            
+
             <div className="flex-1 space-y-3 overflow-y-auto pr-1 mt-4">
               {sensitivityDrivers.map((driver, idx) => {
                 const levelConfig = {
@@ -498,9 +496,9 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                   low:    { color: 'text-savings-green', bg: 'bg-savings-green/10', badge: 'bg-savings-green/10 text-savings-green border-savings-green/20' },
                 };
                 const cfg = levelConfig[driver.level as keyof typeof levelConfig] || levelConfig.low;
-                
+
                 return (
-                  <div key={driver.key} className="flex items-start gap-3 p-3.5 rounded-md bg-bg-primary border border-border-hairline hover:border-text-secondary/35 transition-all">
+                  <div key={driver.key} className="flex items-start gap-3 p-3.5 rounded-md bg-bg-secondary border border-border-hairline hover:border-text-secondary/35 transition-all">
                     <div className={`p-1.5 ${cfg.bg} rounded-md shrink-0`}>
                       {driver.impact > 0 ? <TrendingUp size={14} className={cfg.color} /> : <TrendingDown size={14} className={cfg.color} />}
                     </div>
@@ -530,22 +528,20 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
 
         {/* AI explanation block */}
         {billExplanation && (
-          <div className="panel-operational space-y-3 bg-bg-surface border-border-hairline shadow-sm">
+          <div className="panel-operational space-y-3 bg-white border-border-hairline shadow-sm">
             <div className="flex items-center gap-2 border-b border-border-hairline pb-2">
               <Lightbulb className="text-warning-amber" size={16} />
               <h4 className="text-xs font-bold text-text-secondary uppercase tracking-widest">AI Bill Interpretation</h4>
             </div>
-            <p className="text-xs text-text-primary leading-relaxed whitespace-pre-line">{billExplanation}</p>
+            <p className="text-xs text-text-primary leading-relaxed whitespace-pre-line font-medium">{billExplanation}</p>
           </div>
         )}
       </div>
 
-      {/* ====================================================
-          SECTION 3: Interactive Scenario Simulator
-          ==================================================== */}
+      {/* SECTION 3: Interactive Scenario Simulator */}
       <div className="space-y-6">
         <div className="border-l-4 border-primary-blue pl-3">
-          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Part II: Interactive Scenario Simulator</h3>
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part II: Interactive Scenario Simulator</h3>
           <p className="text-xs text-text-secondary">Simulate adjustments, wholesale markets, and temperature stressors in real time.</p>
         </div>
 
@@ -563,10 +559,9 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            
+
             {/* Presets and usage overrides */}
             <div className="space-y-6">
-              {/* Presets */}
               <div className="space-y-2.5">
                 <label className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Preset Scenarios</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -574,10 +569,10 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                     <button
                       key={p.key}
                       onClick={() => handleApplyPreset(p.key)}
-                      className={`p-3 text-left rounded-md border text-xs font-bold transition-all ${
+                      className={`p-3 text-left rounded-md border text-xs font-bold transition-all active:scale-[0.97] ${
                         scenario === p.key
                           ? 'border-primary-blue bg-primary-blue/5 text-primary-blue shadow-sm'
-                          : 'border-border-hairline hover:bg-bg-primary text-text-secondary hover:text-text-primary'
+                          : 'border-border-hairline hover:bg-bg-secondary text-text-secondary hover:text-text-primary'
                       }`}
                     >
                       <div>{p.label}</div>
@@ -605,7 +600,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                     setKwh(parseInt(e.target.value));
                     setScenario(null);
                   }}
-                  className="w-full h-1.5 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue border border-border-hairline"
+                  className="w-full h-1.5 bg-bg-secondary rounded-lg appearance-none cursor-pointer accent-primary-blue border border-border-hairline"
                 />
                 <div className="flex justify-between text-[9px] text-text-secondary font-mono-numbers">
                   <span>100 kWh</span>
@@ -617,12 +612,12 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
 
             {/* Rate sliders */}
             <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-              
+
               {/* BGS slider */}
               <div className="space-y-2.5">
                 <div className="flex justify-between text-xs font-bold font-mono-numbers">
                   <div className="flex flex-col">
-                    <span className="text-text-primary font-sans">BGS Supply rate</span>
+                    <span className="text-text-primary font-sans text-xs">BGS Supply rate</span>
                     <span className="text-[9px] font-normal text-text-secondary leading-tight mt-0.5">Energy supply cost changes</span>
                   </div>
                   <span className={`text-xs font-bold font-mono-numbers ${bgsChange > 0 ? 'text-alert-red' : bgsChange < 0 ? 'text-savings-green' : 'text-text-secondary'}`}>
@@ -632,7 +627,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                 <input
                   type="range" min="-50" max="100" step="5" value={bgsChange}
                   onChange={(e) => { setBgsChange(parseInt(e.target.value)); setScenario(null); }}
-                  className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
+                  className="w-full h-1.5 bg-bg-secondary rounded-lg appearance-none cursor-pointer accent-primary-blue"
                 />
               </div>
 
@@ -640,7 +635,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               <div className="space-y-2.5">
                 <div className="flex justify-between text-xs font-bold font-mono-numbers">
                   <div className="flex flex-col">
-                    <span className="text-text-primary font-sans">Distribution rate</span>
+                    <span className="text-text-primary font-sans text-xs">Distribution rate</span>
                     <span className="text-[9px] font-normal text-text-secondary leading-tight mt-0.5">Utility infrastructure charge</span>
                   </div>
                   <span className={`text-xs font-bold font-mono-numbers ${distChange > 0 ? 'text-alert-red' : distChange < 0 ? 'text-savings-green' : 'text-text-secondary'}`}>
@@ -650,7 +645,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                 <input
                   type="range" min="-50" max="100" step="5" value={distChange}
                   onChange={(e) => { setDistChange(parseInt(e.target.value)); setScenario(null); }}
-                  className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
+                  className="w-full h-1.5 bg-bg-secondary rounded-lg appearance-none cursor-pointer accent-primary-blue"
                 />
               </div>
 
@@ -658,7 +653,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               <div className="space-y-2.5">
                 <div className="flex justify-between text-xs font-bold font-mono-numbers">
                   <div className="flex flex-col">
-                    <span className="text-text-primary font-sans">Transmission rate</span>
+                    <span className="text-text-primary font-sans text-xs">Transmission rate</span>
                     <span className="text-[9px] font-normal text-text-secondary leading-tight mt-0.5">Regional high-voltage transport fee</span>
                   </div>
                   <span className={`text-xs font-bold font-mono-numbers ${transChange > 0 ? 'text-alert-red' : transChange < 0 ? 'text-savings-green' : 'text-text-secondary'}`}>
@@ -668,7 +663,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                 <input
                   type="range" min="-50" max="100" step="5" value={transChange}
                   onChange={(e) => { setTransChange(parseInt(e.target.value)); setScenario(null); }}
-                  className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
+                  className="w-full h-1.5 bg-bg-secondary rounded-lg appearance-none cursor-pointer accent-primary-blue"
                 />
               </div>
 
@@ -676,7 +671,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               <div className="space-y-2.5">
                 <div className="flex justify-between text-xs font-bold font-mono-numbers">
                   <div className="flex flex-col">
-                    <span className="text-text-primary font-sans">Societal benefits (SBC) rate</span>
+                    <span className="text-text-primary font-sans text-xs">Societal benefits (SBC) rate</span>
                     <span className="text-[9px] font-normal text-text-secondary leading-tight mt-0.5">Societal / clean energy charges</span>
                   </div>
                   <span className={`text-xs font-bold font-mono-numbers ${sbcChange > 0 ? 'text-alert-red' : sbcChange < 0 ? 'text-savings-green' : 'text-text-secondary'}`}>
@@ -686,13 +681,13 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                 <input
                   type="range" min="-50" max="100" step="5" value={sbcChange}
                   onChange={(e) => { setSbcChange(parseInt(e.target.value)); setScenario(null); }}
-                  className="w-full h-1 bg-bg-primary rounded-lg appearance-none cursor-pointer accent-primary-blue"
+                  className="w-full h-1.5 bg-bg-secondary rounded-lg appearance-none cursor-pointer accent-primary-blue"
                 />
               </div>
 
             </div>
           </div>
-          
+
           {/* Dynamic commentary summary */}
           <div className="bg-primary-blue/5 border border-primary-blue/10 p-4 rounded-md text-xs font-semibold leading-relaxed text-text-primary flex items-start gap-2.5 shadow-sm">
             <Info size={14} className="text-primary-blue shrink-0 mt-0.5" />
@@ -700,7 +695,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               {scenario ? (
                 <>Preset <strong className="text-primary-blue">"{PRESETS.find(x => x.key === scenario)?.label}"</strong> applied. This overrides the default BGS and Transmission rates to evaluate stress conditions.</>
               ) : (changes['bgs_rate'] || changes['distribution_rate'] || changes['transmission_rate'] || changes['sbc_rate'] || kwh !== uploadedBill.usage_kwh) ? (
-                <>Custom overrides active. Simulating a rate mix change on {Object.keys(changes).map(k => COMPONENT_METADATA[k]?.label || k).join(', ')} under a adjusted consumption load of {kwh} kWh.</>
+                <>Custom overrides active. Simulating a rate mix change on {Object.keys(changes).map(k => COMPONENT_METADATA[k]?.label || k).join(', ')} under an adjusted consumption load of {kwh} kWh.</>
               ) : (
                 <>No simulation overrides active. Adjust rate component sliders or select preset scenarios to compute simulated monthly bills.</>
               )}
@@ -709,22 +704,20 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
         </div>
       </div>
 
-      {/* ====================================================
-          SECTION 4: Simulation Results
-          ==================================================== */}
+      {/* SECTION 4: Simulation Results */}
       <div className="space-y-6">
         <div className="border-l-4 border-primary-blue pl-3">
-          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Part III: Simulation Results</h3>
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part III: Simulation Results</h3>
           <p className="text-xs text-text-secondary">Probabilistic outputs, causal factor decompositions, and PJM grid states.</p>
         </div>
 
         {/* Results indicators */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono-numbers">
-          
+
           <div className="panel-operational">
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest font-sans">Simulated bill mean</span>
             <div className="text-3xl font-bold mt-2 text-text-primary">${simulatedBill.toFixed(2)}</div>
-            <span className="text-[10px] text-text-secondary block mt-1 font-sans">
+            <span className="text-[10px] text-text-secondary block mt-1 font-sans font-medium">
               Base: ${utilityBill.toFixed(2)}
             </span>
           </div>
@@ -736,7 +729,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
             <div className="text-3xl font-bold mt-2 font-mono-numbers">
               {deltaBill > 0 ? '+' : ''}${deltaBill.toFixed(2)} ({deltaPct > 0 ? '+' : ''}{deltaPct.toFixed(1)}%)
             </div>
-            <span className="text-[10px] block mt-1 font-sans text-text-secondary">
+            <span className="text-[10px] block mt-1 font-sans text-text-secondary font-medium">
               Expected monthly cost deviation
             </span>
           </div>
@@ -746,7 +739,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
             <div className="text-3xl font-bold mt-2 text-text-primary">
               {simUsageDelta > 0 ? '+' : ''}{simUsageDelta.toFixed(1)} kWh
             </div>
-            <span className="text-[10px] text-text-secondary block mt-1 font-sans">
+            <span className="text-[10px] text-text-secondary block mt-1 font-sans font-medium">
               Elasticity rate impact: {simulation?.learned_elasticity?.toFixed(3) || '-0.200'}
             </span>
           </div>
@@ -755,7 +748,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
 
         {/* Probabilistic Area curve & Causal bar decomposition */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          
+
           {/* Bell curve AreaChart */}
           <div className="panel-chart flex flex-col justify-between h-[360px]">
             <div>
@@ -827,7 +820,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
         {simulation?.pjm_physics && (
           <div className="panel-operational space-y-4">
             <div className="flex items-center gap-2 border-b border-border-hairline pb-2">
-              <Cpu className="text-primary-blue animate-pulse" size={16} />
+              <Cpu className="text-primary-blue" size={16} />
               <h4 className="text-[10px] font-bold text-text-secondary uppercase tracking-widest font-sans">PJM Balancing Grid Physical State</h4>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono-numbers">
@@ -852,24 +845,22 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
         )}
       </div>
 
-      {/* ====================================================
-          SECTION 5: Investment Analysis
-          ==================================================== */}
+      {/* SECTION 5: Investment Analysis */}
       <div className="space-y-6">
         <div className="border-l-4 border-primary-blue pl-3">
-          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Part IV: Investment Analysis</h3>
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part IV: Investment Analysis</h3>
           <p className="text-xs text-text-secondary">Evaluate long-term clean energy capital upgrades and grid demand response assets.</p>
         </div>
 
         {/* Annual actual cost indicator */}
         {customerSimulations && (
-          <div className="panel-operational relative overflow-hidden bg-bg-surface p-6 shadow-sm space-y-6">
+          <div className="panel-operational relative overflow-hidden bg-white p-6 shadow-sm space-y-6">
             <div className="flex justify-between items-baseline border-b border-border-hairline pb-3">
               <div>
                 <span className="bg-primary-blue/10 text-primary-blue text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-[4px]">
                   Personalized long-term predictions
                 </span>
-                <h4 className="text-sm font-bold text-text-primary mt-2">Personalized Capital Upgrades Modeling</h4>
+                <h4 className="text-sm font-bold text-text-primary mt-2 font-sans">Personalized Capital Upgrades Modeling</h4>
               </div>
               <div className="text-right">
                 <span className="text-[10px] text-text-secondary block font-sans">Baseline annual cost (Est)</span>
@@ -881,17 +872,16 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
 
             {/* Scenario upgrade cards grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 font-mono-numbers">
-              
+
               {customerSimulations.slice(1, 4).map((s: any, idx: number) => {
                 const diff = s.difference_vs_actual;
                 const isIncrease = diff > 0;
-                
-                // Fetch hardcoded payback and ROI configurations matching standard indices
+
                 const paybacks = ["Solar: 6.4 yrs payback", "Heat Pump: 8.2 yrs payback", "EV charger: 2.1 yrs payback"];
                 const rois = ["15.6% ROI", "12.2% ROI", "47.6% ROI"];
-                
+
                 return (
-                  <div key={idx} className="p-4 bg-bg-primary rounded-md border border-border-hairline flex flex-col justify-between hover:border-text-secondary/35 transition-all shadow-sm">
+                  <div key={idx} className="p-4 bg-bg-secondary rounded-md border border-border-hairline flex flex-col justify-between hover:border-text-secondary/35 transition-all shadow-sm">
                     <div>
                       <div className="flex justify-between items-start mb-2">
                         <span className="text-xs font-bold text-primary-blue uppercase tracking-wider block font-sans">{s.scenario_name}</span>
@@ -923,7 +913,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               })}
 
               {/* Custom Battery Storage Upgrade card */}
-              <div className="p-4 bg-bg-primary rounded-md border border-border-hairline flex flex-col justify-between hover:border-text-secondary/35 transition-all shadow-sm">
+              <div className="p-4 bg-bg-secondary rounded-md border border-border-hairline flex flex-col justify-between hover:border-text-secondary/35 transition-all shadow-sm">
                 <div>
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-xs font-bold text-primary-blue uppercase tracking-wider block font-sans">Battery Storage (10kWh)</span>
@@ -947,7 +937,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               </div>
 
               {/* Custom Demand Response / Load Shifting Upgrade card */}
-              <div className="p-4 bg-bg-primary rounded-md border border-border-hairline flex flex-col justify-between hover:border-text-secondary/35 transition-all shadow-sm">
+              <div className="p-4 bg-bg-secondary rounded-md border border-border-hairline flex flex-col justify-between hover:border-text-secondary/35 transition-all shadow-sm">
                 <div>
                   <div className="flex justify-between items-start mb-2">
                     <span className="text-xs font-bold text-primary-blue uppercase tracking-wider block font-sans">Demand Response program</span>
@@ -978,23 +968,21 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
         <EnergyFlowSVG />
       </div>
 
-      {/* ====================================================
-          SECTION 6: Recommendations
-          ==================================================== */}
+      {/* SECTION 6: Recommendations */}
       <div className="space-y-6">
         <div className="border-l-4 border-primary-blue pl-3">
-          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Part V: Priority Recommendations</h3>
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part V: Priority Recommendations</h3>
           <p className="text-xs text-text-secondary">AI-generated clean energy recommendations prioritized by ROI and payback duration.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs font-semibold">
-          
+
           <div className="panel-operational space-y-4">
             <div className="flex items-center gap-2 border-b border-border-hairline pb-2 text-text-secondary font-bold uppercase tracking-widest">
               <ShieldCheck className="text-savings-green" size={16} />
               <span>Top Opportunities</span>
             </div>
-            
+
             <ul className="space-y-3.5 leading-relaxed text-text-primary">
               <li className="flex items-start gap-2.5 p-3 rounded bg-savings-green/5 border border-savings-green/10">
                 <span className="px-1.5 py-0.5 rounded bg-savings-green/20 text-savings-green text-[9px] font-bold">1</span>
@@ -1018,7 +1006,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
               <ShieldAlert className="text-warning-amber" size={16} />
               <span>Risk Factors & Recommended Actions</span>
             </div>
-            
+
             <ul className="space-y-3.5 leading-relaxed text-text-primary">
               <li className="flex items-start gap-2.5 p-3 rounded bg-warning-amber/5 border border-warning-amber/15">
                 <span className="px-1.5 py-0.5 rounded bg-warning-amber/20 text-warning-amber text-[9px] font-bold">HIGH</span>
@@ -1040,22 +1028,20 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
         </div>
       </div>
 
-      {/* ====================================================
-          SECTION 7: Historical Comparison
-          ==================================================== */}
+      {/* SECTION 7: Historical Comparison */}
       <div className="space-y-6">
         <div className="border-l-4 border-primary-blue pl-3">
-          <h3 className="text-lg font-bold text-text-primary uppercase tracking-wider">Part VI: Historical Comparison</h3>
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part VI: Historical Comparison</h3>
           <p className="text-xs text-text-secondary">Track billing trends and monthly volatility over a 12-month rolling range.</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+
           {/* Trend composed chart */}
           <div className="lg:col-span-2 panel-chart flex flex-col justify-between h-[360px]">
             <div>
               <span className="text-xs uppercase tracking-wider text-text-secondary block mb-1">Billing trends</span>
-              <h4 className="text-sm font-bold text-text-primary">12-Month cost trend vs monthly variance</h4>
+              <h4 className="text-sm font-bold text-text-primary font-sans">12-Month cost trend vs monthly variance</h4>
             </div>
 
             <div className="flex-1 min-h-[220px] mt-4">
@@ -1086,8 +1072,8 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
             </div>
 
             <div className="space-y-4 mt-4 flex-1">
-              
-              <div className="flex justify-between items-center bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+
+              <div className="flex justify-between items-center bg-bg-secondary p-3 rounded-md border border-border-hairline shadow-sm">
                 <div>
                   <span className="text-[10px] text-text-secondary block uppercase">Previous Month</span>
                   <span className="text-xs font-bold text-text-primary">May 2026</span>
@@ -1098,7 +1084,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                 </div>
               </div>
 
-              <div className="flex justify-between items-center bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+              <div className="flex justify-between items-center bg-bg-secondary p-3 rounded-md border border-border-hairline shadow-sm">
                 <div>
                   <span className="text-[10px] text-text-secondary block uppercase">Previous Year</span>
                   <span className="text-xs font-bold text-text-primary">June 2025</span>
@@ -1109,7 +1095,7 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
                 </div>
               </div>
 
-              <div className="flex justify-between items-center bg-bg-primary p-3 rounded-md border border-border-hairline shadow-sm">
+              <div className="flex justify-between items-center bg-bg-secondary p-3 rounded-md border border-border-hairline shadow-sm">
                 <div>
                   <span className="text-[10px] text-text-secondary block uppercase">12-Month Rolling Avg</span>
                   <span className="text-xs font-bold text-text-primary">Mean outflow</span>
@@ -1133,8 +1119,18 @@ const ImpactTab = ({ uploadedBill, setActiveTab, billExplanation }: { uploadedBi
         </div>
       </div>
 
+      {/* Navigation back deep-link */}
+      <div className="flex justify-center">
+        <button
+          onClick={() => navigate('Overview')}
+          className="text-xs text-text-secondary hover:text-primary-blue transition-colors font-semibold"
+        >
+          ← Back to Overview
+        </button>
+      </div>
+
     </div>
   );
 };
 
-export default ImpactTab;
+export default ImpactPage;

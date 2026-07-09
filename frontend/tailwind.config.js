@@ -15,6 +15,7 @@ export default {
         border: '#E5E7EB',
         'bg-primary': 'var(--bg-primary)',
         'bg-surface': 'var(--bg-surface)',
+        'bg-secondary': 'var(--bg-secondary)',
         'border-hairline': 'var(--border-hairline)',
         'text-primary': 'var(--text-primary)',
         'text-secondary': 'var(--text-secondary)',

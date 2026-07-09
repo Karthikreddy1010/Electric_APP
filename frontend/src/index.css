@@ -1,6 +1,7 @@
 :root {
-  --bg-primary: #F6F8FB;
+  --bg-primary: #F7F9FC;
   --bg-surface: #FFFFFF;
+  --bg-secondary: #F2F5F8;
   --border-hairline: #E6EAF0;
   --text-primary: #18212F;
   --text-secondary: #697487;
@@ -19,21 +20,25 @@
 @layer base {
   body {
     @apply bg-bg-primary text-text-primary font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
 @layer components {
-  /* Reusable enterprise components */
+  /* Reusable enterprise operational panel cards with elevation on hover */
   .panel-operational {
-    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all;
+    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all duration-200;
+  }
+  .panel-operational:hover {
+    @apply shadow-md translate-y-[-1px];
   }
   
   .panel-chart {
-    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all;
+    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all duration-200;
   }
   
   .panel-insight {
-    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all;
+    @apply bg-bg-surface border border-border-hairline p-5 rounded-md text-text-primary shadow-sm transition-all duration-200;
   }
   
   .panel-control {
@@ -50,18 +55,52 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Legacy components */
-  .card {
-    @apply bg-white border border-border shadow-sm rounded-xl p-6;
+  /* Buttons with subtle electric pulse hover effect */
+  .btn-electric {
+    @apply relative overflow-hidden transition-all duration-200 active:scale-[0.98];
   }
-  .nav-link {
-    @apply px-4 py-2 text-slate-600 hover:text-primary transition-colors relative;
-  }
-  .nav-link.active {
-    @apply text-primary font-medium;
-  }
-  .nav-link.active::after {
+  .btn-electric::after {
     content: '';
-    @apply absolute bottom-0 left-4 right-4 h-0.5 bg-primary rounded-full;
+    @apply absolute inset-0 bg-white/20 translate-y-full transition-transform duration-300 ease-out pointer-events-none;
   }
+  .btn-electric:hover::after {
+    @apply translate-y-0;
+  }
+
+  /* Energy flow animation for progress bars */
+  .progress-energy-flow {
+    background-image: linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.15) 25%,
+      transparent 25%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.15) 50%,
+      rgba(255, 255, 255, 0.15) 75%,
+      transparent 75%,
+      transparent
+    );
+    background-size: 1rem 1rem;
+    animation: progress-bar-stripes 1s linear infinite;
+  }
+}
+
+@keyframes progress-bar-stripes {
+  from { background-position: 1rem 0; }
+  to { background-position: 0 0; }
+}
+
+/* Custom premium scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
 }
