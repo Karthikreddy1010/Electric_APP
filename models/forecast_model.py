@@ -319,8 +319,24 @@ class ElectricityDemandForecaster:
                     
                     # Forward-fill and backward-fill any gaps
                     daily[cols_to_merge] = daily[cols_to_merge].ffill().bfill()
-                    self.eia861m_cols = cols_to_merge
-                    logger.info(f"Successfully merged EIA-861M monthly features: {cols_to_merge}")
+                    
+                    # Validate coverage and only keep columns with >= 95% coverage
+                    coverage = daily[cols_to_merge].notna().mean()
+                    cols_to_merge = [c for c in cols_to_merge if coverage[c] >= 0.95]
+                    
+                    if cols_to_merge:
+                        # Drop any remaining rows with missing EIA-861M data in the selected columns
+                        eia_missing = daily[cols_to_merge].isnull().any(axis=1).sum()
+                        if eia_missing > 0:
+                            logger.warning(
+                                f"{eia_missing} days have missing EIA-861M data after forward/backward fill — "
+                                f"dropping those rows."
+                            )
+                            daily = daily.dropna(subset=cols_to_merge)
+                        self.eia861m_cols = cols_to_merge
+                        logger.info(f"Successfully merged EIA-861M monthly features: {cols_to_merge}")
+                    else:
+                        logger.warning("EIA-861M data coverage too low; skipping monthly features.")
                 else:
                     logger.warning("eia861m_monthly table is empty in database. Skipping monthly features.")
             else:
