@@ -620,7 +620,7 @@ async def get_user_dashboard(
 
     forecast_data = active_bill.forecast_results.get("forecast", [])
     if forecast_data:
-        kpis["forecast_next_month"] = sum(f.get("predicted_cost", 0.0) for f in forecast_data)
+        kpis["forecast_next_month"] = sum(f.get("predicted_cost", 0.0) for f in forecast_data[-30:])
 
     return {
         "has_active_bill": True,

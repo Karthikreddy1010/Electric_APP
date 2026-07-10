@@ -2,6 +2,66 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import { AlertCircle } from 'lucide-react';
+import { ParticlesProvider } from '@tsparticles/react';
+import Particles from '@tsparticles/react';
+import { loadSlim } from '@tsparticles/slim';
+
+// ─── Floating Neon Particles ─────────────────────────────────────────────────
+function InteractiveBackground() {
+  const particlesInit = async (engine: any) => {
+    await loadSlim(engine);
+  };
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+      <div className="absolute inset-0 pointer-events-auto mix-blend-screen opacity-30">
+        <ParticlesProvider init={particlesInit}>
+          <Particles
+            id="signup-tsparticles"
+            options={{
+              background: { color: { value: "transparent" } },
+              fpsLimit: 60,
+              interactivity: {
+                events: {
+                  onHover: { enable: true, mode: "grab" },
+                },
+                modes: {
+                  grab: { distance: 150, links: { opacity: 0.5 } },
+                },
+              },
+              particles: {
+                color: { value: ["#3b82f6", "#06b6d4"] },
+                links: {
+                  color: "#ffffff",
+                  distance: 150,
+                  enable: true,
+                  opacity: 0.1,
+                  width: 1,
+                },
+                move: {
+                  enable: true,
+                  speed: 0.5,
+                  direction: "none",
+                  random: true,
+                  straight: false,
+                  outModes: { default: "bounce" },
+                },
+                number: { density: { enable: true }, value: 30 },
+                opacity: { value: 0.2 },
+                shape: { type: "circle" },
+                size: { value: { min: 1, max: 2 } },
+              },
+              detectRetina: true,
+            }}
+          />
+        </ParticlesProvider>
+      </div>
+
+      <div className="absolute w-[400px] h-[400px] rounded-full bg-primary-blue/[0.05] blur-[100px] -top-32 -left-32 animate-float-orb pointer-events-none" />
+      <div className="absolute w-[300px] h-[300px] rounded-full bg-electric-cyan/[0.05] blur-[80px] bottom-10 -right-20 animate-float-orb-alt pointer-events-none" />
+    </div>
+  );
+}
 
 const UTILITIES = [
   { id: 'pseg', name: 'PSE&G' },
@@ -98,8 +158,9 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-bg-surface border border-border-hairline rounded-lg shadow-xl p-8 space-y-5">
+    <div className="min-h-screen bg-bg-primary flex items-center justify-center p-4 relative overflow-hidden">
+      <InteractiveBackground />
+      <div className="w-full max-w-md bg-bg-surface border border-border-hairline rounded-lg shadow-xl p-8 space-y-5 relative z-10">
         
         {/* Logo */}
         <div className="text-center space-y-1.5">

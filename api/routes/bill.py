@@ -89,7 +89,8 @@ def parse_real_pdf_text(text: str) -> dict:
     usage_kwh = None
     usage_matches = re.findall(r'(\d+(?:,\d+)?(?:\.\d+)?)\s*(?:kwh|kilowatt\s*hours?)', text, re.IGNORECASE)
     if usage_matches:
-        usage_kwh = float(usage_matches[0].replace(",", ""))
+        # Use the maximum value found, as smaller values are typically tier buckets or "1 kWh" rate descriptions
+        usage_kwh = max(float(m.replace(",", "")) for m in usage_matches)
 
     # Find monthly service charge (customer charge)
     monthly_service_charge = None

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Activity, ChevronDown, LogOut, User, Settings, Zap } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useBill } from '../context/BillContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import HeaderStatus from './shared/HeaderStatus.tsx';
 
@@ -20,7 +19,6 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { uploadedBill } = useBill();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -40,20 +38,6 @@ const Header = () => {
     logout();
     navigate('/login');
   };
-
-  // Utility Load Strip calculation
-  const minRate = 0.10;
-  const maxRate = 0.25;
-  const getPct = (val: number) =>
-    Math.min(100, Math.max(0, ((val - minRate) / (maxRate - minRate)) * 100));
-
-  const curRate = uploadedBill?.effective_rate ?? 0.1852;
-  const stateAvg = 0.1780;
-  const natAvg = 0.1648;
-
-  const curPct = getPct(curRate);
-  const statePct = getPct(stateAvg);
-  const natPct = getPct(natAvg);
 
   // Derive the active tab from the current route path
   const activeTab = TABS.find((t) => location.pathname.startsWith(t.path))?.label ?? '';
@@ -107,36 +91,8 @@ const Header = () => {
           })}
         </nav>
 
-        {/* Right Section: Utility Load Strip + Avatar */}
+        {/* Right Section: User Avatar */}
         <div className="flex items-center gap-4 shrink-0">
-
-          {/* Persistent Utility Load Strip */}
-          <div className="hidden lg:flex flex-col w-[180px]">
-            <div className="flex justify-between items-center text-[8px] font-mono-numbers leading-none text-text-secondary">
-              <span>$0.10</span>
-              <span className="uppercase tracking-wider">Load Strip</span>
-              <span>$0.25</span>
-            </div>
-            <div className="relative h-1.5 border rounded-full mt-1 bg-bg-primary border-border-hairline">
-              {/* National Average */}
-              <div className="absolute top-0 bottom-0 w-0.5 bg-text-secondary opacity-60" style={{ left: `${natPct}%` }} />
-              {/* State Average */}
-              <div className="absolute top-0 bottom-0 w-0.5 bg-warning-amber" style={{ left: `${statePct}%` }} />
-              {/* Current Rate */}
-              <div
-                className="absolute -top-[3px] w-2 h-3 bg-primary-blue transition-all duration-350 ease-out rounded-sm"
-                style={{ left: `calc(${curPct}% - 4px)` }}
-              />
-            </div>
-            <div className="relative h-2.5 text-[7px] text-text-secondary mt-0.5 font-mono-numbers leading-none">
-              <span className="absolute" style={{ left: `${natPct}%`, transform: 'translateX(-50%)' }}>NAT</span>
-              <span className="absolute text-warning-amber" style={{ left: `${statePct}%`, transform: 'translateX(-50%)' }}>STATE</span>
-              <span
-                className="absolute text-primary-blue font-bold"
-                style={{ left: `${curPct}%`, transform: 'translateX(-50%)', transition: 'left 350ms ease-out' }}
-              >CUR</span>
-            </div>
-          </div>
 
           {/* User Avatar Dropdown */}
           {user && (

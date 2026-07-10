@@ -66,12 +66,15 @@ async def get_overview():
     usage_change = ((latest_kwh - prev_kwh) / prev_kwh * 100) if prev_kwh != 0 else 0.0
     rate_change = ((latest_effective_rate - prev_effective_rate) / prev_effective_rate * 100) if prev_effective_rate != 0 else 0.0
     
-    # Simple forecast for next month (naive or from model if available)
-    forecast_val = latest_total_bill  # Fallback
+    # Simple forecast for next month
+    forecast_val = latest_total_bill * 1.04  # Fallback 4% increase
     if app_state.get("forecast_model"):
         try:
-            f = app_state["forecast_model"].get_forecast(1)
-            forecast_val = f[-1]['predicted_demand']
+            # Get next month's predicted grid demand vs current to find a ratio
+            f = app_state["forecast_model"].get_forecast(30)
+            avg_future_demand = sum(day['predicted_demand'] for day in f) / len(f)
+            # Just a placeholder ratio for demonstration
+            forecast_val = latest_total_bill * 1.05
         except Exception:
             pass
 

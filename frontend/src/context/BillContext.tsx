@@ -154,13 +154,16 @@ export const BillContextProvider = ({ children }: { children: React.ReactNode })
   // The guest override is kept for the WelcomeWizard mock-upload path which
   // should still show the freshly scanned bill before the DB refreshes.
   const [guestOverride, setGuestOverride] = useState(false);
+  // When the user clicks "Upload another", this forces hasBill to false
+  // even though a DB bill still exists, so the UploadView is shown again.
+  const [resetOverride, setResetOverride] = useState(false);
 
-  const uploadedBill = (hasDbBill && !guestOverride) ? dbBill : guestBill;
-  const ocrRuns      = (hasDbBill && !guestOverride) ? dbOcr  : guestOcr;
-  const billExplanation = (hasDbBill && !guestOverride) ? dbExplanation : guestExplanation;
+  const uploadedBill = resetOverride ? null : (hasDbBill && !guestOverride) ? dbBill : guestBill;
+  const ocrRuns      = resetOverride ? null : (hasDbBill && !guestOverride) ? dbOcr  : guestOcr;
+  const billExplanation = resetOverride ? null : (hasDbBill && !guestOverride) ? dbExplanation : guestExplanation;
   const hasBill = !!(uploadedBill);
   const activeBillId = dashboardData?.active_bill_id ?? null;
-  const isPersistedBill = hasDbBill && !guestOverride;
+  const isPersistedBill = hasDbBill && !guestOverride && !resetOverride;
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -193,6 +196,9 @@ export const BillContextProvider = ({ children }: { children: React.ReactNode })
     if (hasDbBill && bill) {
       setGuestOverride(true);
     }
+
+    // Clear the reset override so the new bill is visible
+    setResetOverride(false);
   }, [hasDbBill]);
 
   // When the dashboard query refreshes with fresh DB data, clear the local override
@@ -207,6 +213,9 @@ export const BillContextProvider = ({ children }: { children: React.ReactNode })
     setGuestOcr(null);
     setGuestExplanation(null);
     setGuestOverride(false);
+    // Force hasBill to false even when a DB bill exists,
+    // so the UI switches back to the UploadView.
+    setResetOverride(true);
     try {
       sessionStorage.removeItem('bill_data');
       sessionStorage.removeItem('ocr_data');

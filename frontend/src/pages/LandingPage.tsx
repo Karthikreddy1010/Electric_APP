@@ -1,481 +1,405 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useScroll, useTransform, useMotionValue, useSpring } from 'framer-motion';
+import Particles from '@tsparticles/react';
+import { loadSlim } from '@tsparticles/slim';
 import { 
-  Sparkles, ShieldCheck, BarChart3, LineChart, 
-  MapPin, ArrowRight, Activity, CloudSun, 
-  Zap, FileText, Compass
+  Sparkles, ArrowRight, Activity, Zap, FileText, Compass,
+  Globe2, Cpu, CloudSun, MapPin
 } from 'lucide-react';
 
-// ─── Live Energy Panel Component ──────────────────────────────────────────────
-function LiveEnergyPanel() {
-  const [data, setData] = useState({
-    gridStatus: 'Optimal',
-    wholesalePrice: 42.15,
-    estimatedUsage: 14.8,
-    temperature: 78,
-    weather: 'Sunny',
-    frequency: 60.02
-  });
+import { ParticlesProvider } from '@tsparticles/react';
 
+// ─── Floating Neon Particles ─────────────────────────────────────────────────
+function InteractiveBackground() {
+  const particlesInit = async (engine: any) => {
+    await loadSlim(engine);
+  };
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none bg-[#030712]" aria-hidden="true">
+      <div className="absolute inset-0 pointer-events-auto">
+        <ParticlesProvider init={particlesInit}>
+          <Particles
+            id="tsparticles"
+            options={{
+              background: { color: { value: "transparent" } },
+              fpsLimit: 60,
+              interactivity: {
+                events: {
+                  onHover: { enable: true, mode: "grab" },
+                },
+                modes: {
+                  grab: { distance: 150, links: { opacity: 0.5 } },
+                },
+              },
+              particles: {
+                color: { value: ["#3b82f6", "#06b6d4", "#6366f1"] },
+                links: {
+                  color: "#ffffff",
+                  distance: 150,
+                  enable: true,
+                  opacity: 0.1,
+                  width: 1,
+                },
+                move: {
+                  enable: true,
+                  speed: 0.8,
+                  direction: "none",
+                  random: true,
+                  straight: false,
+                  outModes: { default: "bounce" },
+                },
+                number: { density: { enable: true }, value: 60 },
+                opacity: { value: 0.3 },
+                shape: { type: "circle" },
+                size: { value: { min: 1, max: 3 } },
+              },
+              detectRetina: true,
+            }}
+          />
+        </ParticlesProvider>
+      </div>
+      
+      {/* Grid Pattern */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+      
+      {/* Massive Glowing Orbs */}
+      <div className="absolute top-[-20%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-blue-600/20 blur-[120px] mix-blend-screen animate-float-orb pointer-events-none" />
+      <div className="absolute bottom-[-20%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-teal-500/10 blur-[100px] mix-blend-screen animate-float-orb-alt pointer-events-none" style={{ animationDelay: '2s' }} />
+      <div className="absolute top-[30%] left-[40%] w-[30vw] h-[30vw] rounded-full bg-indigo-500/10 blur-[90px] mix-blend-screen animate-float-orb pointer-events-none" style={{ animationDelay: '4s' }} />
+    </div>
+  );
+}
+
+// ─── Holographic Dashboard Preview ──────────────────────────────────────────
+function HolographicDashboard() {
+  const [power, setPower] = useState(42.5);
   useEffect(() => {
-    const interval = setInterval(() => {
-      setData((prev) => ({
-        ...prev,
-        wholesalePrice: Number((42.15 + (Math.random() - 0.5) * 4).toFixed(2)),
-        estimatedUsage: Number((14.8 + (Math.random() - 0.5) * 1.5).toFixed(1)),
-        frequency: Number((60.00 + (Math.random() - 0.5) * 0.05).toFixed(2)),
-        temperature: prev.temperature + (Math.random() > 0.5 ? 1 : -1)
-      }));
-    }, 3000);
-    return () => clearInterval(interval);
+    const int = setInterval(() => setPower(p => Number((p + (Math.random() - 0.5)).toFixed(1))), 1000);
+    return () => clearInterval(int);
   }, []);
+
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [15, -15]), { damping: 40, stiffness: 150 });
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-15, 15]), { damping: 40, stiffness: 150 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    mouseX.set(x / rect.width - 0.5);
+    mouseY.set(y / rect.height - 0.5);
+  };
+  
+  const handleMouseLeave = () => {
+    mouseX.set(0);
+    mouseY.set(0);
+  };
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: 0.2 }}
-      className="p-5 rounded-lg border border-border-hairline bg-bg-surface/85 backdrop-blur-md shadow-lg max-w-sm w-full space-y-4 font-mono-numbers text-xs"
+      initial={{ opacity: 0, y: 50, scale: 0.95 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 1, delay: 0.7, type: 'spring', damping: 20 }}
+      style={{ perspective: 1500 }}
+      className="relative w-full max-w-4xl mx-auto mt-16 group cursor-crosshair z-20"
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
     >
-      <div className="flex items-center justify-between border-b border-border-hairline pb-2.5">
-        <span className="flex items-center gap-1.5 font-bold font-sans text-text-primary uppercase tracking-wider text-[10px]">
-          <Activity size={12} className="text-primary-blue animate-pulse" /> Grid Telemetry Loop
-        </span>
-        <span className="bg-savings-green/10 text-savings-green border border-savings-green/20 px-2 py-0.5 rounded-[4px] text-[10px] font-bold">
-          {data.gridStatus}
-        </span>
-      </div>
+      <motion.div style={{ rotateX, rotateY, transformStyle: "preserve-3d" }} className="w-full h-full relative">
+        <div className="absolute inset-0 bg-gradient-to-t from-[#030712] via-transparent to-transparent z-20 top-1/2 pointer-events-none" style={{ transform: "translateZ(20px)" }} />
+        <div className="rounded-2xl border border-white/10 bg-white/[0.02] backdrop-blur-3xl overflow-hidden shadow-[0_0_50px_rgba(37,99,235,0.15)] relative z-10" style={{ transform: "translateZ(0px)" }}>
+        
+        {/* Header bar */}
+        <div className="h-10 border-b border-white/10 flex items-center px-4 gap-2 bg-black/20">
+          <div className="flex gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
+          </div>
+          <div className="mx-auto flex items-center gap-2 px-3 py-1 bg-white/5 rounded-md border border-white/5 text-[10px] text-white/50 font-mono">
+            <Globe2 size={12} /> app.electricai.dev/overview
+          </div>
+        </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <p className="text-[9px] text-text-secondary uppercase font-sans font-bold tracking-wider mb-1">Wholesale Price</p>
-          <h4 className="text-base font-bold text-text-primary">${data.wholesalePrice} <span className="text-[10px] font-normal text-text-secondary">/MWh</span></h4>
+        {/* Mock UI Body */}
+        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 h-[400px]">
+          {/* Left panel */}
+          <div className="space-y-4">
+            <div className="h-24 rounded-lg bg-gradient-to-br from-blue-500/10 to-indigo-500/10 border border-blue-500/20 p-4 flex flex-col justify-center">
+              <span className="text-blue-400 text-[10px] font-bold uppercase tracking-wider">Live Load Forecast</span>
+              <div className="text-3xl font-mono text-white flex items-baseline gap-1 mt-1">
+                {power} <span className="text-sm text-white/40">kW</span>
+              </div>
+            </div>
+            <div className="h-48 rounded-lg bg-white/[0.03] border border-white/5 p-4 space-y-3">
+              <div className="h-3 w-1/3 bg-white/10 rounded-full" />
+              <div className="space-y-2 mt-4">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-8 rounded bg-white/5 border border-white/5 flex items-center px-3 justify-between">
+                    <div className="h-2 w-16 bg-white/20 rounded-full" />
+                    <div className="h-2 w-8 bg-blue-500/50 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          {/* Center Chart */}
+          <div className="col-span-2 rounded-lg bg-white/[0.03] border border-white/5 p-4 flex flex-col relative overflow-hidden">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-white/80 font-semibold text-sm">Predictive Bill Simulation</h3>
+                <p className="text-white/40 text-[10px] mt-1">Monte Carlo pathing using PJM market variants</p>
+              </div>
+              <div className="px-2 py-1 bg-teal-500/10 text-teal-400 border border-teal-500/20 rounded text-[10px] font-bold flex items-center gap-1">
+                <Activity size={10} /> Active
+              </div>
+            </div>
+            
+            {/* Abstract SVG Chart */}
+            <svg className="w-full flex-1" viewBox="0 0 400 150" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d="M0,150 L0,100 Q 50,120 100,80 T 200,60 T 300,90 T 400,30 L400,150 Z" fill="url(#chartGrad)" />
+              <path d="M0,100 Q 50,120 100,80 T 200,60 T 300,90 T 400,30" fill="none" stroke="#3b82f6" strokeWidth="2" filter="drop-shadow(0 0 6px rgba(59,130,246,0.8))" />
+              {/* Animated scanning line */}
+              <motion.line 
+                x1="0" y1="0" x2="0" y2="150" 
+                stroke="#06b6d4" strokeWidth="1" strokeDasharray="4 4"
+                animate={{ x1: [0, 400, 0], x2: [0, 400, 0] }}
+                transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
+              />
+            </svg>
+          </div>
         </div>
-        <div>
-          <p className="text-[9px] text-text-secondary uppercase font-sans font-bold tracking-wider mb-1">Estimated Load</p>
-          <h4 className="text-base font-bold text-text-primary">{data.estimatedUsage} <span className="text-[10px] font-normal text-text-secondary">kW</span></h4>
         </div>
-        <div>
-          <p className="text-[9px] text-text-secondary uppercase font-sans font-bold tracking-wider mb-1">Grid Frequency</p>
-          <h4 className="text-base font-bold text-text-primary">{data.frequency} <span className="text-[10px] font-normal text-text-secondary">Hz</span></h4>
-        </div>
-        <div>
-          <p className="text-[9px] text-text-secondary uppercase font-sans font-bold tracking-wider mb-1">Local Temperature</p>
-          <h4 className="text-base font-bold text-text-primary flex items-center gap-1">
-            <CloudSun size={13} className="text-amber-500 font-sans" /> {data.temperature}°F
-          </h4>
-        </div>
-      </div>
-      <div className="bg-bg-primary/50 p-2.5 rounded-[4px] border border-border-hairline flex items-center gap-2 text-[9px] text-text-secondary leading-normal font-sans">
-        <ShieldCheck size={14} className="text-primary-blue shrink-0" />
-        <span>Real-time EIA state metrics integrated. Regional average model loaded.</span>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
 
-// ─── Animated Energy Grid SVG ──────────────────────────────────────────────────
-function AnimatedGridSVG() {
-  return (
-    <svg className="w-full h-full min-h-[380px] md:min-h-[460px]" viewBox="0 0 800 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <linearGradient id="grid-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#2F6BFF" stopOpacity="0.8" />
-          <stop offset="50%" stopColor="#16A085" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#2F6BFF" stopOpacity="0.2" />
-        </linearGradient>
-        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
-          <feGaussianBlur stdDeviation="6" result="blur" />
-          <feComposite in="SourceGraphic" in2="blur" operator="over" />
-        </filter>
-      </defs>
-
-      {/* Grid Mesh Layout Nodes */}
-      {/* Power Plant */}
-      <rect x="50" y="180" width="100" height="80" rx="6" fill="#1C2833" stroke="var(--border-hairline)" strokeWidth="1.5" />
-      <path d="M70 180 L70 140 L90 140 L90 180" fill="none" stroke="var(--border-hairline)" strokeWidth="2" />
-      <path d="M110 180 L110 130 L130 130 L130 180" fill="none" stroke="var(--border-hairline)" strokeWidth="2" />
-      <text x="100" y="225" fill="#AEB6BF" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Generation</text>
-
-      {/* Transmission Lines Paths */}
-      <path d="M150 220 L270 220" stroke="var(--border-hairline)" strokeWidth="2" strokeDasharray="5 5" />
-      
-      {/* Transmission Tower */}
-      <path d="M270 260 L290 140 L310 260 M270 180 L310 180 M280 220 L300 220" fill="none" stroke="#5D6D7E" strokeWidth="2" />
-      <text x="290" y="280" fill="#AEB6BF" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Transmission</text>
-
-      {/* Substation */}
-      <path d="M310 220 L450 220" stroke="var(--border-hairline)" strokeWidth="2" strokeDasharray="5 5" />
-      <rect x="450" y="180" width="80" height="80" rx="6" fill="#1C2833" stroke="var(--border-hairline)" strokeWidth="1.5" />
-      <circle cx="490" cy="220" r="16" fill="none" stroke="#2CA6FF" strokeWidth="2" />
-      <path d="M480 220 L500 220 M490 210 L490 230" stroke="#2CA6FF" strokeWidth="2" />
-      <text x="490" y="280" fill="#AEB6BF" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Substation</text>
-
-      {/* Distribution Line Path */}
-      <path d="M530 220 L650 220" stroke="var(--border-hairline)" strokeWidth="2" />
-
-      {/* Smart Home */}
-      <rect x="650" y="170" width="90" height="90" rx="8" fill="#1C2833" stroke="var(--border-hairline)" strokeWidth="1.5" />
-      <polygon points="650,170 695,130 740,170" fill="#2C3E50" stroke="var(--border-hairline)" strokeWidth="1.5" />
-      <rect x="685" y="210" width="20" height="50" fill="#5D6D7E" />
-      <circle cx="695" cy="155" r="8" fill="#F5B041" opacity="0.6" filter="url(#glow)" />
-      <text x="695" y="280" fill="#AEB6BF" fontSize="10" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">Smart Home</text>
-
-      {/* Pulsing Energy flow lines along the grid */}
-      <motion.path
-        d="M150 220 L290 220 L450 220 L650 220"
-        fill="none"
-        stroke="url(#grid-grad)"
-        strokeWidth="3.5"
-        strokeDasharray="40 180"
-        animate={{ strokeDashoffset: [-220, 220] }}
-        transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
-        filter="url(#glow)"
-      />
-    </svg>
-  );
-}
 
 // ─── Landing Page Main ────────────────────────────────────────────────────────
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: containerRef,
+    offset: ["start start", "end end"]
+  });
 
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
+    const handleScroll = () => setScrolled(window.scrollY > 50);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const featureCards = [
+  const features = [
     {
-      title: 'AI Ingestion & Analysis',
-      desc: 'Scan bills instantly. Extract delivery items, public service adjustments, and trace hidden grid taxes.',
-      icon: <FileText className="text-primary-blue" size={20} />,
-      link: '/bill-analysis'
+      title: 'Neural Bill OCR',
+      desc: 'Instant extraction of complex delivery items, public service adjustments, and hidden grid taxes from raw PDF uploads.',
+      icon: <FileText size={24} className="text-blue-400" />
     },
     {
-      title: 'ML Bill Forecasting',
-      desc: 'Calculate seasonal usage spikes using neural ensemble models and actual weather history.',
-      icon: <LineChart className="text-energy-teal" size={20} />,
-      link: '/forecast'
+      title: 'Weather-Adjusted Forecasting',
+      desc: 'Predict your next 6 months of bills based on 10-year localized historical climate data and household elasticity models.',
+      icon: <CloudSun size={24} className="text-teal-400" />
     },
     {
-      title: 'Sensitivity & What-If Simulation',
-      desc: 'Simulate rates changes, load shifts, and EV additions under clean Monte Carlo projections.',
-      icon: <BarChart3 className="text-amber-500" size={20} />,
-      link: '/impact'
-    },
-    {
-      title: 'GIS Regional Insights',
-      desc: 'Verify spatial pricing spreads across state lines, utilities service zones, and postal codes.',
-      icon: <MapPin className="text-primary-blue" size={20} />,
-      link: '/regional-insights'
+      title: 'Real-time Market Telemetry',
+      desc: 'Live PJM wholesale market ingestion mapped directly against your retail rate structure to calculate real markups.',
+      icon: <Activity size={24} className="text-indigo-400" />
     },
     {
       title: 'BGS Plan Matcher',
-      desc: 'Filter current retail tariffs against utility auctions to discover optimal plans.',
-      icon: <Compass className="text-savings-green" size={20} />,
-      link: '/plans'
+      desc: 'Stop guessing. We filter every retail tariff against utility baseline auctions to prove mathematical savings paths.',
+      icon: <Compass size={24} className="text-emerald-400" />
     },
     {
-      title: 'Custom AI Reports',
-      desc: 'Generate concise executive summaries and action items in clean plain-English text.',
-      icon: <Sparkles className="text-purple-500" size={20} />,
-      link: '/settings'
+      title: 'Spatial Grid Insights',
+      desc: 'Visualize rate disparities across state lines and utility service zones to understand your regional positioning.',
+      icon: <MapPin size={24} className="text-amber-400" />
+    },
+    {
+      title: 'What-If Simulation Engine',
+      desc: 'Calculate the exact ROI of buying an EV or switching to a time-of-use (TOU) plan before making the leap.',
+      icon: <Cpu size={24} className="text-rose-400" />
     }
   ];
 
+  const heroText = "Decode your energy.";
+
   return (
-    <div className="min-h-screen bg-bg-primary text-text-primary selection:bg-primary-blue/20 flex flex-col justify-between">
-      
-      {/* 1. Sticky Navigation Bar */}
-      <header className={`fixed top-0 left-0 w-full z-40 transition-all duration-300 ${
-        scrolled 
-          ? 'bg-bg-surface/80 backdrop-blur-md border-b border-border-hairline py-3 shadow-md' 
-          : 'bg-transparent py-5'
-      }`}>
+    <div ref={containerRef} className="min-h-screen bg-[#030712] text-slate-300 font-sans selection:bg-blue-500/30 overflow-hidden relative">
+      <InteractiveBackground />
+
+      {/* ── Navbar ── */}
+      <header className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${scrolled ? 'bg-[#030712]/80 backdrop-blur-xl border-b border-white/5 py-4' : 'bg-transparent py-6'}`}>
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-[4px] bg-primary-blue flex items-center justify-center font-bold text-white text-sm shadow-md shadow-primary-blue/20">E</div>
-            <span className="font-sans font-bold text-base tracking-tight text-text-primary">ElectricAI</span>
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] group-hover:shadow-[0_0_25px_rgba(59,130,246,0.8)] transition-all">
+              <Zap size={16} className="fill-white" />
+            </div>
+            <span className="font-bold text-xl tracking-tight text-white">ElectricAI</span>
           </Link>
-
-          <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-text-secondary font-sans">
-            <a href="#features" className="hover:text-text-primary transition-colors">Features</a>
-            <a href="#how-it-works" className="hover:text-text-primary transition-colors">How It Works</a>
-            <a href="#why-us" className="hover:text-text-primary transition-colors">Why ElectricAI</a>
-            <span className="opacity-40 cursor-not-allowed">Pricing (Soon)</span>
-            <a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-text-primary transition-colors">Docs</a>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <Link to="/login" className="px-3.5 py-1.5 hover:text-text-primary text-xs font-semibold text-text-secondary transition-colors">
-              Login
-            </Link>
-            <Link to="/signup" className="bg-primary-blue hover:bg-primary-blue/95 text-white font-semibold text-xs px-4 py-2 rounded-md transition-all shadow-sm">
+          <div className="flex items-center gap-4">
+            <Link to="/login" className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">Sign In</Link>
+            <Link to="/signup" className="px-5 py-2.5 bg-white text-black text-sm font-bold rounded-full hover:bg-slate-200 transition-colors shadow-[0_0_20px_rgba(255,255,255,0.2)]">
               Get Started
             </Link>
           </div>
         </div>
       </header>
 
-      {/* 2. Hero Section */}
-      <section className="pt-28 md:pt-36 pb-20 max-w-7xl mx-auto w-full px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-        <div className="lg:col-span-6 space-y-6">
-          <span className="bg-primary-blue/10 text-primary-blue text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-[6px] inline-flex items-center gap-1.5">
-            <Zap size={12} className="animate-pulse" /> Operational Electricity Intelligence
-          </span>
+      {/* ── Hero Section ── */}
+      <section className="relative pt-32 md:pt-48 pb-20 px-6 z-10 flex flex-col items-center text-center">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-400 text-xs font-semibold uppercase tracking-widest mb-8 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+        >
+          <Sparkles size={14} className="animate-pulse" /> Next-Gen Energy Intelligence
+        </motion.div>
 
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-text-primary font-sans leading-tight">
-            Understand Your Electricity. <br />
-            <span className="text-primary-blue">Reduce Your Bills.</span> <br />
-            Power Smarter Decisions.
-          </h1>
-
-          <p className="text-text-secondary text-sm md:text-base leading-relaxed max-w-xl">
-            ElectricAI transforms your raw utility billing PDF into personalized operational energy intelligence. Expose hidden components, run load simulations, and map regional rate disparities in seconds.
-          </p>
-
-          {/* Buttons */}
-          <div className="flex flex-wrap gap-4 pt-2">
-            <Link 
-              to="/signup" 
-              className="bg-primary-blue hover:bg-primary-blue/95 text-white font-bold px-6 py-3 rounded-md text-xs shadow-md transition-all flex items-center gap-1.5"
-            >
-              Get Started <ArrowRight size={14} />
-            </Link>
-            <Link 
-              to="/demo" 
-              className="bg-bg-surface hover:bg-bg-primary border border-border-hairline font-bold px-6 py-3 rounded-md text-xs transition-all shadow-sm"
-            >
-              Explore Demo
-            </Link>
-          </div>
-
-          {/* Badges */}
-          <div className="flex flex-wrap gap-3 text-[10px] font-bold text-text-secondary pt-6 font-sans">
-            <span className="flex items-center gap-1 bg-bg-surface px-2.5 py-1 rounded-full border border-border-hairline">
-              <ShieldCheck size={12} className="text-primary-blue" /> AI Bill Analysis
-            </span>
-            <span className="flex items-center gap-1 bg-bg-surface px-2.5 py-1 rounded-full border border-border-hairline">
-              <ShieldCheck size={12} className="text-primary-blue" /> Bill Forecasting
-            </span>
-            <span className="flex items-center gap-1 bg-bg-surface px-2.5 py-1 rounded-full border border-border-hairline">
-              <ShieldCheck size={12} className="text-primary-blue" /> Regional Insights
-            </span>
-            <span className="flex items-center gap-1 bg-bg-surface px-2.5 py-1 rounded-full border border-border-hairline">
-              <ShieldCheck size={12} className="text-primary-blue" /> Savings Simulator
-            </span>
-            <span className="flex items-center gap-1 bg-bg-surface px-2.5 py-1 rounded-full border border-border-hairline">
-              <ShieldCheck size={12} className="text-primary-blue" /> Energy Plans
-            </span>
-          </div>
-        </div>
-
-        {/* Right Side Illustration + Telemetry */}
-        <div className="lg:col-span-6 flex flex-col items-center justify-center gap-6">
-          <div className="w-full bg-bg-surface/50 border border-border-hairline rounded-lg overflow-hidden shadow-xl p-4">
-            <AnimatedGridSVG />
-          </div>
-          <LiveEnergyPanel />
-        </div>
-      </section>
-
-      {/* 3. Features Section */}
-      <section id="features" className="py-20 max-w-7xl mx-auto w-full px-6 border-t border-border-hairline">
-        <div className="text-center max-w-3xl mx-auto space-y-3 mb-16">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-primary-blue bg-primary-blue/10 px-3 py-1 rounded-[6px]">
-            Core Modules
-          </span>
-          <h2 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight font-sans">
-            Personalized Energy Intelligence Workspace
-          </h2>
-          <p className="text-text-secondary text-xs md:text-sm">
-            Everything you need to analyze charges, predict costs, and optimize your rates in one platform.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {featureCards.map((f, idx) => (
-            <motion.div
-              key={idx}
-              whileHover={{ y: -4, boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }}
-              className="bg-bg-surface border border-border-hairline hover:border-primary-blue/30 p-6 rounded-lg shadow-sm flex flex-col justify-between"
-            >
-              <div className="space-y-3">
-                <div className="w-10 h-10 bg-bg-primary rounded-[6px] border border-border-hairline flex items-center justify-center">
-                  {f.icon}
-                </div>
-                <h3 className="text-sm font-bold text-text-primary leading-tight font-sans">{f.title}</h3>
-                <p className="text-text-secondary text-xs leading-normal">{f.desc}</p>
-              </div>
-              <div className="pt-4 border-t border-border-hairline/50 mt-4 flex justify-between items-center text-xs font-semibold text-primary-blue">
-                <Link to="/signup" className="hover:underline flex items-center gap-1">
-                  Learn More <ArrowRight size={12} />
-                </Link>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* 4. How It Works (Timeline) */}
-      <section id="how-it-works" className="py-20 bg-bg-surface/50 border-t border-b border-border-hairline w-full">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="text-center max-w-3xl mx-auto space-y-3 mb-16">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-primary-blue bg-primary-blue/10 px-3 py-1 rounded-[6px]">
-              How it works
-            </span>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-text-primary tracking-tight font-sans">
-              From Raw PDF to Measurable Energy Savings
-            </h2>
-            <p className="text-text-secondary text-xs md:text-sm">
-              We process, estimate, and analyze your bill details across six granular steps.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 relative">
-            {/* Timeline cards */}
-            {[
-              { num: '1', title: 'Upload Bill', desc: 'Select any electricity bill PDF or image file' },
-              { num: '2', title: 'OCR Scan', desc: 'Auto-extract text tokens and numeric tables' },
-              { num: '3', title: 'AI Explanation', desc: 'Plain-language summaries of charges' },
-              { num: '4', title: 'Regional Comp', desc: 'Compare rates to neighborhood baselines' },
-              { num: '5', title: 'ML Forecasting', desc: 'Predict future usage patterns' },
-              { num: '6', title: 'Optimize Costs', desc: 'Compare other energy tariffs to save' }
-            ].map((s, idx) => (
-              <div key={idx} className="bg-bg-surface border border-border-hairline p-5 rounded-lg flex flex-col justify-between min-h-[140px] text-xs">
-                <div>
-                  <div className="w-6 h-6 bg-primary-blue text-white rounded-full font-bold flex items-center justify-center font-mono-numbers mb-3">
-                    {s.num}
-                  </div>
-                  <h4 className="font-bold text-text-primary leading-tight font-sans mb-1">{s.title}</h4>
-                </div>
-                <p className="text-[11px] text-text-secondary font-medium">{s.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 5. Why ElectricAI (Detailed Points) */}
-      <section id="why-us" className="py-20 max-w-7xl mx-auto w-full px-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          <div className="lg:col-span-5 space-y-6">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-primary-blue bg-primary-blue/10 px-3 py-1 rounded-[6px]">
-              Platform Value
-            </span>
-            <h2 className="text-3xl font-extrabold text-text-primary tracking-tight font-sans">
-              Why use ElectricAI?
-            </h2>
-            <p className="text-text-secondary text-sm leading-relaxed">
-              Managing electricity costs shouldn't involve spreadsheets. We do the math so you can make informed decisions.
-            </p>
-            <div className="pt-2">
-              <Link 
-                to="/signup" 
-                className="bg-primary-blue hover:bg-primary-blue/95 text-white font-bold px-5 py-2.5 rounded-md text-xs transition-all shadow-sm inline-flex items-center gap-1.5"
+        <h1 className="text-5xl md:text-7xl lg:text-8xl font-extrabold tracking-tighter text-white max-w-5xl leading-[1.1]">
+          <span className="inline-block relative">
+            {heroText.split("").map((char, index) => (
+              <motion.span
+                key={index}
+                initial={{ opacity: 0, y: 20, filter: 'blur(10px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                transition={{ duration: 0.5, delay: index * 0.03, type: 'spring', damping: 15 }}
+                className="inline-block"
               >
-                Create Account <ArrowRight size={13} />
-              </Link>
-            </div>
+                {char === " " ? "\u00A0" : char}
+              </motion.span>
+            ))}
+          </span>
+          <br />
+          <motion.span 
+            initial={{ opacity: 0, y: 30, scale: 0.95, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+            transition={{ duration: 0.8, delay: 0.6, ease: "easeOut" }}
+            className="inline-block text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-teal-300 to-indigo-400 animate-shimmer" 
+            style={{ backgroundSize: '200% auto' }}>
+            Maximize your savings.
+          </motion.span>
+        </h1>
+
+        <motion.p 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
+          className="mt-6 text-lg md:text-xl text-slate-400 max-w-2xl font-medium leading-relaxed"
+        >
+          Stop paying the utility blindly. Our platform ingests your bill, models your usage against live wholesale markets, and finds mathematically proven cheaper rates.
+        </motion.p>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
+          className="flex flex-col sm:flex-row gap-4 mt-10"
+        >
+          <Link to="/signup" className="px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-full transition-all shadow-[0_0_30px_rgba(59,130,246,0.4)] flex items-center justify-center gap-2 group">
+            Start Free Analysis
+            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
+          <Link to="/demo" className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold rounded-full transition-all flex items-center justify-center gap-2">
+            <MonitorPlayIcon size={18} /> View Demo Workspace
+          </Link>
+        </motion.div>
+
+        {/* Floating Dashboard Preview */}
+        <HolographicDashboard />
+      </section>
+
+      {/* ── Features Grid ── */}
+      <section className="relative py-32 px-6 z-10 border-t border-white/5 bg-black/40 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-20">
+            <h2 className="text-3xl md:text-5xl font-bold text-white tracking-tight mb-4">A complete power grid in your browser.</h2>
+            <p className="text-slate-400 max-w-2xl mx-auto text-lg">We don't just read your bill—we rebuild the math that created it.</p>
           </div>
 
-          <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
-            <div className="border border-border-hairline p-5 rounded-lg space-y-2 bg-bg-surface">
-              <h4 className="font-bold text-text-primary font-sans">Understand Every Bill</h4>
-              <p className="text-text-secondary leading-relaxed font-semibold">Expose service fees, transmission charges, and state taxes that utilities leave unexplained.</p>
-            </div>
-            <div className="border border-border-hairline p-5 rounded-lg space-y-2 bg-bg-surface">
-              <h4 className="font-bold text-text-primary font-sans">AI-Powered Insights</h4>
-              <p className="text-text-secondary leading-relaxed font-semibold">Get actionable notifications explaining month-over-month usage anomalies and savings tips.</p>
-            </div>
-            <div className="border border-border-hairline p-5 rounded-lg space-y-2 bg-bg-surface">
-              <h4 className="font-bold text-text-primary font-sans">Forecast Future Costs</h4>
-              <p className="text-text-secondary leading-relaxed font-semibold">Our ML forecaster utilizes temperature averages to project bills before they arrive.</p>
-            </div>
-            <div className="border border-border-hairline p-5 rounded-lg space-y-2 bg-bg-surface">
-              <h4 className="font-bold text-text-primary font-sans">Plan Comparison</h4>
-              <p className="text-text-secondary leading-relaxed font-semibold">Check standard fixed plans against floating BGS hourly options to optimize costs.</p>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {features.map((f, idx) => {
+              const yOffset = useTransform(scrollYProgress, [0, 1], [0, -30 * (idx % 3)]);
+              return (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 40 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: '-50px' }}
+                  transition={{ duration: 0.7, delay: idx * 0.1, type: 'spring', damping: 20 }}
+                  style={{ y: yOffset }}
+                  className="group relative p-8 rounded-2xl bg-white/[0.02] border border-white/10 hover:bg-white/[0.04] transition-colors"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl pointer-events-none" />
+                  <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(255,255,255,0.05)] group-hover:scale-110 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.2)] transition-all duration-300">
+                    {f.icon}
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-3">{f.title}</h3>
+                  <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+                </motion.div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* 6. Call to Action (CTA) */}
-      <section className="py-20 w-full bg-primary-blue text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-blue to-primary-blue/80 opacity-50 z-0" />
-        <div className="max-w-4xl mx-auto px-6 text-center space-y-6 relative z-10">
-          <h2 className="text-2xl md:text-4xl font-extrabold tracking-tight font-sans leading-tight">
-            Ready to understand your electricity?
+      {/* ── Bottom CTA ── */}
+      <section className="relative py-32 px-6 z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-blue-600/10 blur-[100px] pointer-events-none" />
+        <div className="max-w-4xl mx-auto text-center border border-white/10 bg-white/[0.02] backdrop-blur-xl p-12 md:p-20 rounded-3xl shadow-2xl relative">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent rotate-45 pointer-events-none" />
+          <h2 className="text-4xl md:text-5xl font-bold text-white tracking-tight mb-6 relative z-10">
+            Take control of your utility costs.
           </h2>
-          <p className="text-white/80 text-sm max-w-xl mx-auto">
-            Upload your electricity bill PDF anonymously today. No credit cards or complex setups required.
+          <p className="text-slate-400 text-lg mb-10 max-w-xl mx-auto relative z-10">
+            Join thousands of users who have optimized their energy footprint. Upload your first PDF bill in seconds. No credit card required.
           </p>
-          <div className="flex justify-center gap-4 pt-2">
-            <Link 
-              to="/signup" 
-              className="bg-white text-primary-blue hover:bg-white/95 font-bold px-6 py-3 rounded-md text-xs transition-all shadow-md"
-            >
-              Get Started
-            </Link>
-            <Link 
-              to="/demo" 
-              className="bg-transparent border border-white/30 hover:bg-white/10 font-bold px-6 py-3 rounded-md text-xs transition-all"
-            >
-              Try Demo
-            </Link>
-          </div>
+          <Link to="/signup" className="px-10 py-5 bg-white text-black text-lg font-bold rounded-full hover:bg-slate-200 transition-all shadow-[0_0_40px_rgba(255,255,255,0.3)] hover:scale-105 inline-flex items-center gap-2 relative z-10">
+            Create Free Account <ArrowRight size={20} />
+          </Link>
         </div>
       </section>
 
-      {/* 7. Footer */}
-      <footer className="bg-bg-primary border-t border-border-hairline py-12 w-full text-xs">
-        <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8 mb-8 text-text-secondary">
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-[3px] bg-primary-blue flex items-center justify-center font-bold text-white text-xs">E</div>
-              <span className="font-sans font-bold text-sm tracking-tight text-text-primary">ElectricAI</span>
-            </div>
-            <p className="text-[11px] leading-relaxed">
-              Operational utility bill intelligence and plan matching platform.
-            </p>
+      {/* ── Footer ── */}
+      <footer className="border-t border-white/10 bg-black/50 py-12 px-6 relative z-10">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Zap size={20} className="text-blue-500 fill-blue-500" />
+            <span className="font-bold text-white text-lg tracking-tight">ElectricAI</span>
           </div>
-          <div className="space-y-3">
-            <h4 className="font-bold text-text-primary uppercase tracking-wider text-[10px]">Product</h4>
-            <ul className="space-y-2 text-[11px]">
-              <li><Link to="/demo" className="hover:text-text-primary transition-colors">Interactive Demo</Link></li>
-              <li><a href="#features" className="hover:text-text-primary transition-colors">Features</a></li>
-              <li><a href="#how-it-works" className="hover:text-text-primary transition-colors">How It Works</a></li>
-            </ul>
+          <div className="flex gap-8 text-sm text-slate-500 font-medium">
+            <Link to="/demo" className="hover:text-white transition-colors">Demo</Link>
+            <a href="#" className="hover:text-white transition-colors">Features</a>
+            <a href="#" className="hover:text-white transition-colors">Privacy</a>
+            <a href="#" className="hover:text-white transition-colors">Terms</a>
           </div>
-          <div className="space-y-3">
-            <h4 className="font-bold text-text-primary uppercase tracking-wider text-[10px]">Resources</h4>
-            <ul className="space-y-2 text-[11px]">
-              <li><a href="https://github.com" target="_blank" rel="noreferrer" className="hover:text-text-primary transition-colors">GitHub Repository</a></li>
-              <li><a href="https://open-meteo.com" target="_blank" rel="noreferrer" className="hover:text-text-primary transition-colors">Open-Meteo Weather</a></li>
-            </ul>
-          </div>
-          <div className="space-y-3">
-            <h4 className="font-bold text-text-primary uppercase tracking-wider text-[10px]">Contact</h4>
-            <ul className="space-y-2 text-[11px] font-mono-numbers">
-              <li>support@electricai.dev</li>
-              <li>NJ GIS Ingestion workspace</li>
-            </ul>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-6 border-t border-border-hairline pt-6 flex flex-col md:flex-row items-center justify-between text-text-secondary text-[10px] font-semibold font-sans">
-          <span>© {new Date().getFullYear()} ElectricAI. All rights reserved.</span>
-          <div className="flex gap-4 mt-2 md:mt-0">
-            <span className="cursor-not-allowed opacity-50">Privacy Policy</span>
-            <span className="cursor-not-allowed opacity-50">Terms of Service</span>
-          </div>
+          <p className="text-slate-600 text-xs">© {new Date().getFullYear()} ElectricAI. All rights reserved.</p>
         </div>
       </footer>
-
     </div>
+  );
+}
+
+function MonitorPlayIcon({ size = 24, ...props }: React.SVGProps<SVGSVGElement> & { size?: number | string }) {
+  return (
+    <svg {...props} xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="20" height="14" x="2" y="3" rx="2" />
+      <line x1="8" x2="16" y1="21" y2="21" />
+      <line x1="12" x2="12" y1="17" y2="21" />
+      <polygon points="10 7 15 10 10 13 10 7" />
+    </svg>
   );
 }

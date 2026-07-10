@@ -12,6 +12,8 @@
   "dependencies": {
     "@tailwindcss/postcss": "^4.3.0",
     "@tanstack/react-query": "^5.100.10",
+    "@tsparticles/react": "^4.3.2",
+    "@tsparticles/slim": "^4.3.2",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.16.1",
     "clsx": "^2.1.1",
