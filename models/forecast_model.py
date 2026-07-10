@@ -546,16 +546,13 @@ class ElectricityDemandForecaster:
                 future_monthly[col] = full_df[col].iloc[-1]
             future_exog = future_exog.join(future_monthly)
 
-        # If there are still NaNs after interpolation, raise
+        # If there are still NaNs after interpolation, raise an error
         remaining_nans = future_exog[WEATHER_COLS].isnull().any(axis=1).sum()
         if remaining_nans > 0:
-            logger.warning(
-                f"{remaining_nans} forecast days still missing weather after interpolation — "
-                f"dropping those days from forecast."
+            raise ValueError(
+                f"Cannot forecast: {remaining_nans}/{len(future_exog)} days missing weather data "
+                f"after interpolation. Weather API may be unavailable or misconfigured."
             )
-            future_exog = future_exog.dropna(subset=WEATHER_COLS)
-            future_dates = future_exog.index
-            days = len(future_dates)
 
         logger.info(f"Using REAL Open-Meteo forecast weather for {len(future_exog)} days")
 

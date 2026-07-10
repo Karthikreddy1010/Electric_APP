@@ -18,8 +18,26 @@ def mock_openmeteo_forecast(monkeypatch):
             params = kwargs.get("params", {}) or {}
             days = params.get("forecast_days", 30)
             
-            # Generate fake temperature lists of length `days`
-            times = [f"2026-07-{9+i:02d}" for i in range(days)]
+            # Dynamically determine the start date for the mock weather forecast
+            # by reading the last date in the demand CSV
+            import pandas as pd
+            from pathlib import Path
+            project_root = Path(__file__).resolve().parent.parent
+            demand_path = project_root / "data" / "raw" / "eia_pjm_daily_demand.csv"
+            
+            start_date = pd.Timestamp.now()
+            if demand_path.exists():
+                try:
+                    df_demand = pd.read_csv(demand_path)
+                    if not df_demand.empty and "period" in df_demand.columns:
+                        last_date = pd.to_datetime(df_demand["period"]).max()
+                        if pd.notna(last_date):
+                            start_date = last_date + pd.Timedelta(days=1)
+                except Exception:
+                    pass
+            
+            # Generate fake temperature lists of length `days` starting from start_date
+            times = [(start_date + pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
             max_temps = [25.0 + i * 0.1 for i in range(days)]
             min_temps = [15.0 + i * 0.1 for i in range(days)]
             
