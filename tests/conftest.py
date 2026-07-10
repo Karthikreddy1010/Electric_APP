@@ -65,6 +65,7 @@ TestClient.request = wrapped_request
 @pytest.fixture(scope="session", autouse=True)
 def setup_test_data():
     import pandas as pd
+    import numpy as np
     from pathlib import Path
     
     project_root = Path(__file__).resolve().parent.parent
@@ -77,15 +78,20 @@ def setup_test_data():
     demand_path = raw_dir / "eia_pjm_daily_demand.csv"
     if not demand_path.exists():
         dates = pd.date_range("2023-01-01", "2025-12-31", freq="D")
+        np.random.seed(42)
+        n_rows = len(dates) * 4
+        noise = np.random.normal(0, 500, n_rows)
         rows = []
+        idx = 0
         for d in dates:
             for subba in ["AE", "JC", "PS", "RECO"]:
                 rows.append({
                     "period": d.strftime("%Y-%m-%d"),
                     "subba": subba,
-                    "value": 10000.0,
+                    "value": float(10000.0 + noise[idx]),
                     "parent": "PJM"
                 })
+                idx += 1
         df = pd.DataFrame(rows)
         df.to_csv(demand_path, index=False)
 
