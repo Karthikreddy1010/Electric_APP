@@ -117,6 +117,17 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.error("No benchmark data available")
 
+    # Ensure 'region' and 'state_name' columns exist in loaded benchmark dataframe
+    if app_state.get("benchmark_df") is not None:
+        df = app_state["benchmark_df"]
+        if "region" not in df.columns or "state_name" not in df.columns:
+            from data_pipeline.benchmark_builder import REGION_MAP, STATE_ABBREV
+            if "region" not in df.columns:
+                df["region"] = df["state"].map(REGION_MAP).fillna("Northeast")
+            if "state_name" not in df.columns:
+                reverse_state_map = {v: k for k, v in STATE_ABBREV.items()}
+                df["state_name"] = df["state"].map(reverse_state_map).fillna(df["state"])
+
     # ── Step 3: Clean + feature-engineer ─────────────────────────────────────
     try:
         from data_pipeline.cleaners import run_cleaning_pipeline

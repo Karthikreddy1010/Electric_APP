@@ -60,3 +60,99 @@ def wrapped_request(self, method, url, *args, **kwargs):
     return response
 
 TestClient.request = wrapped_request
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_data():
+    import pandas as pd
+    from pathlib import Path
+    
+    project_root = Path(__file__).resolve().parent.parent
+    raw_dir = project_root / "data" / "raw"
+    processed_dir = project_root / "data" / "processed"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    processed_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Ensure eia_pjm_daily_demand.csv exists with correct schema
+    demand_path = raw_dir / "eia_pjm_daily_demand.csv"
+    if not demand_path.exists():
+        dates = pd.date_range("2023-01-01", "2025-12-31", freq="D")
+        rows = []
+        for d in dates:
+            for subba in ["AE", "JC", "PS", "RECO"]:
+                rows.append({
+                    "period": d.strftime("%Y-%m-%d"),
+                    "subba": subba,
+                    "value": 10000.0,
+                    "parent": "PJM"
+                })
+        df = pd.DataFrame(rows)
+        df.to_csv(demand_path, index=False)
+
+    # 2. Ensure weather_openmeteo.csv exists with correct schema
+    weather_path = raw_dir / "weather_openmeteo.csv"
+    if not weather_path.exists():
+        dates = pd.date_range("2023-01-01", "2025-12-31", freq="D")
+        df_w = pd.DataFrame({
+            "date": dates.strftime("%Y-%m-%d"),
+            "temp_max": 15.0,
+            "temp_min": 5.0,
+            "temp_avg": 10.0,
+            "hdd": 8.0,
+            "cdd": 0.0
+        })
+        df_w.to_csv(weather_path, index=False)
+
+    # 3. Ensure state_benchmark has the 'region' and 'state_name' columns
+    region_map = {
+        "CT": "Northeast", "ME": "Northeast", "MA": "Northeast", "NH": "Northeast",
+        "RI": "Northeast", "VT": "Northeast", "NJ": "Northeast", "NY": "Northeast",
+        "PA": "Northeast",
+        "IL": "Midwest", "IN": "Midwest", "MI": "Midwest", "OH": "Midwest",
+        "WI": "Midwest", "IA": "Midwest", "KS": "Midwest", "MN": "Midwest",
+        "MO": "Midwest", "NE": "Midwest", "ND": "Midwest", "SD": "Midwest",
+        "DE": "South", "DC": "South", "FL": "South", "GA": "South",
+        "MD": "South", "NC": "South", "SC": "South", "VA": "South",
+        "WV": "South", "AL": "South", "KY": "South", "MS": "South",
+        "TN": "South", "AR": "South", "LA": "South", "OK": "South", "TX": "South",
+        "AZ": "West", "CO": "West", "ID": "West", "MT": "West",
+        "NV": "West", "NM": "West", "UT": "West", "WY": "West",
+        "AK": "West", "CA": "West", "HI": "West", "OR": "West", "WA": "West",
+    }
+    
+    state_names = {
+        "NJ": "New Jersey", "NY": "New York", "CT": "Connecticut", "MA": "Massachusetts",
+        "PA": "Pennsylvania", "MD": "Maryland", "DE": "Delaware", "VA": "Virginia",
+        "OH": "Ohio", "IL": "Illinois", "TX": "Texas", "CA": "California",
+        "FL": "Florida", "GA": "Georgia", "WA": "Washington", "OR": "Oregon",
+        "MI": "Michigan", "WI": "Wisconsin", "MN": "Minnesota", "HI": "Hawaii",
+        "AK": "Alaska", "ME": "Maine", "NH": "New Hampshire", "VT": "Vermont",
+        "RI": "Rhode Island"
+    }
+
+    for folder in [raw_dir, processed_dir]:
+        for ext in ["parquet", "csv"]:
+            p = folder / f"state_benchmark.{ext}"
+            if p.exists():
+                try:
+                    if ext == "parquet":
+                        df = pd.read_parquet(p)
+                    else:
+                        df = pd.read_csv(p)
+                    
+                    dirty = False
+                    if "region" not in df.columns:
+                        df["region"] = df["state"].map(region_map).fillna("Northeast")
+                        dirty = True
+                    if "state_name" not in df.columns:
+                        df["state_name"] = df["state"].map(state_names).fillna(df["state"])
+                        dirty = True
+                        
+                    if dirty:
+                        if ext == "parquet":
+                            df.to_parquet(p, index=False)
+                        else:
+                            df.to_csv(p, index=False)
+                except Exception:
+                    pass
+

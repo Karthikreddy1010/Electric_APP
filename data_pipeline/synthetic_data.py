@@ -87,13 +87,67 @@ def generate_state_benchmarks(seed=42):
         ("OR",0.105),("MI",0.158),("WI",0.143),("MN",0.128),("HI",0.328),
         ("AK",0.218),("ME",0.168),("NH",0.188),("VT",0.178),("RI",0.218),
     ]
+    
+    # Census region mapping
+    region_map = {
+        "CT": "Northeast", "ME": "Northeast", "MA": "Northeast", "NH": "Northeast",
+        "RI": "Northeast", "VT": "Northeast", "NJ": "Northeast", "NY": "Northeast",
+        "PA": "Northeast",
+        "IL": "Midwest", "IN": "Midwest", "MI": "Midwest", "OH": "Midwest",
+        "WI": "Midwest", "IA": "Midwest", "KS": "Midwest", "MN": "Midwest",
+        "MO": "Midwest", "NE": "Midwest", "ND": "Midwest", "SD": "Midwest",
+        "DE": "South", "DC": "South", "FL": "South", "GA": "South",
+        "MD": "South", "NC": "South", "SC": "South", "VA": "South",
+        "WV": "South", "AL": "South", "KY": "South", "MS": "South",
+        "TN": "South", "AR": "South", "LA": "South", "OK": "South", "TX": "South",
+        "AZ": "West", "CO": "West", "ID": "West", "MT": "West",
+        "NV": "West", "NM": "West", "UT": "West", "WY": "West",
+        "AK": "West", "CA": "West", "HI": "West", "OR": "West", "WA": "West",
+    }
+    
+    state_names = {
+        "NJ": "New Jersey", "NY": "New York", "CT": "Connecticut", "MA": "Massachusetts",
+        "PA": "Pennsylvania", "MD": "Maryland", "DE": "Delaware", "VA": "Virginia",
+        "OH": "Ohio", "IL": "Illinois", "TX": "Texas", "CA": "California",
+        "FL": "Florida", "GA": "Georgia", "WA": "Washington", "OR": "Oregon",
+        "MI": "Michigan", "WI": "Wisconsin", "MN": "Minnesota", "HI": "Hawaii",
+        "AK": "Alaska", "ME": "Maine", "NH": "New Hampshire", "VT": "Vermont",
+        "RI": "Rhode Island"
+    }
+
     rows = []
     for abbr, base in states_data:
         for yr in range(2019, 2026):
             rate = base*(1+0.025*(yr-2019)) + np.random.normal(0, 0.005)
-            rows.append({"state": abbr, "year": yr, "avg_rate": round(rate,4),
-                         "avg_bill": round(rate*900,2)})
-    return pd.DataFrame(rows)
+            region = region_map.get(abbr, "Northeast")
+            state_name = state_names.get(abbr, abbr)
+            rows.append({
+                "state": abbr,
+                "state_name": state_name,
+                "year": yr,
+                "avg_rate": round(rate, 4),
+                "avg_rate_cents": round(rate * 100, 2),
+                "avg_bill": round(rate * 900, 2),
+                "avg_usage_kwh": 900,
+                "sales_mwh": 1000000.0,
+                "region": region
+            })
+            
+    df = pd.DataFrame(rows)
+    
+    # Compute rankings per year
+    for year in df["year"].unique():
+        mask = df["year"] == year
+        year_data = df.loc[mask].copy()
+        df.loc[mask, "rank"] = year_data["avg_rate"].rank(ascending=False).astype(int)
+        df.loc[mask, "percentile"] = (year_data["avg_rate"].rank(pct=True) * 100).round(1)
+        national_avg = year_data["avg_rate"].mean()
+        df.loc[mask, "vs_national_pct"] = (
+            (year_data["avg_rate"] - national_avg) / national_avg * 100
+        ).round(2)
+        
+    df["rank"] = df["rank"].astype(int)
+    return df
 
 
 def generate_retail_plans():
