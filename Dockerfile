@@ -26,6 +26,9 @@ COPY --from=builder /install /usr/local
 
 # Copy application code
 COPY config/ ./config/
+COPY database/ ./database/
+COPY shared/ ./shared/
+COPY orchestration/ ./orchestration/
 COPY data_pipeline/ ./data_pipeline/
 COPY models/ ./models/
 COPY api/ ./api/
