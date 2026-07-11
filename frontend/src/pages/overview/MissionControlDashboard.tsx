@@ -33,8 +33,8 @@ const KpiCard = ({ id, label, value, unit, changePct, changeLabel, subtext, acce
     <button
       id={id}
       onClick={() => targetTab && navigate(targetTab)}
-      className={`panel-operational text-left space-y-2 group transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 ${targetTab ? 'cursor-pointer' : 'cursor-default'}`}
-      style={{ borderTop: `3px solid ${accentColor}` }}
+      className={`panel-operational text-left space-y-2 group ${targetTab ? 'cursor-pointer' : 'cursor-default'}`}
+      style={{ borderTop: `2px solid ${accentColor}` }}
       aria-label={`${label}: ${value}${unit || ''}`}
     >
       <div className="flex items-center justify-between">
@@ -97,11 +97,7 @@ const AlertItem = ({ type, text }: { type: 'warning' | 'info'; text: string }) =
 // ─── Mini Energy Network ───────────────────────────────────────────────────────
 const MiniEnergyNetwork = () => (
   <div
-    className="rounded-lg border border-border-hairline overflow-hidden"
-    style={{
-      background: 'linear-gradient(135deg, #EEF3FB 0%, #F4F7FC 100%)',
-      boxShadow: '0 2px 12px rgba(47,107,255,0.06)',
-    }}
+    className="rounded-lg border border-border-hairline overflow-hidden bg-bg-surface"
   >
     <EnergyNetworkSVG />
   </div>
@@ -184,7 +180,6 @@ const MissionControlDashboard = () => {
       value: savingsOpportunity > 0 ? `$${savingsOpportunity.toFixed(2)}` : 'Optimized',
       subtext: savingsOpportunity > 0 ? 'vs. state avg baseline' : 'Below state average',
       accentColor: '#27AE60',
-      targetTab: 'Plans',
     },
     {
       id: 'kpi-regional-rank',
@@ -313,23 +308,14 @@ const MissionControlDashboard = () => {
               <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
             ),
           },
-          {
-            id: 'quick-plans',
-            title: 'Energy Plans',
-            desc: 'Compare available retail plans',
-            tab: 'Plans',
-            color: '#27AE60',
-            icon: (
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            ),
-          },
+
         ].map(({ id, title, desc, tab, color, icon }) => (
           <button
             key={id}
             id={id}
             onClick={() => navigate(tab)}
-            className="panel-operational group text-left hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 space-y-3"
-            style={{ borderLeft: `3px solid ${color}` }}
+            className="panel-operational group text-left space-y-3"
+            style={{ borderLeft: `2px solid ${color}` }}
           >
             <div className="w-8 h-8 rounded-md flex items-center justify-center"
               style={{ backgroundColor: `${color}15` }}>

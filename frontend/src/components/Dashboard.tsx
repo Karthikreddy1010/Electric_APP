@@ -10,7 +10,7 @@
  */
 import BillPage from '../pages/BillPage.tsx';
 import ForecastPage from '../pages/ForecastPage.tsx';
-import PlansPage from '../pages/PlansPage.tsx';
+
 import SettingsPage from '../pages/SettingsPage.tsx';
 import OverviewPage from '../pages/OverviewPage.tsx';
 
@@ -44,9 +44,7 @@ const Dashboard = ({ activeTab }: DashboardProps) => {
     case 'Forecast':
       return <ForecastPage />;
 
-    // Plans — recommends (Phase A, complete)
-    case 'Plans':
-      return <PlansPage />;
+
 
     // Settings — configures (Phase A, complete)
     case 'Settings':

@@ -17,7 +17,7 @@ import BillPage from './pages/BillPage.tsx';
 import ImpactPage from './pages/ImpactPage.tsx';
 import RegionalPage from './pages/RegionalPage.tsx';
 import ForecastPage from './pages/ForecastPage.tsx';
-import PlansPage from './pages/PlansPage.tsx';
+
 import SettingsPage from './pages/SettingsPage.tsx';
 
 import Header from './components/Header.tsx';
@@ -152,7 +152,7 @@ function App() {
                   <Route path="/impact" element={<ImpactPage />} />
                   <Route path="/regional-insights" element={<RegionalPage />} />
                   <Route path="/forecast" element={<ForecastPage />} />
-                  <Route path="/plans" element={<PlansPage />} />
+
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
 

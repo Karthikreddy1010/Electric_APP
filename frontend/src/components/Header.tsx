@@ -11,7 +11,7 @@ const TABS: { label: string; path: string }[] = [
   { label: 'Impact & Simulation', path: '/impact' },
   { label: 'Regional Insights', path: '/regional-insights' },
   { label: 'Forecast', path: '/forecast' },
-  { label: 'Plans', path: '/plans' },
+
   { label: 'Settings', path: '/settings' },
 ];
 
