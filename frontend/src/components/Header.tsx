@@ -4,15 +4,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import HeaderStatus from './shared/HeaderStatus.tsx';
 
-/** Route path → tab label mapping (Rev 3 navigation order). */
+/** Route path → tab label mapping. */
 const TABS: { label: string; path: string }[] = [
   { label: 'Overview', path: '/overview' },
   { label: 'Bill Analysis', path: '/bill-analysis' },
-  { label: 'Impact & Simulation', path: '/impact' },
-  { label: 'Regional Insights', path: '/regional-insights' },
+  { label: 'Impact', path: '/impact' },
   { label: 'Forecast', path: '/forecast' },
-
-  { label: 'Settings', path: '/settings' },
+  { label: 'Regional', path: '/regional-insights' },
+  { label: 'Plans', path: '/plans' },
 ];
 
 const Header = () => {
@@ -133,20 +132,12 @@ const Header = () => {
                   {/* Menu items */}
                   <div className="py-1">
                     <button
-                      id="header-menu-profile"
-                      onClick={() => { setMenuOpen(false); navigate('/settings'); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-primary transition-all"
-                    >
-                      <User size={13} />
-                      Profile & Preferences
-                    </button>
-                    <button
                       id="header-menu-settings"
                       onClick={() => { setMenuOpen(false); navigate('/settings'); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-text-secondary hover:text-text-primary hover:bg-bg-primary transition-all"
                     >
                       <Settings size={13} />
-                      System Settings
+                      Settings
                     </button>
                   </div>
 
@@ -155,7 +146,7 @@ const Header = () => {
                     <button
                       id="header-menu-logout"
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-energy-red hover:bg-energy-red/5 transition-all"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-xs text-alert-red hover:bg-alert-red/5 transition-all"
                     >
                       <LogOut size={13} />
                       Sign Out

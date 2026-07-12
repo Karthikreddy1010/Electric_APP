@@ -320,9 +320,9 @@ class ElectricityDemandForecaster:
                     # Forward-fill and backward-fill any gaps
                     daily[cols_to_merge] = daily[cols_to_merge].ffill().bfill()
                     
-                    # Validate coverage and only keep columns with >= 95% coverage
+                    # Validate coverage (>= 95%) and non-zero variance (to prevent singular matrix in Prophet)
                     coverage = daily[cols_to_merge].notna().mean()
-                    cols_to_merge = [c for c in cols_to_merge if coverage[c] >= 0.95]
+                    cols_to_merge = [c for c in cols_to_merge if coverage[c] >= 0.95 and daily[c].var() > 1e-5]
                     
                     if cols_to_merge:
                         # Drop any remaining rows with missing EIA-861M data in the selected columns

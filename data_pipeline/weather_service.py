@@ -310,6 +310,7 @@ def fetch_forecast_weather(days: int = 7) -> pd.DataFrame:
         "longitude": NJ_LON,
         "daily": "temperature_2m_max,temperature_2m_min",
         "forecast_days": forecast_days,
+        "past_days": 30,
         "timezone": "America/New_York",
     }
 

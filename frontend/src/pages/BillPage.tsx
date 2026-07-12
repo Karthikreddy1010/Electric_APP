@@ -16,6 +16,8 @@ import { useBill } from '../context/BillContext.tsx';
 import { useBillUpload } from '../hooks/useBillUpload.ts';
 import RecentBillsCard from '../components/shared/RecentBillsCard.tsx';
 import { useNavigation } from '../context/NavigationContext.tsx';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── Upload Interface ─────────────────────────────────────────────────────────
 
@@ -340,11 +342,13 @@ const AnalysisView = () => {
             <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5 border-b border-border-hairline pb-3">
               <Terminal size={14} className="text-primary-blue" /> AI bill explanation
             </h3>
-            <div className="text-xs text-text-primary space-y-3 max-h-[300px] overflow-y-auto leading-relaxed whitespace-pre-wrap font-medium pr-1">
+            <div className="text-xs text-text-primary max-h-[300px] overflow-y-auto pr-1 prose prose-sm prose-invert max-w-none prose-p:leading-relaxed prose-headings:text-text-primary prose-strong:text-text-primary prose-strong:font-bold">
               {billExplanation ? (
-                <div dangerouslySetInnerHTML={{ __html: billExplanation.replace(/\n/g, '<br />') }} />
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {billExplanation}
+                </ReactMarkdown>
               ) : (
-                <span className="italic text-text-secondary">Loading AI explanation...</span>
+                <span className="italic text-text-secondary font-medium">Loading AI explanation...</span>
               )}
             </div>
           </div>

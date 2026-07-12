@@ -83,7 +83,7 @@ const HoverTooltip = ({ visible, data, tooltipRef }: any) => {
   return (
     <div
       ref={tooltipRef}
-      className="fixed z-[9999] pointer-events-none bg-white text-text-primary p-4 rounded-md shadow-md border border-border-hairline transform -translate-x-1/2 -translate-y-[120%]"
+      className="fixed z-[9999] pointer-events-none bg-bg-surface text-text-primary p-4 rounded-md shadow-md border border-border-hairline transform -translate-x-1/2 -translate-y-[120%]"
       style={{ minWidth: '220px' }}
     >
       <div className="flex justify-between items-end border-b border-border-hairline pb-2 mb-2">
@@ -460,7 +460,7 @@ const RegionalPage = () => {
       </div>
 
       {/* Navigation Sub-Tabs bar */}
-      <div className="flex overflow-x-auto border-b border-border-hairline pb-px bg-white p-2 rounded-md shadow-sm gap-1">
+      <div className="flex overflow-x-auto border-b border-border-hairline pb-px bg-bg-surface p-2 rounded-md shadow-sm gap-1">
         {SUB_TABS.map((tab) => (
           <button
             key={tab.id}
@@ -477,7 +477,7 @@ const RegionalPage = () => {
       </div>
 
       {/* Sub-Tab Workspaces */}
-      <div className="bg-white border border-border-hairline rounded-md p-6 shadow-sm min-h-[460px]">
+      <div className="bg-bg-surface border border-border-hairline rounded-md p-6 shadow-sm min-h-[460px]">
 
         {/* SUMMARY SUB-TAB */}
         {subTab === 'summary' && (
@@ -542,7 +542,7 @@ const RegionalPage = () => {
                 <div className="flex flex-wrap items-center justify-between gap-4 bg-bg-secondary p-4 border border-border-hairline rounded-md">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-text-secondary uppercase font-sans">View metrics:</span>
-                    <div className="flex bg-white p-0.5 rounded border border-border-hairline text-[10px] font-bold">
+                    <div className="flex bg-bg-surface p-0.5 rounded border border-border-hairline text-[10px] font-bold">
                       <button
                         onClick={() => setViewMode('bill')}
                         className={`px-2.5 py-1 rounded-sm transition-all ${viewMode === 'bill' ? 'bg-bg-secondary text-primary-blue shadow-sm' : 'text-text-secondary'}`}
@@ -560,7 +560,7 @@ const RegionalPage = () => {
 
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-text-secondary uppercase font-sans">Granularity:</span>
-                    <div className="flex bg-white p-0.5 rounded border border-border-hairline text-[10px] font-bold">
+                    <div className="flex bg-bg-surface p-0.5 rounded border border-border-hairline text-[10px] font-bold">
                       {['state', 'utility', 'zip'].map((level) => (
                         <button
                           key={level}
@@ -576,7 +576,7 @@ const RegionalPage = () => {
                     </div>
                   </div>
 
-                  <form onSubmit={handleSearch} className="flex border border-border-hairline bg-white rounded overflow-hidden shadow-sm">
+                  <form onSubmit={handleSearch} className="flex border border-border-hairline bg-bg-surface rounded overflow-hidden shadow-sm">
                     <input
                       type="text"
                       value={searchInput}
@@ -612,7 +612,7 @@ const RegionalPage = () => {
                       colorRange={viewMode === 'bill' ? ["#F0F4FF", "#2F6BFF"] : ["#E8F7F3", "#16A085"]}
                     />
                   ) : isBoundariesLoading ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm">
+                    <div className="absolute inset-0 flex items-center justify-center bg-bg-surface/50 backdrop-blur-sm">
                       <div className="animate-spin h-8 w-8 border-b-2 border-primary-blue" />
                     </div>
                   ) : (
@@ -646,7 +646,7 @@ const RegionalPage = () => {
                         </h5>
                       </div>
 
-                      <div className="bg-white p-3 rounded-md border border-border-hairline shadow-sm space-y-1">
+                      <div className="bg-bg-surface p-3 rounded-md border border-border-hairline shadow-sm space-y-1">
                         <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest font-sans">Average Monthly Bill</p>
                         <p className="text-lg font-bold text-text-primary">${detailData?.avg_bill?.toFixed(2) || '120.00'}</p>
                         {detailData?.vs_national_bill_pct !== undefined && (
@@ -657,11 +657,11 @@ const RegionalPage = () => {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-white p-3 rounded-md border border-border-hairline shadow-sm">
+                        <div className="bg-bg-surface p-3 rounded-md border border-border-hairline shadow-sm">
                           <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-0.5 font-sans">Average Rate</p>
                           <p className="text-xs font-bold text-primary-blue">${detailData?.avg_rate?.toFixed(4) || '0.1600'}</p>
                         </div>
-                        <div className="bg-white p-3 rounded-md border border-border-hairline shadow-sm">
+                        <div className="bg-bg-surface p-3 rounded-md border border-border-hairline shadow-sm">
                           <p className="text-[9px] font-bold text-text-secondary uppercase tracking-widest mb-0.5 font-sans">Average Usage</p>
                           <p className="text-xs font-bold text-text-primary">{detailData?.usage_kwh?.toLocaleString() || '750'} <span className="text-[9px] font-sans font-normal">kWh</span></p>
                         </div>
@@ -676,7 +676,7 @@ const RegionalPage = () => {
                             {utilityTerritories.slice(0, 3).map((u: any) => (
                               <div key={u.eia_utility_id} className="flex justify-between items-center text-xs">
                                 <span className="font-semibold text-text-primary truncate max-w-[120px] font-sans">{u.utility_name}</span>
-                                <span className="text-[9px] font-bold text-text-secondary bg-white border border-border-hairline px-1.5 py-0.5 rounded-[4px]">{u.zip_count} ZIPs</span>
+                                <span className="text-[9px] font-bold text-text-secondary bg-bg-surface border border-border-hairline px-1.5 py-0.5 rounded-[4px]">{u.zip_count} ZIPs</span>
                               </div>
                             ))}
                           </div>
@@ -803,7 +803,7 @@ const RegionalPage = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-bg-secondary rounded-md p-4 border border-border-hairline">
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-text-secondary tracking-widest mb-1.5 font-sans">Selected State</label>
-                  <div className="w-full bg-white border border-border-hairline rounded-md px-3 py-2 text-xs font-bold text-text-primary">
+                  <div className="w-full bg-bg-surface border border-border-hairline rounded-md px-3 py-2 text-xs font-bold text-text-primary">
                     {selectedState}
                   </div>
                 </div>
@@ -816,7 +816,7 @@ const RegionalPage = () => {
                       placeholder={`Search utilities in ${selectedState}...`}
                       value={utilitySearchTerm}
                       onChange={(e) => setUtilitySearchTerm(e.target.value)}
-                      className="w-full bg-white border border-border-hairline rounded-md pl-9 pr-4 py-2 text-xs font-semibold text-text-primary outline-none focus:border-primary-blue"
+                      className="w-full bg-bg-surface border border-border-hairline rounded-md pl-9 pr-4 py-2 text-xs font-semibold text-text-primary outline-none focus:border-primary-blue"
                       aria-label="Search utility"
                     />
                   </div>
@@ -839,7 +839,7 @@ const RegionalPage = () => {
                           className={`w-full text-left px-3 py-2 rounded-md transition-all block truncate active:scale-[0.98] ${
                             selectedUtilityId === u.utility_id
                               ? 'bg-primary-blue text-white shadow-sm font-bold'
-                              : 'text-text-primary hover:bg-white border border-transparent'
+                              : 'text-text-primary hover:bg-bg-surface border border-transparent'
                           }`}
                         >
                           {u.utility_name}
@@ -863,7 +863,7 @@ const RegionalPage = () => {
                             <span className="text-[9px] font-bold uppercase bg-primary-blue/10 text-primary-blue px-2 py-0.5 rounded-[4px] border border-primary-blue/20">
                               {selectedState} network profile
                             </span>
-                            <div className="flex bg-white p-0.5 rounded border border-border-hairline text-[8px] font-bold uppercase">
+                            <div className="flex bg-bg-surface p-0.5 rounded border border-border-hairline text-[8px] font-bold uppercase">
                               <button
                                 onClick={() => setGranularity('annual')}
                                 className={`px-2 py-0.5 rounded-sm transition-all ${granularity === 'annual' ? 'bg-bg-secondary text-primary-blue shadow-sm border border-border-hairline' : 'text-text-secondary'}`}
@@ -1046,7 +1046,7 @@ const RegionalPage = () => {
                         <div key={f.fuel_type} className="flex justify-between items-center text-xs">
                           <span className="font-semibold text-text-secondary font-sans">{f.fuel_type_name}</span>
                           <div className="flex items-center gap-2">
-                            <div className="w-20 h-1.5 bg-white rounded-full overflow-hidden border border-border-hairline">
+                            <div className="w-20 h-1.5 bg-bg-surface rounded-full overflow-hidden border border-border-hairline">
                               <div className="h-full bg-primary-blue rounded-full" style={{ width: `${f.percentage}%` }}></div>
                             </div>
                             <span className="font-bold text-[10px] w-6 text-right">{f.percentage.toFixed(0)}%</span>
@@ -1094,7 +1094,7 @@ const RegionalPage = () => {
               <div className="flex items-center justify-between bg-bg-secondary p-3 border border-border-hairline rounded-md">
                 <span className="text-xs font-bold text-text-primary">EIA-861/861M Timelines</span>
                 {geoData?.available_months && (
-                  <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-md border border-border-hairline text-[10px] font-semibold text-text-primary">
+                  <div className="flex items-center gap-3 bg-bg-surface px-3 py-1.5 rounded-md border border-border-hairline text-[10px] font-semibold text-text-primary">
                     <button
                       onClick={() => setIsPlaying(!isPlaying)}
                       className={`p-1 rounded-full transition-all ${isPlaying ? 'bg-primary-blue text-white' : 'bg-bg-primary text-text-primary border border-border-hairline'}`}

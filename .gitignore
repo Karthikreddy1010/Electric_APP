@@ -22,19 +22,11 @@ env/
 data/raw/
 data/processed/
 data/parquet/
-
-# SQLite database
 data/electricity.db
-
-# Logs
 data/pipeline.log
-*.log
-
-# Synthetic bill annotations (generated)
-data/synthetic_bills/annotations/
-
-# Optional: generated OCR labels
-data/synthetic_bills/**/annotations/
+data/synthetic_bills/
+data/test_synthetic_bills/
+data/geojson_cache/
 
 # =========================
 # ML Models
@@ -49,7 +41,7 @@ mlruns/
 *.ckpt
 
 # =========================
-# Cache
+# Cache & Coverage
 # =========================
 .cache/
 .pytest_cache/
@@ -75,48 +67,26 @@ Thumbs.db
 # =========================
 .docker/
 
-# Databases
-data/electricity.db
+# =========================
+# Node
+# =========================
+node_modules/
 
+# =========================
 # Logs
-data/pipeline.log
+# =========================
 logs/
 *.log
 
-# Synthetic bill annotations
-data/synthetic_bills/annotations/
-
-# Python
-.venv/
-__pycache__/
-*.pyc
-# Node
-node_modules/
-# Database
-data/electricity.db
-# Logs
-data/pipeline.log
-# Annotation data
+# =========================
+# Generated Annotations
+# =========================
 annotations/
 **/annotations/
-# Cache
-.cache/
-
-# Generated synthetic bill data
-data/synthetic_bills/
-
-# If you also generate data here
 data_pipeline/synthetic_bills/
 
-# Database
-data/electricity.db
-
-# Logs
-logs/
-*.log
-data/pipeline.log
-
-data/test_synthetic_bills/
-
+# =========================
+# Documents
+# =========================
 documents/*.docx
 *.pdf

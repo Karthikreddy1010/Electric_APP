@@ -1,7 +1,11 @@
 """
 Bill Impact Engine Endpoints.
 Provides deterministic, statistical, and causal analysis of electricity bill components.
+
+All CPU-bound operations are offloaded to background threads via asyncio.to_thread()
+to prevent blocking the FastAPI event loop during Monte Carlo and DML inference.
 """
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, Query
 
@@ -24,10 +28,11 @@ async def impact_sensitivity(req: SensitivityRequest):
     """
     Change ONE component by a percentage and measure the deterministic impact.
     """
-    result = bill_impact_engine.sensitivity_analysis(
+    result = await asyncio.to_thread(
+        bill_impact_engine.sensitivity_analysis,
         component=req.component,
         change_pct=req.change_pct,
-        kwh=req.kwh
+        kwh=req.kwh,
     )
     if "error" in result:
         raise HTTPException(400, result["error"])
@@ -42,9 +47,10 @@ async def impact_what_if(req: WhatIfRequest):
     if not req.changes:
         raise HTTPException(400, "No changes provided")
     
-    result = bill_impact_engine.what_if_simulation(
+    result = await asyncio.to_thread(
+        bill_impact_engine.what_if_simulation,
         modifications=req.changes,
-        kwh=req.kwh
+        kwh=req.kwh,
     )
     if "error" in result:
         raise HTTPException(400, result["error"])
@@ -55,14 +61,14 @@ async def impact_what_if_v2(req: WhatIfV2Request):
     """
     Enhanced what-if simulation with learned demand, weather variations,
     and full multivariate Monte Carlo simulation.
+    Offloaded to thread pool to prevent event loop blocking.
     """
-
-        
-    result = bill_impact_engine.what_if_simulation_v2(
+    result = await asyncio.to_thread(
+        bill_impact_engine.what_if_simulation_v2,
         modifications=req.changes,
         kwh=req.kwh,
         scenario=req.scenario,
-        n_sim=req.n_simulations
+        n_sim=req.n_simulations,
     )
     if "error" in result:
         raise HTTPException(400, result["error"])
@@ -74,7 +80,7 @@ async def impact_rank():
     Rank all components by their share of the total bill and elasticity.
     """
     try:
-        rankings = bill_impact_engine.rank_components()
+        rankings = await asyncio.to_thread(bill_impact_engine.rank_components)
         return {"rankings": rankings}
     except Exception as e:
         logger.exception("Ranking error")
@@ -89,7 +95,7 @@ async def impact_causal(req: CausalRequest):
     if req.treatment not in COMPONENT_TYPES:
         raise HTTPException(400, f"Invalid treatment component: {req.treatment}")
         
-    result = bill_impact_engine.get_causal_impact(req.treatment)
+    result = await asyncio.to_thread(bill_impact_engine.get_causal_impact, req.treatment)
     if "error" in result:
         raise HTTPException(500, result["error"])
     return result
@@ -103,7 +109,8 @@ async def impact_causal_v2(req: CausalRequest):
     if req.treatment not in COMPONENT_TYPES:
         raise HTTPException(400, f"Invalid treatment component: {req.treatment}")
         
-    result = bill_impact_engine.get_causal_impact_v2(req.treatment)
+    result = await asyncio.to_thread(bill_impact_engine.get_causal_impact_v2, req.treatment)
     if "error" in result:
         raise HTTPException(500, result["error"])
     return result
+

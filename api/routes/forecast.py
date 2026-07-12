@@ -1,4 +1,5 @@
 """GET /forecast — electricity demand forecast via trained ensemble."""
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException, Query
 from api.state import app_state
@@ -27,7 +28,7 @@ async def forecast_costs(
             ensemble.train_and_evaluate()
             app_state["forecast_model"] = ensemble
             
-        forecast_results = ensemble.get_forecast(days=days_ahead, model_type=model)
+        forecast_results = await asyncio.to_thread(ensemble.get_forecast, days=days_ahead, model_type=model)
 
         import pandas as pd
         mapped_forecast = []

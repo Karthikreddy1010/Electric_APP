@@ -81,7 +81,7 @@ const RecentBillsCard = ({ limit, compact = false }: RecentBillsCardProps) => {
                     <button
                       onClick={() => setActiveBill.mutate(bill.id)}
                       disabled={setActiveBill.isPending}
-                      className="text-[9px] text-primary-blue hover:underline shrink-0 font-bold"
+                      className="text-[9px] text-primary-blue bg-primary-blue/10 hover:bg-primary-blue/20 border border-primary-blue/20 px-2 py-0.5 rounded-[4px] shrink-0 font-bold transition-colors"
                       title="Set as active bill"
                     >
                       Use
@@ -139,7 +139,7 @@ const RecentBillsCard = ({ limit, compact = false }: RecentBillsCardProps) => {
                           <button
                             onClick={() => setActiveBill.mutate(bill.id)}
                             disabled={setActiveBill.isPending}
-                            className="text-[10px] text-primary-blue hover:underline font-bold disabled:opacity-50"
+                            className="text-[10px] text-text-primary bg-bg-surface border border-border-hairline hover:bg-bg-primary hover:border-text-secondary/50 px-2.5 py-1 rounded-[4px] font-bold transition-all shadow-sm disabled:opacity-50"
                           >
                             Set Active
                           </button>

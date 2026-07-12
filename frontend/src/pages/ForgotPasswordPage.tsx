@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, CheckCircle2, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Mail, ShieldCheck, Zap, ArrowLeft, AlertCircle, BarChart3, Activity } from 'lucide-react';
 import apiClient from '../lib/apiClient.ts';
 
 export default function ForgotPasswordPage() {
@@ -34,85 +34,144 @@ export default function ForgotPasswordPage() {
     }
   };
 
+  const sellingPoints = [
+    { icon: <Zap size={16} />, title: 'AI Bill Analysis', desc: 'Instant OCR extraction and explanation' },
+    { icon: <BarChart3 size={16} />, title: 'ML Forecasting', desc: 'Predict future bills with weather data' },
+    { icon: <Activity size={16} />, title: 'Cost Simulation', desc: 'What-if scenarios for rate optimization' },
+    { icon: <ShieldCheck size={16} />, title: 'Secure & Private', desc: 'PII-compliant, no permanent file storage' },
+  ];
+
   return (
-    <div className="min-h-screen bg-bg-primary flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-bg-surface border border-border-hairline rounded-lg shadow-xl p-8 space-y-6">
-        
-        {/* Logo */}
-        <div className="text-center">
-          <Link to="/" className="inline-flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 rounded-[5px] bg-primary-blue flex items-center justify-center font-bold text-white text-base shadow-md">E</div>
-            <span className="font-sans font-bold text-lg tracking-tight text-text-primary">ElectricAI</span>
-          </Link>
-        </div>
-
-        {success ? (
-          <div className="text-center space-y-4 py-4">
-            <div className="w-12 h-12 bg-savings-green/10 rounded-full flex items-center justify-center text-savings-green mx-auto">
-              <CheckCircle2 size={28} />
-            </div>
-            <div className="space-y-2">
-              <h2 className="text-xl font-bold text-text-primary tracking-tight font-sans">Check your email</h2>
-              <p className="text-xs text-text-secondary leading-relaxed max-w-sm mx-auto">
-                We sent a secure link to reset your password to <br />
-                <span className="text-text-primary font-mono font-bold text-[11px]">{email}</span>
-              </p>
-            </div>
-            <div className="pt-2">
-              <Link
-                to="/login"
-                className="bg-bg-primary hover:bg-bg-surface border border-border-hairline text-text-primary font-bold px-4 py-2.5 rounded-md text-xs transition-all shadow-sm inline-flex items-center gap-1.5"
-              >
-                <ArrowLeft size={13} /> Back to Login
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold text-text-primary tracking-tight font-sans">Reset your password</h2>
-              <p className="text-xs text-text-secondary">Enter your email and we'll send you a password recovery link</p>
-            </div>
-
-            {error && (
-              <div className="bg-energy-red/10 border border-energy-red/20 text-energy-red px-4 py-2.5 rounded-md text-xs font-semibold flex items-center gap-2">
-                <AlertCircle size={14} className="shrink-0" />
-                <span>{error}</span>
+    <div className="min-h-screen flex bg-bg-primary font-sans">
+      {/* ── Left Panel: Brand Identity ──────────────────────────────────── */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden flex-col justify-between p-12 bg-bg-surface border-r border-border-hairline">
+        <div className="relative z-10 h-full flex flex-col justify-between">
+          <div>
+            <Link to="/" className="inline-flex items-center gap-2.5 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-blue rounded-md">
+              <div className="w-8 h-8 rounded-md bg-bg-primary border border-border-hairline flex items-center justify-center font-bold text-primary-blue">
+                <Zap size={16} />
               </div>
-            )}
+              <span className="font-bold text-lg tracking-tight text-text-primary">ElectricAI</span>
+            </Link>
+          </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold text-text-primary">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-text-secondary block">Email Address</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="sarah@company.com"
-                    className="w-full bg-bg-primary border border-border-hairline hover:border-text-secondary px-3 py-2.5 rounded-md pl-10 focus:outline-none focus:border-primary-blue transition-all"
-                  />
-                  <Mail size={14} className="absolute left-3.5 top-3 text-text-secondary" />
+          <div className="max-w-md space-y-6">
+            <h2 className="text-3xl font-bold text-text-primary tracking-tight leading-tight">
+              Operational intelligence for your energy spend.
+            </h2>
+            <p className="text-text-secondary text-sm leading-relaxed">
+              Reset your password to regain access to your personalized bill analytics, load forecasts, and rate optimization tools.
+            </p>
+
+            <div className="space-y-4 pt-6 border-t border-border-hairline">
+              {sellingPoints.map((point, idx) => (
+                <div key={idx} className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-md bg-bg-primary border border-border-hairline flex items-center justify-center text-primary-blue shrink-0">
+                    {point.icon}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-text-primary">{point.title}</h4>
+                    <p className="text-xs text-text-secondary mt-0.5">{point.desc}</p>
+                  </div>
                 </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-primary-blue text-white hover:bg-primary-blue/95 py-3 rounded-md text-xs font-bold transition-all shadow-sm"
-              >
-                {isLoading ? 'Sending link...' : 'Send Recovery Link'}
-              </button>
-            </form>
-
-            <div className="text-center pt-2">
-              <Link to="/login" className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary hover:text-text-primary font-bold">
-                <ArrowLeft size={13} /> Back to Sign In
-              </Link>
+              ))}
             </div>
           </div>
-        )}
 
+          <div className="flex items-center gap-2 text-xs text-text-secondary font-medium">
+            <ShieldCheck size={14} className="text-text-secondary" />
+            <span>Trusted by energy analysts across New Jersey utilities</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Right Panel: Forgot Password Form ───────────────────────────── */}
+      <div className="flex-1 flex items-center justify-center p-6 md:p-12 relative bg-bg-primary">
+        <div className="w-full max-w-sm space-y-8">
+          
+          <div className="lg:hidden text-center">
+            <Link to="/" className="inline-flex items-center gap-2">
+              <div className="w-8 h-8 rounded-md bg-bg-surface border border-border-hairline flex items-center justify-center text-primary-blue">
+                <Zap size={16} />
+              </div>
+              <span className="font-bold text-lg tracking-tight text-text-primary">ElectricAI</span>
+            </Link>
+          </div>
+
+          {success ? (
+            <div className="space-y-6">
+              <div className="w-12 h-12 bg-savings-green/10 rounded-full flex items-center justify-center text-savings-green mb-4">
+                <ShieldCheck size={28} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-text-primary tracking-tight">Check your email</h2>
+                <p className="text-sm text-text-secondary leading-relaxed">
+                  We sent a secure link to reset your password to <strong className="text-text-primary">{email}</strong>
+                </p>
+              </div>
+              <div>
+                <Link
+                  to="/login"
+                  className="w-full bg-bg-surface hover:bg-border-hairline border border-border-hairline text-text-primary py-2.5 rounded-md text-sm font-semibold transition-colors flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-blue"
+                >
+                  <ArrowLeft size={16} /> Back to Sign In
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <div className="space-y-2">
+                <h2 className="text-2xl font-bold text-text-primary tracking-tight">Reset your password</h2>
+                <p className="text-sm text-text-secondary">Enter your email and we'll send you a password recovery link.</p>
+              </div>
+
+              {error && (
+                <div className="bg-alert-red/10 border border-alert-red/20 text-alert-red px-4 py-3 rounded-md text-sm font-medium flex items-start gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-text-primary block">Email Address</label>
+                  <div className="relative">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="name@company.com"
+                      className="w-full bg-bg-surface border border-border-hairline hover:border-text-secondary px-3 py-2 rounded-md pl-10 focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue text-sm transition-colors text-text-primary"
+                    />
+                    <Mail size={16} className="absolute left-3 top-2.5 text-text-secondary" />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-text-primary text-bg-primary hover:bg-text-secondary py-2.5 rounded-md text-sm font-semibold transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-blue focus-visible:ring-offset-2 focus-visible:ring-offset-bg-primary"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-bg-primary/30 border-t-bg-primary rounded-full animate-spin" />
+                      Sending link...
+                    </>
+                  ) : (
+                    'Send Recovery Link'
+                  )}
+                </button>
+              </form>
+
+              <div className="text-center text-sm">
+                <Link to="/login" className="inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary font-medium transition-colors">
+                  <ArrowLeft size={16} /> Back to Sign In
+                </Link>
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );

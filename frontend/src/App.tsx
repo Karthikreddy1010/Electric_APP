@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillContextProvider } from './context/BillContext.tsx';
@@ -15,13 +16,23 @@ import ResetPasswordPage from './pages/ResetPasswordPage.tsx';
 import OverviewPage from './pages/OverviewPage.tsx';
 import BillPage from './pages/BillPage.tsx';
 import ImpactPage from './pages/ImpactPage.tsx';
-import RegionalPage from './pages/RegionalPage.tsx';
-import ForecastPage from './pages/ForecastPage.tsx';
-
 import SettingsPage from './pages/SettingsPage.tsx';
 
 import Header from './components/Header.tsx';
 import WelcomeWizard from './components/Auth/WelcomeWizard.tsx';
+
+// Lazy-loaded heavy pages (D3, Leaflet, Monte Carlo charts)
+const RegionalPage = lazy(() => import('./pages/RegionalPage.tsx'));
+const ForecastPage = lazy(() => import('./pages/ForecastPage.tsx'));
+const PlansPage = lazy(() => import('./pages/PlansPage.tsx'));
+
+function LazyFallback() {
+  return (
+    <div className="flex items-center justify-center py-32">
+      <div className="w-6 h-6 border-2 border-primary-blue border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -150,9 +161,9 @@ function App() {
                   <Route path="/overview" element={<OverviewPage />} />
                   <Route path="/bill-analysis" element={<BillPage />} />
                   <Route path="/impact" element={<ImpactPage />} />
-                  <Route path="/regional-insights" element={<RegionalPage />} />
-                  <Route path="/forecast" element={<ForecastPage />} />
-
+                  <Route path="/regional-insights" element={<Suspense fallback={<LazyFallback />}><RegionalPage /></Suspense>} />
+                  <Route path="/forecast" element={<Suspense fallback={<LazyFallback />}><ForecastPage /></Suspense>} />
+                  <Route path="/plans" element={<Suspense fallback={<LazyFallback />}><PlansPage /></Suspense>} />
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
 

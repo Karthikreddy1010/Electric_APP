@@ -23,21 +23,23 @@ import {
 import {
   Calculator, Activity, TrendingUp, TrendingDown,
   ThermometerSun, Lightbulb, BarChart3, Info,
-  Cpu, RefreshCw, ShieldCheck, ShieldAlert
+  Cpu, RefreshCw, ShieldCheck, ShieldAlert,
+  Flame, Snowflake, Zap, Leaf, Plug, Network, Building2
 } from 'lucide-react';
+import React from 'react';
 
 const PRESETS = [
-  { key: 'hot_summer', label: '🔥 Hot Summer', desc: 'High CDD temperatures and peak pricing (+25% BGS)' },
-  { key: 'cold_winter', label: '❄️ Cold Winter', desc: 'High HDD temperatures and peak heating demand (+15% BGS)' },
-  { key: 'high_market', label: '⚡ High Wholesale Market', desc: 'Wholesale prices spike (+40% BGS, +20% Transmission)' },
-  { key: 'conservation', label: '🌳 Green Conservation', desc: 'Usage drops by 20% (-20% usage)' }
+  { key: 'hot_summer', label: <span className="flex items-center gap-1.5"><Flame size={14} className="text-alert-red" /> Hot Summer</span>, desc: 'High CDD temperatures and peak pricing (+25% BGS)' },
+  { key: 'cold_winter', label: <span className="flex items-center gap-1.5"><Snowflake size={14} className="text-primary-blue" /> Cold Winter</span>, desc: 'High HDD temperatures and peak heating demand (+15% BGS)' },
+  { key: 'high_market', label: <span className="flex items-center gap-1.5"><Zap size={14} className="text-warning-amber" /> High Wholesale Market</span>, desc: 'Wholesale prices spike (+40% BGS, +20% Transmission)' },
+  { key: 'conservation', label: <span className="flex items-center gap-1.5"><Leaf size={14} className="text-savings-green" /> Green Conservation</span>, desc: 'Usage drops by 20% (-20% usage)' }
 ];
 
-const COMPONENT_METADATA: Record<string, { label: string; description: string; icon: string }> = {
-  bgs_rate:          { label: "BGS Supply",       description: "Wholesale energy supply rate set by the market.",         icon: "⚡" },
-  distribution_rate: { label: "Distribution",     description: "Local utility delivery and infrastructure fee.",          icon: "🔌" },
-  transmission_rate: { label: "Transmission",     description: "Regional high-voltage transport fee.",                    icon: "🏗️" },
-  sbc_rate:          { label: "Societal Benefits", description: "State-mandated societal benefits & clean energy charges.", icon: "🏛️" },
+const COMPONENT_METADATA: Record<string, { label: string; description: string; icon: React.ReactNode }> = {
+  bgs_rate:          { label: "BGS Supply",       description: "Wholesale energy supply rate set by the market.",         icon: <Zap size={12} /> },
+  distribution_rate: { label: "Distribution",     description: "Local utility delivery and infrastructure fee.",          icon: <Plug size={12} /> },
+  transmission_rate: { label: "Transmission",     description: "Regional high-voltage transport fee.",                    icon: <Network size={12} /> },
+  sbc_rate:          { label: "Societal Benefits", description: "State-mandated societal benefits & clean energy charges.", icon: <Building2 size={12} /> },
 };
 
 const COLORS = [
@@ -206,7 +208,7 @@ const ImpactPage = () => {
   }
 
   // Core Data Values
-  const utilityBill = uploadedBill.total_bill;
+  const utilityBill = uploadedBill.total_bill || 0;
   const simulatedBill = simulation?.simulated_bill ?? utilityBill;
   const deltaBill = simulation?.total_impact ?? (simulatedBill - utilityBill);
   const deltaPct = utilityBill > 0 ? (deltaBill / utilityBill) * 100 : 0;
@@ -214,7 +216,7 @@ const ImpactPage = () => {
   // Previous Bill estimate (using index seasonal multiplier offset)
   const previousBill = utilityBill * 0.92;
   const billDifference = utilityBill - previousBill;
-  const billDiffPct = (billDifference / previousBill) * 100;
+  const billDiffPct = previousBill > 0 ? (billDifference / previousBill) * 100 : 0;
 
   // Baseline decomposing factors
   const baseDirectPrice = baselineDecomp?.decomposition?.direct_price_effect ?? 0;
@@ -222,16 +224,16 @@ const ImpactPage = () => {
   const baseWeatherEffect = baselineDecomp?.decomposition?.weather_effect ?? 0;
 
   // Active Component breakdown mapping
-  const fixedCharge = uploadedBill.monthly_service_charge;
-  const deliveryCharge = round(uploadedBill.delivery_charge - fixedCharge, 2);
-  const supplyCharge = uploadedBill.supply_charge;
-  const salesTax = uploadedBill.tax;
+  const fixedCharge = uploadedBill.monthly_service_charge || 0;
+  const deliveryCharge = round((uploadedBill.delivery_charge || 0) - fixedCharge, 2);
+  const supplyCharge = uploadedBill.supply_charge || 0;
+  const salesTax = uploadedBill.tax || 0;
 
   const componentsList = [
-    { name: "Fixed Customer Service Charge", amount: fixedCharge, pct: round(fixedCharge / utilityBill * 100, 1), type: "fixed" },
-    { name: "Grid Delivery Infrastructure", amount: deliveryCharge, pct: round(deliveryCharge / utilityBill * 100, 1), type: "variable" },
-    { name: "Standard Supply Generation", amount: supplyCharge, pct: round(supplyCharge / utilityBill * 100, 1), type: "variable" },
-    { name: "State Sales Taxes (6.625%)", amount: salesTax, pct: round(salesTax / utilityBill * 100, 1), type: "tax" }
+    { name: "Fixed Customer Service Charge", amount: fixedCharge, pct: utilityBill > 0 ? round(fixedCharge / utilityBill * 100, 1) : 0, type: "fixed" },
+    { name: "Grid Delivery Infrastructure", amount: deliveryCharge, pct: utilityBill > 0 ? round(deliveryCharge / utilityBill * 100, 1) : 0, type: "variable" },
+    { name: "Standard Supply Generation", amount: supplyCharge, pct: utilityBill > 0 ? round(supplyCharge / utilityBill * 100, 1) : 0, type: "variable" },
+    { name: "State Sales Taxes (6.625%)", amount: salesTax, pct: utilityBill > 0 ? round(salesTax / utilityBill * 100, 1) : 0, type: "tax" }
   ];
 
   // Waterfall Chart data for Section 2 (ReadOnly current bill shift explanation)
@@ -323,7 +325,7 @@ const ImpactPage = () => {
         </div>
         <button
           onClick={clearOverrides}
-          className="px-4 py-2 bg-white hover:bg-bg-secondary text-text-primary border border-border-hairline rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
+          className="px-4 py-2 bg-bg-surface hover:bg-bg-secondary text-text-primary border border-border-hairline rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 active:scale-[0.98]"
         >
           <RefreshCw size={12} />
           Reset studio
@@ -528,7 +530,7 @@ const ImpactPage = () => {
 
         {/* AI explanation block */}
         {billExplanation && (
-          <div className="panel-operational space-y-3 bg-white border-border-hairline shadow-sm">
+          <div className="panel-operational space-y-3 bg-bg-surface border-border-hairline shadow-sm">
             <div className="flex items-center gap-2 border-b border-border-hairline pb-2">
               <Lightbulb className="text-warning-amber" size={16} />
               <h4 className="text-xs font-bold text-text-secondary uppercase tracking-widest">AI Bill Interpretation</h4>
@@ -793,11 +795,16 @@ const ImpactPage = () => {
 
             <div className="flex-1 min-h-[200px] mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={decompositionChartData} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
+                <BarChart data={decompositionChartData} margin={{ top: 10, right: 15, left: -25, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
-                  <XAxis dataKey="name" stroke="var(--text-secondary)" fontSize={10} tickLine={false} tick={{ fill: 'var(--text-secondary)' }} />
-                  <YAxis stroke="var(--text-secondary)" fontSize={10} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} />
-                  <Tooltip formatter={(value: any) => [`$${value.toFixed(2)}`, 'Cost Contribution']} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontWeight: 600 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 10, fontFamily: 'IBM Plex Mono' }} />
+                  <Tooltip
+                    cursor={{ fill: 'var(--bg-secondary)', opacity: 0.5 }}
+                    contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }}
+                    itemStyle={{ fontSize: '11px', color: 'var(--text-primary)' }}
+                    formatter={(value: any) => [`$${value.toFixed(2)}`, 'Cost Contribution']}
+                  />
                   <Bar dataKey="value" radius={[2, 2, 0, 0]} barSize={45}>
                     {decompositionChartData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -854,7 +861,7 @@ const ImpactPage = () => {
 
         {/* Annual actual cost indicator */}
         {customerSimulations && (
-          <div className="panel-operational relative overflow-hidden bg-white p-6 shadow-sm space-y-6">
+          <div className="panel-operational relative overflow-hidden bg-bg-surface p-6 shadow-sm space-y-6">
             <div className="flex justify-between items-baseline border-b border-border-hairline pb-3">
               <div>
                 <span className="bg-primary-blue/10 text-primary-blue text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-[4px]">

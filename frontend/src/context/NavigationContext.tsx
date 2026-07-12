@@ -17,7 +17,7 @@ export const NavigationProvider = ({
       'Impact & Simulation': '/impact',
       'Regional Insights': '/regional-insights',
       'Forecast': '/forecast',
-
+      'Plans': '/plans',
       'Settings': '/settings',
     };
     const target = routeMap[tab] ?? '/overview';

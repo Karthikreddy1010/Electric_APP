@@ -27,13 +27,9 @@ export function useBillUpload() {
   const [scanLogs, setScanLogs] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const addLog = (msg: string, delay: number) =>
-    new Promise<void>((resolve) => {
-      setTimeout(() => {
-        setScanLogs((prev) => [...prev, msg]);
-        resolve();
-      }, delay);
-    });
+  const addLog = (msg: string) => {
+    setScanLogs((prev) => [...prev, msg]);
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -73,16 +69,7 @@ export function useBillUpload() {
     setIsScanning(true);
     setScanLogs([]);
 
-    await addLog('🚀 Initializing Document AI Engine...', 100);
-    await addLog('📁 Reading uploaded document structure...', 200);
-    await addLog('👁️ Running OCR text extraction layout sweeps...', 200);
-    await addLog('⚡ Extraction completed: found 22 text blocks, 9 tables', 200);
-    await addLog('🎯 Running field bounding box alignments...', 200);
-    await addLog('🧬 Ground truth matcher: Confidence 98.4% (All green)', 200);
-    await addLog('📊 Querying PSEG Tariff Database (15477) for estimation parameters...', 250);
-    await addLog('⚖️ Calculating deterministic component contributions & sensitivity...', 200);
-    await addLog("🧠 Querying LLM explaining charges ('qwen3:4b')...", 300);
-    await addLog('✅ Explanation payload generated. Dashboard ready!', 150);
+    addLog('📁 Preparing document for upload...');
 
     try {
       const formData = new FormData();
@@ -94,17 +81,13 @@ export function useBillUpload() {
 
       if (user) {
         // ── Authenticated path: persist to DB via /users/me/bills ──────────
-        // This associates the bill with the user's account for multi-session access.
+        addLog('⬆️ Uploading to server (authenticated)...');
         const uploadRes = await apiClient.post('/users/me/bills', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
+        addLog('✅ Bill saved to your account.');
 
-        // The persistent endpoint returns minimal metadata; the full bill data
-        // is fetched from /users/me/dashboard on the next query invalidation.
-        // We temporarily populate context with the upload response bill data
-        // so the UI updates instantly without waiting for the background refetch.
         if (uploadRes.data?.bill) {
-          // Optimistic local update — dashboard invalidation will sync fully
           const partialBill: Partial<BillData> = {
             total_bill: uploadRes.data.bill.total_bill,
             usage_kwh: uploadRes.data.bill.usage_kwh,
@@ -113,13 +96,15 @@ export function useBillUpload() {
           setBillData(partialBill as BillData, [], null);
         }
 
-        // Invalidate dashboard + bills list so the DB record shows everywhere
         invalidateDashboard();
+        addLog('📊 Dashboard refreshed with new bill data.');
       } else {
-        // ── Guest / Demo path: in-memory only, unchanged behaviour ─────────
+        // ── Guest / Demo path: in-memory only ─────────────────────────────
+        addLog('⬆️ Uploading document for analysis...');
         const uploadRes = await apiClient.post('/bill/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
+        addLog('✅ Bill parsed — extracting components...');
 
         const billData: BillData = {
           ...uploadRes.data.bill_data,
@@ -132,13 +117,16 @@ export function useBillUpload() {
         };
 
         const ocrData: OcrRun[] = uploadRes.data.ocr_runs ?? [];
+
+        addLog('🧠 Requesting AI explanation...');
         const explainRes = await apiClient.post('/bill/explain', billData);
+        addLog('✅ Analysis complete.');
 
         setBillData(billData, ocrData, explainRes.data.explanation);
       }
     } catch (err) {
       console.error(err);
-      setScanLogs((prev) => [...prev, '❌ Analysis failed. Reverting to fallback static templates...']);
+      addLog('❌ Analysis failed. Please check your file and try again.');
     } finally {
       setIsScanning(false);
     }
@@ -148,10 +136,8 @@ export function useBillUpload() {
   const getWorkflowStep = () => {
     if (!isScanning && scanLogs.length === 0) return 0;
     if (scanLogs.length < 2) return 1;
-    if (scanLogs.length < 4) return 2;
-    if (scanLogs.length < 6) return 3;
-    if (scanLogs.length < 8) return 4;
-    if (scanLogs.length < 10) return 5;
+    if (scanLogs.length < 3) return 3;
+    if (scanLogs.length < 4) return 5;
     return 6;
   };
 

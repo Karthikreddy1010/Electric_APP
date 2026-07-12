@@ -8,8 +8,9 @@ import { useBill } from '../../context/BillContext.tsx';
 import { useNavigation } from '../../context/NavigationContext.tsx';
 import { useUserDashboard } from '../../hooks/useUserDashboard.ts';
 import RecentBillsCard from '../../components/shared/RecentBillsCard.tsx';
-import EnergyNetworkSVG from './EnergyNetworkSVG.tsx';
 import { TrendingUp, TrendingDown, ArrowUpRight, ShieldAlert, Lightbulb } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // ─── KPI Card ─────────────────────────────────────────────────────────────────
 interface KpiCardProps {
@@ -90,16 +91,11 @@ const AlertItem = ({ type, text }: { type: 'warning' | 'info'; text: string }) =
       ? <ShieldAlert size={13} className="text-warning-amber shrink-0 mt-0.5" />
       : <Lightbulb size={13} className="text-primary-blue shrink-0 mt-0.5" />
     }
-    <span className="font-medium leading-relaxed">{text}</span>
-  </div>
-);
-
-// ─── Mini Energy Network ───────────────────────────────────────────────────────
-const MiniEnergyNetwork = () => (
-  <div
-    className="rounded-lg border border-border-hairline overflow-hidden bg-bg-surface"
-  >
-    <EnergyNetworkSVG />
+    <div className="font-medium leading-relaxed prose prose-sm prose-invert max-w-none prose-p:my-0 prose-ul:my-0">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {text}
+      </ReactMarkdown>
+    </div>
   </div>
 );
 
@@ -126,9 +122,9 @@ const MissionControlDashboard = () => {
   const savingsOpportunity = Math.max(0, currentBill - 118.0);
 
   const insights: string[] = dashboardData?.insights ?? [
-    'Supply charges account for 58.3% of your bill.',
-    `Your bill ${billChangePct >= 0 ? 'increased' : 'decreased'} by ${Math.abs(billChangePct).toFixed(1)}% vs. last month.`,
-    `Your rate is ${Math.abs(vsPct).toFixed(1)}% above the national average.`,
+    '**Supply charges** account for **58.3%** of your bill.',
+    `Your bill ${billChangePct >= 0 ? 'increased' : 'decreased'} by **${Math.abs(billChangePct).toFixed(1)}%** vs. last month.`,
+    `Your rate is **${Math.abs(vsPct).toFixed(1)}%** above the national average.`,
   ];
 
   const alerts: string[] = [
@@ -198,18 +194,8 @@ const MissionControlDashboard = () => {
       {/* Page title */}
       <div className="flex items-end justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-1.5 h-6 bg-primary-blue rounded-full" />
-            <span className="text-[9px] font-bold uppercase tracking-widest text-text-secondary">
-              Mission Control
-            </span>
-            <div className="flex items-center gap-1 bg-savings-green/10 border border-savings-green/20 text-savings-green text-[8px] font-bold px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-savings-green animate-pulse" />
-              Live
-            </div>
-          </div>
           <h1 className="text-2xl font-bold text-text-primary tracking-tight">
-            Electricity Intelligence Dashboard
+            Dashboard Overview
           </h1>
           <p className="text-xs text-text-secondary mt-1">
             {uploadedBill?.utility ?? 'PSE&G'} · {uploadedBill?.zip_code ?? '07102'} ·
@@ -217,8 +203,8 @@ const MissionControlDashboard = () => {
           </p>
         </div>
         <div className="hidden md:flex items-center gap-2 text-[10px] text-text-secondary font-semibold">
-          <span className="w-2 h-2 rounded-full bg-savings-green" />
-          All systems operational
+          <span className="w-2 h-2 rounded-full bg-border-hairline" />
+          Last synced: Just now
         </div>
       </div>
 
@@ -227,25 +213,15 @@ const MissionControlDashboard = () => {
         {KPI_CARDS.map(kpi => <KpiCard key={kpi.id} {...kpi} />)}
       </div>
 
-      {/* Middle section: Recent Bills + Compact Network */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8">
-
-        {/* Recent Bills (shared component, limit=5 compact) */}
-        <div className="space-y-4">
-          <SectionHeader
-            title="Recent billing history"
-            sub="Simulated seasonal 12-month history"
-            action="Full history"
-            onAction={() => navigate('Bill Analysis')}
-          />
-          <RecentBillsCard limit={5} compact />
-        </div>
-
-        {/* Compact Energy Network */}
-        <div className="space-y-4">
-          <SectionHeader title="Energy network" sub="Your local grid topology" />
-          <MiniEnergyNetwork />
-        </div>
+      {/* Recent Bills (shared component) - taking full width since EnergyNetworkSVG is removed */}
+      <div className="space-y-4">
+        <SectionHeader
+          title="Recent billing history"
+          sub="Simulated seasonal 12-month history"
+          action="Full history"
+          onAction={() => navigate('Bill Analysis')}
+        />
+        <RecentBillsCard limit={5} compact />
       </div>
 
       {/* Alerts + Insights Row */}
