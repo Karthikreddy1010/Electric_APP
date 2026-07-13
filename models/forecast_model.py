@@ -431,7 +431,7 @@ class ElectricityDemandForecaster:
             enforce_stationarity=False,
             enforce_invertibility=False
         )
-        sarima_fitted = self.sarima_model.fit(disp=False)
+        sarima_fitted = self.sarima_model.fit(disp=False, maxiter=200, warn_convergence=False)
 
         # ── RECURSIVE OUT-OF-SAMPLE LAG PROPAGATION FOR VALIDATION ──
         # Resolves lag feature data leakage during test set validation.

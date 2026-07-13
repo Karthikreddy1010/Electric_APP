@@ -225,7 +225,7 @@ class CausalModelService:
         from econml.dml import LinearDML
 
         W = df[self._available_confounders].values.astype(np.float64)
-        T = df[[treatment]].values.astype(np.float64)
+        T = df[treatment].values.astype(np.float64)
         Y = df[OUTCOME_COL].values.astype(np.float64)
 
         model = LinearDML(

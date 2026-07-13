@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Activity, ChevronDown, LogOut, User, Settings, Zap } from 'lucide-react';
+import { Activity, ChevronDown, LogOut, Settings, Zap } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import HeaderStatus from './shared/HeaderStatus.tsx';
@@ -80,8 +80,8 @@ const Header = () => {
                 aria-current={isActive ? 'page' : undefined}
                 className={`px-3 py-1.5 rounded-[6px] text-xs font-semibold transition-all shrink-0 ${
                   isActive
-                    ? 'bg-bg-primary text-primary-blue border border-border-hairline'
-                    : 'text-text-secondary border border-transparent hover:text-text-primary hover:bg-bg-primary/50'
+                    ? 'bg-white text-primary-blue border border-gray-200'
+                    : 'text-text-secondary border border-transparent hover:text-white hover:bg-white/10'
                 }`}
               >
                 {tab.label}
