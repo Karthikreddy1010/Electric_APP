@@ -19,12 +19,12 @@ import ImpactPage from './pages/ImpactPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 
 import Header from './components/Header.tsx';
-import WelcomeWizard from './components/Auth/WelcomeWizard.tsx';
+
 
 // Lazy-loaded heavy pages (D3, Leaflet, Monte Carlo charts)
 const RegionalPage = lazy(() => import('./pages/RegionalPage.tsx'));
 const ForecastPage = lazy(() => import('./pages/ForecastPage.tsx'));
-const PlansPage = lazy(() => import('./pages/PlansPage.tsx'));
+
 
 function LazyFallback() {
   return (
@@ -47,7 +47,7 @@ const queryClient = new QueryClient({
 
 // Route Guard for Protected Dashboard Pages
 function ProtectedRoute() {
-  const { status, isOnboarded } = useAuth();
+  const { status } = useAuth();
 
   if (status === 'loading') {
     return (
@@ -71,8 +71,8 @@ function ProtectedRoute() {
 
   return (
     <>
-      {!isOnboarded && <WelcomeWizard />}
-      <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary">
+      {/* WelcomeWizard removed as requested by user */}
+      <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary light-theme">
         {sessionStorage.getItem('is_demo_mode') === 'true' && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-500 text-[10px] sm:text-xs px-4 py-2 flex items-center justify-center gap-2 font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
@@ -163,7 +163,7 @@ function App() {
                   <Route path="/impact" element={<ImpactPage />} />
                   <Route path="/regional-insights" element={<Suspense fallback={<LazyFallback />}><RegionalPage /></Suspense>} />
                   <Route path="/forecast" element={<Suspense fallback={<LazyFallback />}><ForecastPage /></Suspense>} />
-                  <Route path="/plans" element={<Suspense fallback={<LazyFallback />}><PlansPage /></Suspense>} />
+
                   <Route path="/settings" element={<SettingsPage />} />
                 </Route>
 

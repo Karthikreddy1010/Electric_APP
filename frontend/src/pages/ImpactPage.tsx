@@ -138,6 +138,24 @@ const ImpactPage = () => {
     }
   }, [uploadedBill]);
 
+  // Tariff States
+  const [tariffSummary, setTariffSummary] = useState<any>(null);
+  const [tariffHistory, setTariffHistory] = useState<any[]>([]);
+  const utility = 'PSE&G';
+  const schedule = 'RS';
+
+  useEffect(() => {
+    // Fetch summary
+    axios.get(`/tariffs/summary?utility_code=${utility}`)
+      .then(res => setTariffSummary(res.data))
+      .catch(console.error);
+        
+    // Fetch history
+    axios.get(`/tariffs/history?utility_code=${utility}&schedule=${schedule}`)
+      .then(res => setTariffHistory(res.data.history || []))
+      .catch(console.error);
+  }, [utility, schedule]);
+
   // Debounced states
   const debouncedKwh = useDebounce(kwh, 300);
   const debouncedBgs = useDebounce(bgsChange, 300);
@@ -310,7 +328,7 @@ const ImpactPage = () => {
   });
 
   return (
-    <div className="space-y-10 font-sans pb-16">
+    <div className="bg-bg-primary text-text-primary space-y-10 font-sans pb-16 px-4 md:px-8 pt-6">
 
       {/* HEADER BANNER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-border-hairline pb-6">
@@ -706,10 +724,87 @@ const ImpactPage = () => {
         </div>
       </div>
 
+      {/* SECTION 3.5: Historic Tariff Data */}
+      <div className="space-y-6">
+        <div className="border-l-4 border-primary-blue pl-3">
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part III: Historic Tariff Data</h3>
+          <p className="text-xs text-text-secondary">Explore the database summary and historic tariff rates for {utility} ({schedule}).</p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="panel-operational">
+            <h4 className="text-sm font-bold text-text-primary mb-3">Database Summary</h4>
+            {tariffSummary ? (
+              <div className="space-y-2 text-sm text-text-secondary">
+                <div className="flex justify-between border-b border-border-hairline pb-2">
+                  <span>Utility</span>
+                  <span className="font-mono-numbers text-text-primary">{tariffSummary.utility}</span>
+                </div>
+                <div className="flex justify-between border-b border-border-hairline pb-2">
+                  <span>Total Versions</span>
+                  <span className="font-mono-numbers text-text-primary">{tariffSummary.total_versions}</span>
+                </div>
+                <div className="flex justify-between border-b border-border-hairline pb-2">
+                  <span>Rates Recorded</span>
+                  <span className="font-mono-numbers text-text-primary">{tariffSummary.total_rates}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Schedules</span>
+                  <span className="font-mono-numbers text-text-primary">{tariffSummary.schedules.join(', ')}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-text-secondary">Loading summary...</div>
+            )}
+          </div>
+
+          <div className="lg:col-span-2 panel-operational">
+            <h4 className="text-sm font-bold text-text-primary mb-3">Historical Rate Explorer</h4>
+            <div className="space-y-4 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+              {tariffHistory.map((version, i) => (
+                <div key={i} className="p-3 bg-bg-secondary border border-border-hairline rounded-md">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-text-primary text-sm">{version.version_name}</span>
+                    <span className="text-[10px] text-text-secondary uppercase tracking-wider bg-bg-primary px-2 py-0.5 rounded border border-border-hairline">
+                      Effective: {version.effective_start} to {version.effective_end || 'Present'}
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="border-b border-border-hairline text-text-secondary font-sans uppercase tracking-widest text-[9px]">
+                          <th className="py-2 px-1">Component</th>
+                          <th className="py-2 px-1">Category</th>
+                          <th className="py-2 px-1 text-right">Rate</th>
+                          <th className="py-2 px-1">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border-hairline/50">
+                        {version.components.map((c: any, idx: number) => (
+                          <tr key={idx} className="hover:bg-bg-primary/50 transition-colors">
+                            <td className="py-2 px-1 font-medium text-text-primary">{c.component}</td>
+                            <td className="py-2 px-1 text-text-secondary">{c.category}</td>
+                            <td className="py-2 px-1 text-right font-mono-numbers text-primary-blue font-bold">{c.rate}</td>
+                            <td className="py-2 px-1 text-text-secondary font-mono-numbers text-[10px]">{c.unit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+              {tariffHistory.length === 0 && (
+                <div className="text-xs text-text-secondary">Loading history...</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* SECTION 4: Simulation Results */}
       <div className="space-y-6">
         <div className="border-l-4 border-primary-blue pl-3">
-          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part III: Simulation Results</h3>
+          <h3 className="text-base font-bold text-text-primary uppercase tracking-wider">Part IV: Simulation Results</h3>
           <p className="text-xs text-text-secondary">Probabilistic outputs, causal factor decompositions, and PJM grid states.</p>
         </div>
 

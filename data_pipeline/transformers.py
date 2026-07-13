@@ -234,3 +234,33 @@ def preprocess_cpi(df: pd.DataFrame) -> pd.DataFrame:
     df = df.dropna(subset=["cpi"])
     df = df.sort_values(["year", "month"]).reset_index(drop=True)
     return df
+
+
+def preprocess_pseg_distribution_rates(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Preprocess PSEG Component Distribution Rates.
+    Extracts tariff numbers and splits component labels.
+    """
+    if df.empty:
+        return df
+
+    df = df.copy()
+    
+    # Extract tariff number (e.g., 'Tariff 13' -> 13)
+    if "tariff_version" in df.columns:
+        df["tariff_number"] = df["tariff_version"].str.extract(r'(\d+)')[0]
+        df["tariff_number"] = pd.to_numeric(df["tariff_number"], errors="coerce")
+        
+    # Split component_label by colon
+    if "component_label" in df.columns:
+        df["component_type"] = df["component_label"].str.split(":").str[0].str.strip()
+        df["component_detail"] = df["component_label"].str.split(":", n=1).str[1].str.strip()
+        
+    # Ensure rates are numeric
+    if "base_rate" in df.columns:
+        df["base_rate"] = pd.to_numeric(df["base_rate"], errors="coerce")
+    if "with_sut" in df.columns:
+        df["with_sut"] = pd.to_numeric(df["with_sut"], errors="coerce")
+        
+    df = df.drop_duplicates()
+    return df

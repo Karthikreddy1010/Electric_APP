@@ -1,0 +1,82 @@
+Original Label,Normalized Label,Category,Unit
+Service Charge: Customer   in each month [  including New Jersey Sales and,customer_charge,fixed,$/month
+Summer Demand Charge: **   **,demand_charge,demand,$/kW
+Summer Demand Charge: Distribution Charge Remainder,distribution_charge,demand,$/kW
+Summer Demand Charge: Generation Capacity,generation_capacity_charge,demand,$/kW
+Summer Demand Charge: Market Transition Charge ( ),market_transition_charge,demand,$/kW
+Summer Demand Charge: Total Kilowatt Charge,demand_charge,demand,$/kW
+Summer Demand Charge: Transmission Capacity,transmission_charge,demand,$/kW
+Annual Demand Charge: per kilowatt of Monthly Peak Demand,demand_charge,demand,$/kW
+Service Charge: in each month [ including New Jersey Sales and Use Tax (SUT)],customer_charge,fixed,$/month
+Summer Demand Charge: per kilowatt of Monthly Peak Demand,demand_charge,demand,$/kW
+Volumetric Charge: per kilowatthour,distribution_charge,volumetric,$/kWh
+Volumetric Charge: per kilowatt-hour,distribution_charge,volumetric,$/kWh
+"Service Charge: Customer , in each month [,  including New Jersey Sales and",customer_charge,fixed,$/month
+Summer Demand Charge: Market Transition Charge,market_transition_charge,demand,$/kW
+Annual Demand Charge: per kilowatt of Annual Peak Demand,demand_charge,demand,$/kW
+Annual Demand Charge: per kilowatt of Duplicate Service Capacity,demand_charge,demand,$/kW
+Service Charge: (c-) Addition of a Base Energy Charge of  cents ( cents including New,unknown,unknown,unknown
+Service Charge: (e-a) A monthly facilities charge as set fo rth in Section  of these Standard Terms,customer_charge,fixed,$/month
+"Service Charge: , in each month [, including New Jersey Sales and Use Tax (SUT)]",unknown,unknown,unknown
+Service Charge: Customer must commit to a one time expenditure of at least  times its electric bill for the  months,customer_charge,fixed,$/month
+"Service Charge: Public Service, in accordance with Standard Te rms and Conditions, Section , Metering, for",unrelated_boilerplate,notes,N/A
+"Service Charge: SBC by subtracting  cents ( cents with SUT), and",sbc_charge,volumetric,$/kWh
+Service Charge: customer’s Application/Agreement A credit of  ( including SUT) per kilowatt of,customer_charge,fixed,$/month
+Summer Demand Charge: (d-) A credit of  ( including SUT) per  kilowatt of Monthly Peak Demand shall apply,demand_charge,demand,$/kW
+Summer Demand Charge: (d-) A credit of  ( including SUT) per kilowatt of Monthly Peak Demand  shall apply,demand_charge,demand,$/kW
+Summer Demand Charge: Bills are due on presentation subject to a late pay ment charge at the rate of % per monthly,demand_charge,demand,$/kW
+Summer Demand Charge: billing period in accordance with Section  of  the Standard Terms and Conditions Service to a,demand_charge,demand,$/kW
+Summer Demand Charge: per kilowatt of On-Peak Monthly Peak Demand,demand_charge,demand,$/kW
+"Summer Demand Charge: shall be in accordance with Section , Measurem ent of Electric Servic e, of the Standard Terms",demand_charge,demand,$/kW
+"Service Charge: in each month for installations with a thr ee time period watthour meter, or  in each",customer_charge,fixed,$/month
+"Summer Demand Charge: for paperless billing, of the outstanding bill and subject to  a late payment charge at the rate of %",demand_charge,demand,$/kW
+Summer Demand Charge: per monthly billing period in accordance with Section  of the Standard Terms and Conditions,demand_charge,demand,$/kW
+Service Charge: (e-a) A monthly f acilities charge as set forth in Section  of these Standard Terms,unrelated_boilerplate,notes,N/A
+"Service Charge: accordance with Standard Terms and Conditions, Section , Metering, for the installed",unrelated_boilerplate,notes,N/A
+"Service Charge: in each month for installations with a three time period watthour meter, or  in each",customer_charge,fixed,$/month
+Summer Demand Charge: (d-) A credit of  ( including SUT) per kilowatt of Monthly  Peak Demand  shall apply,demand_charge,demand,$/kW
+Summer Demand Charge: (d-) A credit of  ( including SUT) per kilowatt of Monthly Peak Demand shall apply,demand_charge,demand,$/kW
+"Summer Demand Charge: for paperless billing, of the outstanding bill and subject to a late payment charge at the rate of %",demand_charge,demand,$/kW
+Summer Demand Charge: per monthly billing period in accordance with Sectio n  of the Standard Terms and Conditions,demand_charge,demand,$/kW
+"Summer Demand Charge: shall be in accordance with Section , Measurement of Electric Service, of the Standard Terms",demand_charge,demand,$/kW
+Volumetric Charge: The current adjustment factor for Subtransmission to High Voltage usage is %,distribution_charge,volumetric,$/kWh
+Service Charge: (e-a) A monthly facilities charge as set forth in Section  of these Standard Terms,customer_charge,fixed,$/month
+"Service Charge: Conditions, Section , Metering, for the installed interval metering device if the customer chooses to",customer_charge,fixed,$/month
+Service Charge: customer’s Application/Agreement A credit of  ( including SUT)  per kilowatt of,customer_charge,fixed,$/month
+Summer Demand Charge: (d-) A credit of  ( including SUT) per kilowatt of Monthly Peak Demand shall apply to,demand_charge,demand,$/kW
+"Summer Demand Charge: accordance with Section , Measurement of Electric Service, of the Standard Terms and",demand_charge,demand,$/kW
+Summer Demand Charge: monthly billing period in accordance with Section  of the Standard Terms and Conditions Service,demand_charge,demand,$/kW
+"Summer Demand Charge: paperless billing, of the outstanding bill and subject to a late payment charge at the rate of % per",demand_charge,demand,$/kW
+Volumetric Charge: adjustment factor for Subtransmission to High Voltage usage is %,distribution_charge,volumetric,$/kWh
+"Volumetric Charge: and High Voltage Losses as detailed in the Standard Terms and Conditions, Section   The current",distribution_charge,volumetric,$/kWh
+Service Charge: Customer   in each month [ including New,customer_charge,fixed,$/month
+Summer Demand Charge: Distribution Charge Remainder       **       **,distribution_charge,demand,$/kW
+Annual Demand Charge: Bills are due on presentation subject to a late pay ment charge at the rate of % per monthly,demand_charge,demand,$/kW
+Annual Demand Charge: billing period in accordance with Section  of  the Standard Terms and Conditions Service to a,demand_charge,demand,$/kW
+Annual Demand Charge: per kilowatt of highest Monthly Peak,demand_charge,demand,$/kW
+"Annual Demand Charge: shall be in accordance with Section , Measurem ent of Electric Servic e, of the Standard Terms",demand_charge,demand,$/kW
+Service Charge: (d-) A credit of  ( including SUT) per  kilowatt of Monthly Peak Demand shall apply,demand_charge,demand,$/kW
+Service Charge: (d-) A credit of  ( including SUT) per kilowatt of Monthly Peak Demand  shall apply,demand_charge,demand,$/kW
+"Service Charge: as designated in Standard Terms and Conditions , Section , High Voltage Service, and",unrelated_boilerplate,notes,N/A
+Service Charge: be subject to a monthly Service Charge of  ( including SUT) in lieu of the,unknown,unknown,unknown
+"Annual Demand Charge: for paperless billing, of the outstanding bill and subject to  a late payment charge at the rate of %",demand_charge,demand,$/kW
+Annual Demand Charge: per monthly billing period in accordance with Section  of the Standard Terms and Conditions,demand_charge,demand,$/kW
+"Annual Demand Charge: for paperless billing, of the outstanding bill and subject to a late payment charge at the rate of %",demand_charge,demand,$/kW
+"Annual Demand Charge: shall be in accordance with Section , Measurement of Electric Servic e, of the Standard Terms",demand_charge,demand,$/kW
+Service Charge: (d-) A credit of  ( including SUT) per kilowatt of Monthly Peak Demand shall apply,demand_charge,demand,$/kW
+Service Charge: be subject to a monthly Service Charg e of   ( including SUT) in lieu of the,unknown,unknown,unknown
+"Service Charge: designated in Standard Terms and Conditions, Section , High Voltage Service, and",unrelated_boilerplate,notes,N/A
+"Annual Demand Charge: accordance with Section , Measurement of Electric Service, of the Standard Terms and",demand_charge,demand,$/kW
+Annual Demand Charge: monthly billing period in accordance with Section  of the Standard Terms and Conditions Service,demand_charge,demand,$/kW
+"Annual Demand Charge: paperless billing, of the outstanding bill and subject to a late payment charge at the rate of % per",demand_charge,demand,$/kW
+Service Charge: (d-) A credit of  ( including SUT) per kilowatt of Monthly Peak Demand shall apply to,demand_charge,demand,$/kW
+"Service Charge: designated in Standard Terms and Conditions, Section , High Voltage Service, and customer and",customer_charge,fixed,$/month
+Service Charge: monthly Service Charg e of  ( including SUT) in lieu of the otherwise applicable Service,unknown,unknown,unknown
+"Summer Demand Charge: (h) Veterans’ Organization Service:   Pursuant to NJSA :-, when electric service is",demand_charge,demand,$/kW
+"Summer Demand Charge: Act,’ NJS A :- et seq”  Under NJSA : - , a qualified Veterans’ Organization shall be",demand_charge,demand,$/kW
+Summer Demand Charge: Organization as defined by NJSA :-  as “an organization dedicated to serving the needs of,demand_charge,demand,$/kW
+Service Charge: Customer  in each month [ including New Jersey Sales and Use,customer_charge,fixed,$/month
+Summer Demand Charge: Including SUT,demand_charge,demand,$/kW
+Summer Demand Charge: Off-Peak,demand_charge,demand,$/kW
+Summer Demand Charge: On-Peak,demand_charge,demand,$/kW
+Service Charge: Customer   in each mont h [ including New Jersey,customer_charge,fixed,$/month

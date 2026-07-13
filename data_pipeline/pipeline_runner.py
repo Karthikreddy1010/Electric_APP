@@ -18,7 +18,8 @@ from data_pipeline.transformers import (
     preprocess_nj_retail_prices,
     preprocess_eia_residential_prices,
     preprocess_weather,
-    preprocess_cpi
+    preprocess_cpi,
+    preprocess_pseg_distribution_rates
 )
 from data_pipeline.validators import run_all_validations
 from data_pipeline.merger import build_master_dataset
@@ -94,6 +95,9 @@ def run_pipeline(force: bool = False) -> dict:
         
     if "cpi_monthly" in datasets:
         processed["cpi_monthly"] = preprocess_cpi(datasets["cpi_monthly"])
+
+    if "pseg_distribution_rates" in datasets:
+        processed["pseg_distribution_rates"] = preprocess_pseg_distribution_rates(datasets["pseg_distribution_rates"])
 
     # Run EIA-861 processor
     try:

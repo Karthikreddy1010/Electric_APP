@@ -371,8 +371,9 @@ async def upload_user_bill(
         try:
             forecast_results = ensemble.get_forecast(days=30, model_type="ensemble")
             avg_daily = bill["usage_kwh"] / bill["days"] if bill["days"] > 0 else 25.0
-            sum_pred = sum(fc["predicted_demand"] for fc in forecast_results if fc["predicted_demand"] is not None)
-            avg_grid = sum_pred / len(forecast_results) if sum_pred > 0 else 1.0
+            valid_preds = [fc["predicted_demand"] for fc in forecast_results if fc["predicted_demand"] is not None]
+            sum_pred = sum(valid_preds)
+            avg_grid = sum_pred / len(valid_preds) if len(valid_preds) > 0 else 1.0
             rate = bill["effective_rate"]
             
             for fc in forecast_results:
@@ -388,28 +389,6 @@ async def upload_user_bill(
             logger.warning(f"Failed to calculate scaled forecast: {fe}")
             scaled_forecast = []
 
-    plans_comparison = {}
-    plans_df = app_state.get("plans_df")
-    billing_df = app_state.get("billing_df")
-    if plans_df is not None and billing_df is not None:
-        try:
-            from api.schemas import PlanSimRequest
-            from api.services.simulation_service import run_plan_simulation
-            plan_req = PlanSimRequest(
-                monthly_usage_kwh=bill["usage_kwh"],
-                usage_growth_pct=0.0,
-                horizon_months=12,
-                n_simulations=1000
-            )
-            sim_res = run_plan_simulation(plans_df, billing_df, plan_req)
-            plans_comparison = {
-                "comparison": [p.model_dump() for p in sim_res.comparison],
-                "recommended": sim_res.recommended,
-                "savings_vs_default": sim_res.savings_vs_default
-            }
-        except Exception as pe:
-            logger.warning(f"Plan simulation failed: {pe}")
-            plans_comparison = {}
 
     new_bill = UserBill(
         user_id=current_user.id,
@@ -432,7 +411,7 @@ async def upload_user_bill(
             "vs_national_pct": 12.3,
             "state_rank": 8,
         },
-        recommendations=plans_comparison
+        recommendations={}
     )
 
     db.add(new_bill)
@@ -453,7 +432,7 @@ async def upload_user_bill(
         user_id=current_user.id,
         type="bill_uploaded",
         title="New bill analyzed",
-        message=f"Bill '{fname}' was parsed successfully. Estimated savings: ${plans_comparison.get('savings_vs_default', 0.0) / 12.0:.2f}/month."
+        message=f"Bill '{fname}' was parsed successfully."
     )
     db.add(notification)
 

@@ -62,41 +62,6 @@ class BenchmarkResponse(BaseModel):
     states: list[StateData]
 
 
-# ===== /plan-simulation =====
-class PlanSimRequest(BaseModel):
-    monthly_usage_kwh: float = Field(750, ge=100, le=5000)
-    usage_growth_pct: float = Field(0.0, ge=-50, le=50)
-    horizon_months: int = Field(12, ge=1, le=36)
-    n_simulations: int = Field(10000, ge=1000, le=100000)
-
-class PlanResult(BaseModel):
-    provider: str
-    plan_type: str
-    rate: float
-    expected_annual_cost: float
-    median_annual_cost: float
-    std_annual_cost: float
-    p5_annual_cost: float
-    p95_annual_cost: float
-    risk_score: float
-    monthly_expected: list[float]
-    
-    # New integration fields
-    utility_name: Optional[str] = None
-    tariff_name: Optional[str] = None
-    fixed_charge: Optional[float] = None
-    energy_charge: Optional[float] = None
-    service_type: Optional[str] = None
-    rate_structure: Optional[str] = None
-    effective_date: Optional[str] = None
-    green_pct: Optional[float] = None
-
-
-class PlanSimResponse(BaseModel):
-    comparison: list[PlanResult]
-    recommended: str
-    savings_vs_default: float
-
 
 # ===== /simulate =====
 class SimulateRequest(BaseModel):

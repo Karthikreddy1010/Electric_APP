@@ -359,6 +359,56 @@ class BgsAuctionRate(Base):
     )
 
 
+class TariffVersion(Base):
+    """
+    Metadata for a specific tariff version issued by a utility.
+    """
+    __tablename__ = "tariff_versions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    utility_name = Column(String(100), nullable=False)
+    utility_code = Column(String(50), nullable=False, index=True)
+    state = Column(String(2))
+    service_territory = Column(String(100))
+    regulator = Column(String(100))
+    tariff_version = Column(String(50), nullable=False)
+    description = Column(Text)
+    regulator_order = Column(String(100))
+    effective_start = Column(Date, index=True)
+    effective_end = Column(Date, index=True)
+    status = Column(String(20), default="active")
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    rates = relationship("HistoricalUtilityTariff", back_populates="version", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("utility_code", "tariff_version", name="uq_tariff_version_utility"),
+    )
+
+
+class HistoricalUtilityTariff(Base):
+    """
+    Normalized, historical component-level rates across utilities.
+    """
+    __tablename__ = "historical_utility_tariffs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tariff_version_id = Column(Integer, ForeignKey("tariff_versions.id"), nullable=False, index=True)
+    component = Column(String(100), nullable=False, index=True)
+    component_category = Column(String(50))
+    rate = Column(Float, nullable=False)
+    unit = Column(String(20))
+    schedule = Column(String(50), nullable=False, index=True)
+    season = Column(String(20))
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    version = relationship("TariffVersion", back_populates="rates")
+
+    __table_args__ = (
+        Index("ix_hist_tariff_fast_lookup", "tariff_version_id", "schedule", "component"),
+    )
+
+
 class CommunityEnergy(Base):
     """
     Aggregated Community-Scale Utility Energy Data for NJ.
@@ -798,6 +848,11 @@ class CustomerBill(Base):
     supply_charge = Column(Float)
     tax = Column(Float)
     total_bill = Column(Float)
+    
+    # Bill Versioning Fields
+    utility = Column(String(50))
+    tariff_version_id = Column(Integer, ForeignKey("tariff_versions.id"), nullable=True)
+    calculation_engine_version = Column(String(50))
     average_daily_usage = Column(Float)
     average_daily_cost = Column(Float)
     utility_message = Column(Text)

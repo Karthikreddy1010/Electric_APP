@@ -28,6 +28,8 @@ from database.models import (
     Tariff,
     WeatherIndex,
     BgsAuctionRate,
+    TariffVersion,
+    HistoricalUtilityTariff,
     CommunityEnergy,
     MunicipalEnergy,
     StateMonthlyPrice,
@@ -287,6 +289,8 @@ def run_seed(force: bool = False) -> dict:
                 session.query(StateBenchmark).delete()
                 session.query(Tariff).delete()
                 session.query(BgsAuctionRate).delete()
+                session.query(HistoricalUtilityTariff).delete()
+                session.query(TariffVersion).delete()
                 session.query(CommunityEnergy).delete()
                 session.query(MunicipalEnergy).delete()
                 session.query(StateMonthlyPrice).delete()
@@ -315,6 +319,7 @@ def run_seed(force: bool = False) -> dict:
     results["benchmarks"] = seed_benchmarks(force)
     results["plans"] = seed_retail_plans(force)
     results["bgs_auction"] = seed_bgs_auction_rates(force)
+    results["historical_tariffs"] = seed_historical_tariffs(force)
     results["community_energy"] = seed_community_energy(force)
     results["municipal_energy"] = seed_municipal_energy(force)
     results["state_monthly"] = seed_state_monthly_prices(force)
@@ -435,6 +440,68 @@ def seed_bgs_auction_rates(force: bool = False) -> int:
         session.commit()
     logger.info(f"Seeded {len(records)} BGS Auction rates")
     return len(records)
+
+
+def seed_historical_tariffs(force: bool = False) -> int:
+    """Run the ETL pipeline to generate and load TariffVersions and HistoricalUtilityTariffs."""
+    from data_pipeline.tariff_etl import run_tariff_etl
+    
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(HistoricalUtilityTariff.id)).scalar()
+            if count > 0:
+                logger.info(f"historical_utility_tariffs already has {count} rows — skipping")
+                return count
+
+        # The ETL pipeline reads raw files and generates the clean DataFrames
+        versions_df, rates_df = run_tariff_etl()
+        if versions_df.empty or rates_df.empty:
+            logger.warning("Tariff ETL returned empty DataFrames — skipping seed")
+            return 0
+            
+        # 1. Insert Versions
+        db_versions = {}
+        for _, row in versions_df.iterrows():
+            tv = TariffVersion(
+                utility_name=str(row["utility_name"]),
+                utility_code=str(row["utility_code"]),
+                state=str(row["state"]),
+                service_territory=str(row["service_territory"]),
+                regulator=str(row["regulator"]),
+                tariff_version=str(row["tariff_version"]),
+                description=str(row["description"]),
+                effective_start=pd.to_datetime(row["effective_start"]).date() if pd.notna(row["effective_start"]) else None,
+                effective_end=pd.to_datetime(row["effective_end"]).date() if pd.notna(row["effective_end"]) else None,
+                status=str(row["status"])
+            )
+            session.add(tv)
+            # Flush so tv gets an ID
+            session.flush()
+            # Map temp_version_id to real DB id
+            db_versions[row["temp_version_id"]] = tv.id
+            
+        # 2. Insert Rates
+        rates_to_insert = []
+        for _, row in rates_df.iterrows():
+            temp_id = row["temp_version_id"]
+            if temp_id not in db_versions:
+                continue
+                
+            rates_to_insert.append(HistoricalUtilityTariff(
+                tariff_version_id=db_versions[temp_id],
+                component=str(row["component"]),
+                component_category=str(row["component_category"]) if pd.notna(row["component_category"]) else None,
+                rate=float(row["rate"]),
+                unit=str(row["unit"]) if pd.notna(row["unit"]) else None,
+                schedule=str(row["schedule"]),
+                season=str(row["season"]) if pd.notna(row["season"]) else None
+            ))
+            
+        session.add_all(rates_to_insert)
+        session.commit()
+        
+    logger.info(f"Seeded {len(db_versions)} Tariff Versions and {len(rates_to_insert)} Rates")
+    return len(rates_to_insert)
 
 
 def seed_community_energy(force: bool = False) -> int:

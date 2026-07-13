@@ -89,6 +89,7 @@ DATASET_REGISTRY = {
     "eia861m_monthly": "EIA_861M_sales_revenue.xlsx",
     "openei_iou_mapping": "OpenEI_IOU_Utility_ZIP_Mapping_2024.csv",
     "openei_noniou_mapping": "OpenEI_NonIOU_Utility_ZIP_Mapping_2024.csv",
+    "pseg_distribution_rates": "PSEG_Component_Distribution_Rates.csv",
 }
 
 # EIA-930 Default Balancing Authorities (PJM is primary)
@@ -113,6 +114,7 @@ OUTPUT_FILES = {
     "weather_monthly": "weather_monthly.csv",
     "cpi": "cpi.csv",
     "cpi_yearly": "cpi_yearly.csv",
+    "pseg_distribution_rates": "pseg_distribution_rates.csv",
     "master": "final_master_dataset.csv",
 }
 

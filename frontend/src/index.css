@@ -13,6 +13,15 @@
   --alert-red: #EF4444;
 }
 
+.light-theme {
+  --bg-primary: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-secondary: #F1F5F9;
+  --border-hairline: #E2E8F0;
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

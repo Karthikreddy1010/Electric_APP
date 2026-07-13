@@ -8,7 +8,7 @@ app_state: dict = {
     "weather_df": None,
     "market_df": None,
     "benchmark_df": None,
-    "plans_df": None,
+    "weather_df": None,
     "pseg_history_df": None,
     "impact_model": None,
     "forecast_model": None,

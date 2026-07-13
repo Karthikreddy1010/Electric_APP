@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI):
 
     # ── Step 1: Generate synthetic data if missing ───────────────────────────
     expected = ["billing.parquet", "weather.parquet", "pjm_market.parquet",
-                "state_benchmark.parquet", "retail_plans.parquet"]
+                "state_benchmark.parquet"]
     missing = [f for f in expected if not (data_dir / f).exists()]
     if missing:
         logger.info(f"Missing files {missing} — generating synthetic data...")
@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
         app_state["billing_df"] = pd.read_parquet(data_dir / "billing.parquet")
         app_state["weather_df"] = pd.read_parquet(data_dir / "weather.parquet")
         app_state["market_df"] = pd.read_parquet(data_dir / "pjm_market.parquet")
-        app_state["plans_df"] = pd.read_parquet(data_dir / "retail_plans.parquet")
+
         
         if (data_dir / "pseg_rate_history.csv").exists():
             app_state["pseg_history_df"] = pd.read_csv(data_dir / "pseg_rate_history.csv")
@@ -86,7 +86,7 @@ async def lifespan(app: FastAPI):
             f"Loaded billing={len(app_state['billing_df'])}, "
             f"weather={len(app_state['weather_df'])}, "
             f"market={len(app_state['market_df'])}, "
-            f"plans={len(app_state['plans_df'])} rows"
+
         )
         from models.pjm_market_physics import DEFAULT_PJM
         app_state["pjm_defaults"] = DEFAULT_PJM
@@ -202,6 +202,7 @@ async def lifespan(app: FastAPI):
         app_state["municipal_energy_df"] = pd.read_sql("SELECT * FROM municipal_energy", con=engine)
         app_state["state_monthly_prices_df"] = pd.read_sql("SELECT * FROM state_monthly_prices", con=engine)
         app_state["eia861_master_df"] = pd.read_sql("SELECT * FROM eia861_master", con=engine)
+        app_state["pseg_distribution_rates_df"] = pd.read_sql("SELECT * FROM pseg_distribution_rates", con=engine)
         
         # Load EIA-861M monthly
         try:
@@ -217,7 +218,8 @@ async def lifespan(app: FastAPI):
             f"municipal_energy={len(app_state['municipal_energy_df'])}, "
             f"state_monthly_prices={len(app_state['state_monthly_prices_df'])}, "
             f"eia861_master={len(app_state['eia861_master_df'])}, "
-            f"eia861m_monthly={len(app_state['eia861m_df'])}"
+            f"eia861m_monthly={len(app_state['eia861m_df'])}, "
+            f"pseg_distribution_rates={len(app_state['pseg_distribution_rates_df'])}"
         )
 
         # Build geo_monthly_df from state_monthly_prices directly
@@ -328,7 +330,7 @@ from api.routes.impact import router as impact_router
 from api.routes.bill_impact import router as bill_impact_router
 from api.routes.benchmark import router as benchmark_router
 from api.routes.forecast import router as forecast_router
-from api.routes.plans import router as plans_router
+
 from api.routes.bgs import router as bgs_router
 from api.routes.municipal import router as municipal_router
 from api.routes.eia861 import router as eia861_router
@@ -359,7 +361,7 @@ app.include_router(impact_router)
 app.include_router(bill_impact_router)
 app.include_router(benchmark_router)
 app.include_router(forecast_router)
-app.include_router(plans_router)
+
 app.include_router(bgs_router)
 app.include_router(municipal_router)
 app.include_router(eia861_router)
@@ -372,6 +374,7 @@ app.include_router(report_router)
 app.include_router(simulate_router)
 app.include_router(geo_boundaries_router)
 app.include_router(metrics_router)
+from api.routes.tariff_analytics import router as tariffs_router
 app.include_router(tariffs_router)
 app.include_router(service_territory_router)
 app.include_router(customers_router)

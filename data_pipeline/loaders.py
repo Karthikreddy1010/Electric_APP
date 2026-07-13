@@ -258,6 +258,19 @@ def load_pseg_rate_history() -> pd.DataFrame:
     return df
 
 
+def load_pseg_distribution_rates() -> pd.DataFrame:
+    """Load PSEG Component Distribution Rates (CSV)."""
+    path = RAW_DIR / DATASET_REGISTRY.get("pseg_distribution_rates", "PSEG_Component_Distribution_Rates.csv")
+    if not path.exists():
+        logger.warning(f"PSEG distribution rates file not found: {path}")
+        return pd.DataFrame()
+
+    df = pd.read_csv(path)
+    df = _standardise_columns(df)
+    _log_loaded("pseg_distribution_rates", df)
+    return df
+
+
 # ── Master Loader ────────────────────────────────────────────────────────────
 
 def load_all_local() -> dict[str, pd.DataFrame]:
@@ -284,6 +297,7 @@ def load_all_local() -> dict[str, pd.DataFrame]:
     datasets["cpi_monthly"] = load_cpi_cached()
     datasets["cpi_yearly"] = load_cpi_yearly_cached()
     datasets["pseg_rate_history"] = load_pseg_rate_history()
+    datasets["pseg_distribution_rates"] = load_pseg_distribution_rates()
 
     # EIA-861 tables (selected subset)
     for table_file in EIA861_TABLES:
