@@ -9,13 +9,11 @@
  * State B (hasBill === true): Mission Control — summary KPI dashboard
  *   with deep-links to all other pages. No detailed charts or analysis here.
  */
-import { useBill } from '../context/BillContext.tsx';
-import OnboardingHero from './overview/OnboardingHero.tsx';
 import MissionControlDashboard from './overview/MissionControlDashboard.tsx';
 
 const OverviewPage = () => {
-  const { hasBill } = useBill();
-  return hasBill ? <MissionControlDashboard /> : <OnboardingHero />;
+  return <MissionControlDashboard />;
 };
 
 export default OverviewPage;
+

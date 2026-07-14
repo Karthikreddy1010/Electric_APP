@@ -8,16 +8,16 @@ from typing import Dict, Any, Optional
 class DeterministicFallback:
     @staticmethod
     def generate_bill_analysis_fallback(context: Dict[str, Any]) -> str:
-        bill = context.get("bill", {})
-        customer = context.get("customer", {})
-        utility = customer.get("utility", "Utility Provider")
-        total = bill.get("total_bill", 0.0)
-        kwh = bill.get("usage_kwh", 0.0)
-        period = bill.get("billing_period", "Current Billing Period")
-        eff_rate = bill.get("effective_rate", (total / kwh) if kwh > 0 else 0.0)
-        supply = bill.get("supply_charge", 0.0)
-        delivery = bill.get("delivery_charge", 0.0)
-        tax = bill.get("tax", 0.0)
+        bill = context.get("bill") or {}
+        customer = context.get("customer") or {}
+        utility = customer.get("utility") or "Utility Provider"
+        total = bill.get("total_bill") or 0.0
+        kwh = bill.get("usage_kwh") or 0.0
+        period = bill.get("billing_period") or "Current Billing Period"
+        eff_rate = bill.get("effective_rate") or ((total / kwh) if kwh > 0 else 0.0)
+        supply = bill.get("supply_charge") or 0.0
+        delivery = bill.get("delivery_charge") or 0.0
+        tax = bill.get("tax") or 0.0
 
         return (
             f"### 📝 Executive Bill Summary\n"
@@ -36,22 +36,28 @@ class DeterministicFallback:
 
     @staticmethod
     def generate_impact_fallback(context: Dict[str, Any]) -> str:
-        bill = context.get("bill", {})
-        sim = context.get("simulation", {})
-        total_base = bill.get("total_bill", 0.0)
-        sim_bill = sim.get("simulated_bill", total_base)
-        impact = sim.get("total_impact", sim_bill - total_base)
-        contribs = sim.get("contributions", {})
-        decomp = sim.get("decomposition", {})
-        dist = sim.get("distribution", {})
+        bill = context.get("bill") or {}
+        sim = context.get("simulation") or {}
 
-        mean_val = dist.get("mean", sim_bill)
-        p5_val = dist.get("p5", mean_val - 10.0)
-        p95_val = dist.get("p95", mean_val + 10.0)
+        total_base = bill.get("total_bill") or 0.0
+        sim_bill = sim.get("simulated_bill")
+        if sim_bill is None:
+            sim_bill = total_base
 
-        price_eff = decomp.get("direct_price_effect", 0.0)
-        behavior_eff = decomp.get("indirect_behavioral_effect", 0.0)
-        weather_eff = decomp.get("weather_effect", 0.0)
+        impact = sim.get("total_impact")
+        if impact is None:
+            impact = sim_bill - total_base
+
+        decomp = sim.get("decomposition") or {}
+        dist = sim.get("distribution") or {}
+
+        mean_val = dist.get("mean") if dist.get("mean") is not None else sim_bill
+        p5_val = dist.get("p5") if dist.get("p5") is not None else (mean_val - 10.0)
+        p95_val = dist.get("p95") if dist.get("p95") is not None else (mean_val + 10.0)
+
+        price_eff = decomp.get("direct_price_effect") or 0.0
+        behavior_eff = decomp.get("indirect_behavioral_effect") or 0.0
+        weather_eff = decomp.get("weather_effect") or 0.0
 
         sign_str = "+" if impact >= 0 else "−"
 
@@ -77,10 +83,10 @@ class DeterministicFallback:
 
     @staticmethod
     def generate_forecast_fallback(context: Dict[str, Any]) -> str:
-        bill = context.get("bill", {})
-        fc = context.get("forecast", {})
-        pred_kwh = fc.get("predicted_kwh", bill.get("usage_kwh", 750.0))
-        pred_cost = fc.get("predicted_cost", bill.get("total_bill", 160.0))
+        bill = context.get("bill") or {}
+        fc = context.get("forecast") or {}
+        pred_kwh = fc.get("predicted_kwh") or bill.get("usage_kwh") or 750.0
+        pred_cost = fc.get("predicted_cost") or bill.get("total_bill") or 160.0
 
         return (
             f"### 🔮 Predictive Demand Forecast\n"
@@ -93,9 +99,9 @@ class DeterministicFallback:
 
     @staticmethod
     def generate_overview_fallback(context: Dict[str, Any]) -> str:
-        stats = context.get("statistics", {})
-        active_bills = stats.get("total_bills", 1)
-        total_spent = stats.get("total_spent", 0.0)
+        stats = context.get("statistics") or {}
+        active_bills = stats.get("total_bills") or 1
+        total_spent = stats.get("total_spent") or 0.0
 
         return (
             f"### ⚡ Executive Dashboard Overview\n"
@@ -112,8 +118,8 @@ class DeterministicFallback:
 
     @staticmethod
     def generate_benchmark_fallback(context: Dict[str, Any]) -> str:
-        customer = context.get("customer", {})
-        utility = customer.get("utility", "Regional Utility")
+        customer = context.get("customer") or {}
+        utility = customer.get("utility") or "Regional Utility"
         return (
             f"### 🏙️ Peer Utility Benchmark\n"
             f"Comparative analysis for **{utility}** against state benchmarks indicates competitive rate performance."
@@ -121,8 +127,8 @@ class DeterministicFallback:
 
     @staticmethod
     def generate_geo_fallback(context: Dict[str, Any]) -> str:
-        stats = context.get("statistics", {})
-        state = stats.get("state_code", "NJ")
+        stats = context.get("statistics") or {}
+        state = stats.get("state_code") or "NJ"
         return (
             f"### 🗺️ Geographic & Regional Intelligence\n"
             f"Regional market clearing price analysis for state **{state}** within PJM Interconnection."
@@ -130,23 +136,29 @@ class DeterministicFallback:
 
     @staticmethod
     def generate_chat_fallback(context: Dict[str, Any], user_message: str) -> str:
-        bill = context.get("bill", {})
-        sim = context.get("simulation", {})
+        bill = context.get("bill") or {}
+        sim = context.get("simulation") or {}
         user_lower = user_message.lower()
 
+        supply_charge = bill.get("supply_charge") or 81.0
+        delivery_charge = bill.get("delivery_charge") or 41.25
+        sim_val = sim.get("simulated_bill") or bill.get("total_bill") or 160.0
+        total_bill = bill.get("total_bill") or 0.0
+        usage_kwh = bill.get("usage_kwh") or 0.0
+        effective_rate = bill.get("effective_rate") or 0.0
+
         if "supply" in user_lower or "bgs" in user_lower:
-            return f"BGS Supply costs are based on PJM wholesale market auctions. In your bill context, total supply charge is ${bill.get('supply_charge', 81.0):.2f}."
+            return f"BGS Supply costs are based on PJM wholesale market auctions. In your bill context, total supply charge is ${supply_charge:.2f}."
         elif "delivery" in user_lower or "distribution" in user_lower:
-            return f"Distribution & delivery charges pay for local grid line maintenance. Baseline delivery cost is ${bill.get('delivery_charge', 41.25):.2f}."
+            return f"Distribution & delivery charges pay for local grid line maintenance. Baseline delivery cost is ${delivery_charge:.2f}."
         elif "weather" in user_lower or "temp" in user_lower:
             return "Extreme high or low temperatures raise space heating/cooling HVAC loads, increasing consumption."
         elif "what if" in user_lower or "simulate" in user_lower:
-            sim_val = sim.get("simulated_bill", bill.get("total_bill", 160.0))
             return f"Active simulation yields a total projected bill of ${sim_val:.2f}."
         
         return (
-            f"Based on your validated bill data (${bill.get('total_bill', 0.0):.2f} total, {bill.get('usage_kwh', 0.0):.1f} kWh), "
-            f"your effective rate is ${bill.get('effective_rate', 0.0):.4f}/kWh."
+            f"Based on your validated bill data (${total_bill:.2f} total, {usage_kwh:.1f} kWh), "
+            f"your effective rate is ${effective_rate:.4f}/kWh."
         )
 
     @classmethod
