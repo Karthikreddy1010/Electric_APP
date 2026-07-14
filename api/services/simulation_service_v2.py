@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 NJ_TAX_RATE = 0.06625
 
 # Rate component keys (variable charges)
-RATE_KEYS = ["bgs_rate", "distribution_rate", "transmission_rate", "sbc_rate"]
+RATE_KEYS = ["bgs_rate", "distribution_rate", "transmission_rate", "sbc_rate", "transition_rate", "nug_rate", "rider_rate"]
 
 # Scenario presets — modifiers applied to the base simulation
 SCENARIO_PRESETS: Dict[str, Dict[str, Any]] = {
@@ -159,26 +159,11 @@ def simulate_v2(
     kwh_override: Optional[float] = None,
     n_sim: int = 2000,
     seed: int = 42,
+    base_rates_override: Optional[Dict[str, float]] = None,
+    base_costs_override: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """
     Enhanced What-If Monte Carlo simulation.
-
-    Parameters
-    ----------
-    modifications : {component: pct_change} e.g., {"bgs_rate": 15}
-    billing_df : historical billing DataFrame
-    feature_df : feature-engineered DataFrame (for weather/market context)
-    demand_model : trained DemandResponseModel (optional — falls back to elasticity)
-    rate_cov : (n_rates, n_rates) covariance matrix for correlated sampling
-    weather_stats : monthly CDD/HDD distributions
-    scenario : named scenario preset (optional, merged with modifications)
-    kwh_override : explicit usage override (bypasses demand model)
-    n_sim : number of Monte Carlo draws
-    seed : random seed
-
-    Returns
-    -------
-    dict with simulation results including decomposition
     """
     t0 = time.perf_counter()
     rng = np.random.default_rng(seed)
@@ -204,12 +189,31 @@ def simulate_v2(
     base_kwh *= usage_multiplier
 
     # ── Build base and modified rates ────────────────────────────────────
-    base_rates = np.array([float(latest.get(k, 0.0)) for k in RATE_KEYS])
+    if base_rates_override:
+        fixed_charge = float(base_rates_override.get("customer_charge", latest.get("customer_charge", 8.24)))
+        # Map cost keys to rate keys if passed as cost keys
+        def get_rate(k):
+            # map keys like bgs_cost to bgs_rate
+            cost_key = k.replace("_rate", "_cost")
+            if k in base_rates_override:
+                return float(base_rates_override[k])
+            elif cost_key in base_rates_override and base_kwh > 0:
+                return float(base_rates_override[cost_key]) / base_kwh
+            return float(latest.get(k, 0.0))
+        base_rates = np.array([get_rate(k) for k in RATE_KEYS])
+    else:
+        fixed_charge = float(latest.get("customer_charge", 8.24))
+        base_rates = np.array([float(latest.get(k, 0.0)) for k in RATE_KEYS])
+
+    # Check if modifications are for fixed charge or other items
+    # customer_charge change_pct:
+    fixed_charge_change = modifications.get("customer_charge", 0.0)
+    sim_fixed_charge = fixed_charge * (1 + fixed_charge_change / 100.0)
+
     mod_pcts = np.array([modifications.get(k, 0.0) / 100.0 for k in RATE_KEYS])
     mod_rates = base_rates * (1 + mod_pcts)
 
     # ── Compute base bill ────────────────────────────────────────────────
-    fixed_charge = float(latest.get("customer_charge", 8.24))
     base_bill = _compute_bill_scalar(base_rates, base_kwh, fixed_charge)
 
     # ── Determine month for weather sampling ─────────────────────────────
@@ -220,12 +224,19 @@ def simulate_v2(
 
     # ── Sample correlated rate noise ─────────────────────────────────────
     if rate_cov is not None:
-        rate_noise = rng.multivariate_normal(np.zeros(len(RATE_KEYS)), rate_cov, n_sim)
+        # Pad rate_cov if dimensions mismatch
+        if rate_cov.shape[0] != len(RATE_KEYS):
+            rate_cov_padded = np.eye(len(RATE_KEYS)) * 1e-6
+            min_dim = min(rate_cov.shape[0], len(RATE_KEYS))
+            rate_cov_padded[:min_dim, :min_dim] = rate_cov[:min_dim, :min_dim]
+            rate_noise = rng.multivariate_normal(np.zeros(len(RATE_KEYS)), rate_cov_padded, n_sim)
+        else:
+            rate_noise = rng.multivariate_normal(np.zeros(len(RATE_KEYS)), rate_cov, n_sim)
     else:
         rate_noise = np.zeros((n_sim, len(RATE_KEYS)))
 
     sim_rates = mod_rates[np.newaxis, :] + rate_noise  # (n_sim, n_rates)
-    sim_rates = np.clip(sim_rates, 0.001, None)  # rates can't be negative
+    sim_rates = np.clip(sim_rates, 0.0001, None)  # rates can't be negative
 
     # ── Sample weather variability ───────────────────────────────────────
     if weather_stats and month in weather_stats:
@@ -240,36 +251,31 @@ def simulate_v2(
 
     # ── Predict usage for each simulation draw ───────────────────────────
     if demand_model is not None and demand_model.is_trained and kwh_override is None:
-        # Use learned demand model
         effective_rates = sim_rates.sum(axis=1)  # composite price per kWh
-
-        # Build base feature values from latest feature row
         base_features = {}
         if feature_df is not None and len(feature_df) > 0:
             last_feat_row = feature_df.iloc[-1].to_dict()
             base_features = demand_model.build_features_from_row(last_feat_row)
 
-        # Build batch features
         X_sim = demand_model.build_features_batch(
             base_features, effective_rates, cdd_draws, hdd_draws, month
         )
         sim_kwh = demand_model.predict_batch(X_sim)  # (n_sim,)
         sim_kwh *= usage_multiplier
-
         learned_elasticity = demand_model.get_learned_elasticity()
     else:
-        # Fallback: fixed elasticity with weather adjustment
         learned_elasticity = -0.20
         effective_rate_base = base_rates.sum()
         effective_rate_mod = sim_rates.sum(axis=1)
-        price_change_pct = (effective_rate_mod - effective_rate_base) / effective_rate_base
+        price_change_pct = np.zeros(n_sim)
+        if effective_rate_base > 0:
+            price_change_pct = (effective_rate_mod - effective_rate_base) / effective_rate_base
 
-        # Simple demand response
         kwh_response = base_kwh * price_change_pct * learned_elasticity
         sim_kwh = np.clip(base_kwh + kwh_response, 100, 5000)
 
     # ── Compute simulated bills (vectorized) ─────────────────────────────
-    sim_bills = _compute_bills_vectorized(sim_rates, sim_kwh, fixed_charge)
+    sim_bills = _compute_bills_vectorized(sim_rates, sim_kwh, sim_fixed_charge)
 
     # ── PJM Market Physics Stochastic Simulation ─────────────────────────
     from models.pjm_market_physics import (
@@ -302,7 +308,7 @@ def simulate_v2(
         base_transmission_rate=trans_rate,
         congestion_per_kwh=cong_per_kwh,
         policy_rate=pol_rate,
-        customer_charge=fixed_charge,
+        customer_charge=sim_fixed_charge,
         usage_kwh=sim_kwh,
         tax_rate=NJ_TAX_RATE,
     )
@@ -335,11 +341,11 @@ def simulate_v2(
     mean_kwh = float(np.mean(sim_kwh))
     kwh_change = mean_kwh - base_kwh
 
-    # Decomposition: separate direct price effect from indirect behavioral effect
-    # Direct price effect: ΔRate × base_usage
-    direct_price = float(np.sum((mod_rates - base_rates) * base_kwh) * (1 + NJ_TAX_RATE))
-    # Indirect behavioral: ΔUsage × modified_rates
-    indirect_behavioral = float(kwh_change * mod_rates.sum() * (1 + NJ_TAX_RATE))
+    # Direct price effect: Sum of component rate modifications on base usage
+    direct_price = float(np.sum((mod_rates - base_rates) * base_kwh) + (sim_fixed_charge - fixed_charge)) * (1 + NJ_TAX_RATE)
+    # Indirect behavioral: usage response * mod_rates
+    indirect_behavioral = float(kwh_change * mod_rates.sum()) * (1 + NJ_TAX_RATE)
+
     # Weather effect: difference from weather-induced usage shifts
     weather_effect = 0.0
     if weather_stats and month in weather_stats:
@@ -348,7 +354,6 @@ def simulate_v2(
         base_hdd = ws["hdd_mean"] * weather_override.get("hdd_multiplier", 1.0)
         normal_cdd = ws["cdd_mean"]
         normal_hdd = ws["hdd_mean"]
-        # Rough weather attribution using demand model coefficients or defaults
         if demand_model and demand_model.is_trained:
             coefs = demand_model.get_coefficients()
             cdd_coef = coefs.get("monthly_CDD", 0.85)
@@ -356,31 +361,95 @@ def simulate_v2(
         else:
             cdd_coef, hdd_coef = 0.85, 0.45
         weather_kwh_shift = cdd_coef * (base_cdd - normal_cdd) + hdd_coef * (base_hdd - normal_hdd)
-        weather_effect = float(weather_kwh_shift * mod_rates.sum() * (1 + NJ_TAX_RATE))
+        weather_effect = float(weather_kwh_shift * mod_rates.sum()) * (1 + NJ_TAX_RATE)
 
-    # Interaction effect: residual = total - (direct + indirect + weather)
     total_impact = median_bill - base_bill
     interaction_effect = total_impact - direct_price - indirect_behavioral - weather_effect
 
     elapsed_ms = (time.perf_counter() - t0) * 1000
 
-    # ── Build per-component contribution breakdown ───────────────────────
+    # ── Build per-component contribution breakdown (accounting identity) ─
     contributions = {}
     from api.services.bill_impact_engine import COMPONENT_TYPES
-    for key, meta in COMPONENT_TYPES.items():
-        if meta["type"] == "variable" and key in RATE_KEYS:
-            mod_rate = float(mod_rates[RATE_KEYS.index(key)])
-            base_rate = float(base_rates[RATE_KEYS.index(key)])
-            contributions[meta["label"]] = round(
-                float(mod_rate * mean_kwh * (1 + NJ_TAX_RATE)), 2
-            )
-        elif meta["type"] == "fixed":
-            contributions[meta["label"]] = round(
-                float(latest.get(key, 0)) * (1 + NJ_TAX_RATE), 2
-            )
+    
+    # We will build subtotal costs excluding tax
+    subtotal_sim = sim_fixed_charge
+    subtotal_base = fixed_charge
+    
+    # customer charge
+    contributions["customer_charge"] = {
+        "name": "Customer Charge",
+        "key": "customer_charge",
+        "category": "Fixed Charge",
+        "type": "fixed",
+        "controllable": "No",
+        "base_rate": fixed_charge,
+        "base_cost": fixed_charge,
+        "simulated_rate": sim_fixed_charge,
+        "simulated_cost": sim_fixed_charge,
+        "difference": round(sim_fixed_charge - fixed_charge, 2),
+        "percent_difference": round(fixed_charge_change, 2)
+    }
+    
+    for idx, key in enumerate(RATE_KEYS):
+        mod_rate = float(mod_rates[idx])
+        base_rate = float(base_rates[idx])
+        
+        sim_cost = round(mod_rate * mean_kwh, 2)
+        base_cost = round(base_rate * base_kwh, 2)
+        
+        subtotal_sim += sim_cost
+        subtotal_base += base_cost
+        
+        meta = COMPONENT_TYPES.get(key, {"label": key.replace("_", " ").title(), "type": "variable", "driver": "regulatory", "controllable": "No"})
+        
+        contributions[key] = {
+            "name": meta["label"],
+            "key": key,
+            "category": "Supply Charge" if key == "bgs_rate" else "Delivery Charge",
+            "type": "variable",
+            "controllable": meta["controllable"],
+            "base_rate": round(base_rate, 5),
+            "base_cost": round(base_cost, 2),
+            "simulated_rate": round(mod_rate, 5),
+            "simulated_cost": round(sim_cost, 2),
+            "difference": round(sim_cost - base_cost, 2),
+            "percent_difference": round(((mod_rate - base_rate)/base_rate*100) if base_rate > 0 else 0.0, 2)
+        }
+        
+    # Sales Tax
+    sim_tax = round(subtotal_sim * NJ_TAX_RATE, 2)
+    base_tax = round(subtotal_base * NJ_TAX_RATE, 2)
+    
+    contributions["sales_tax"] = {
+        "name": "Sales Tax (6.625%)",
+        "key": "sales_tax",
+        "category": "Tax",
+        "type": "tax",
+        "controllable": "No",
+        "base_rate": NJ_TAX_RATE,
+        "base_cost": base_tax,
+        "simulated_rate": NJ_TAX_RATE,
+        "simulated_cost": sim_tax,
+        "difference": round(sim_tax - base_tax, 2),
+        "percent_difference": round(((sim_tax - base_tax)/base_tax*100) if base_tax > 0 else 0.0, 2)
+    }
+
+    # Sum of simulated costs + tax = total bill
+    simulated_bill_sum = round(subtotal_sim + sim_tax, 2)
+    base_bill_sum = round(subtotal_base + base_tax, 2)
+
+    # Overwrite simulated_bill & base_bill with exact sums to preserve perfect accounting identity
+    median_bill = simulated_bill_sum
+    base_bill = base_bill_sum
+    total_impact = round(median_bill - base_bill, 2)
+
+    # Attach contribution_pct to each component
+    for key, c in list(contributions.items()):
+        c["contribution_pct"] = round((c["simulated_cost"] / simulated_bill_sum * 100), 2) if simulated_bill_sum > 0 else 0.0
+        c["contribution_to_change"] = c["difference"]
 
     return {
-        # V1 backward-compatible fields
         "base_bill": round(base_bill, 2),
         "new_bill": round(median_bill, 2),
         "total_impact": round(total_impact, 2),
@@ -390,7 +459,6 @@ def simulate_v2(
         ],
         "usage_response": round(kwh_change, 2),
         "contributions": contributions,
-        # V2 enhanced fields
         "simulated_bill": round(median_bill, 2),
         "usage_change_kwh": round(kwh_change, 2),
         "learned_elasticity": round(learned_elasticity, 4),
@@ -409,7 +477,6 @@ def simulate_v2(
             "rate_correlation": rate_cov is not None,
             "weather_sampling": weather_stats is not None,
         },
-        # Distribution statistics
         "distribution": {
             "mean": round(float(np.mean(sim_bills)), 2),
             "std": round(float(np.std(sim_bills)), 2),
@@ -421,6 +488,7 @@ def simulate_v2(
         },
         "pjm_physics": pjm_physics_data,
     }
+
 
 
 # ─────────────────────────────────────────────────────────────────────────

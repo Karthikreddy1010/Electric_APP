@@ -1,0 +1,24 @@
+{
+  "id": 10,
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [
+      {
+        "text": "{\"name\":\"projects/3410340932868783177/screens/96758b9bca0b424b9cd20b41beabebf6\",\"title\":\"ElectricAI Enterprise Landing Page Redesign\",\"screenshot\":{\"name\":\"projects/3410340932868783177/files/7a0ca2832cb24e59b245bc621ad3913e\",\"downloadUrl\":\"https://lh3.googleusercontent.com/aida/AP1WRLvkf-MmKIVaznZ0p_hYx5WOFlaerDZSwzEN8wawgQZ9SaS0DkgY6XZlN790XOEVlq-YLeflYb-WhTl52hhKzQgxlDq-ZeR8nX8ze9mYVZQ7HEZi1yoyKB4rIbz1DrEH_IfvuVsgnTyw5NLfsZoofq3EPhbQfhBbFmsz6eGLSMRQVwhH5eQdTPJ8pWf8EB4bOjdZirl9IaLdh0KllrEqR4JECU9Glpm-OjOthy2QFjb0CVGjErr7rAqKkpI\"},\"htmlCode\":{},\"width\":\"1376\",\"height\":\"768\",\"deviceType\":\"DESKTOP\"}",
+        "type": "text"
+      }
+    ],
+    "structuredContent": {
+      "deviceType": "DESKTOP",
+      "height": "768",
+      "htmlCode": {},
+      "name": "projects/3410340932868783177/screens/96758b9bca0b424b9cd20b41beabebf6",
+      "screenshot": {
+        "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLvkf-MmKIVaznZ0p_hYx5WOFlaerDZSwzEN8wawgQZ9SaS0DkgY6XZlN790XOEVlq-YLeflYb-WhTl52hhKzQgxlDq-ZeR8nX8ze9mYVZQ7HEZi1yoyKB4rIbz1DrEH_IfvuVsgnTyw5NLfsZoofq3EPhbQfhBbFmsz6eGLSMRQVwhH5eQdTPJ8pWf8EB4bOjdZirl9IaLdh0KllrEqR4JECU9Glpm-OjOthy2QFjb0CVGjErr7rAqKkpI",
+        "name": "projects/3410340932868783177/files/7a0ca2832cb24e59b245bc621ad3913e"
+      },
+      "title": "ElectricAI Enterprise Landing Page Redesign",
+      "width": "1376"
+    }
+  }
+}

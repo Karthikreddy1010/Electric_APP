@@ -76,6 +76,9 @@ export interface BillData {
   drivers?: DriversData;
   insights?: string[];
   contribution?: Record<string, number>;
+  canonical_bill?: any;
+  rates?: Record<string, number>;
+  costs?: Record<string, number>;
 }
 
 // ─── Context Interface ────────────────────────────────────────────────────────

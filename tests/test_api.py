@@ -109,5 +109,108 @@ class TestPlanSimulation:
             assert plan["expected_annual_cost"] > 0
 
 
+class TestImpactV2AndAI:
+    def test_what_if_v2_with_overrides(self, client):
+        payload = {
+            "changes": {"bgs_rate": 10.0, "distribution_rate": -5.0},
+            "kwh": 800,
+            "base_rates": {
+                "customer_charge": 8.24,
+                "bgs_rate": 0.105,
+                "distribution_rate": 0.045,
+                "transmission_rate": 0.015,
+                "sbc_rate": 0.007,
+                "transition_rate": 0.002,
+                "nug_rate": 0.001,
+                "rider_rate": 0.003
+            },
+            "base_costs": {
+                "customer_charge": 8.24,
+                "bgs_cost": 84.0,
+                "distribution_cost": 36.0,
+                "transmission_cost": 12.0,
+                "sbc_cost": 5.6,
+                "transition_cost": 1.6,
+                "nug_cost": 0.8,
+                "rider_cost": 2.4,
+                "sales_tax": 9.98,
+                "total_bill": 160.62
+            }
+        }
+        resp = client.post("/impact/what-if-v2", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "simulated_bill" in data
+        assert "contributions" in data
+        assert "distribution_rate" in data["contributions"]
+        
+        contribs = data["contributions"]
+        total_sum = sum(c["simulated_cost"] for c in contribs.values())
+        assert abs(total_sum - data["simulated_bill"]) < 0.05
+
+    def test_explain_endpoint(self, client):
+        uploaded_bill = {"usage_kwh": 800, "total_bill": 160.62}
+        simulation_results = {
+            "base_bill": 160.62,
+            "simulated_bill": 172.50,
+            "total_impact": 11.88,
+            "usage_change_kwh": 0.0,
+            "learned_elasticity": -0.20,
+            "decomposition": {
+                "direct_price_effect": 11.0,
+                "indirect_behavioral_effect": 0.0,
+                "weather_effect": 0.0,
+                "interaction_effect": 0.0
+            },
+            "contributions": {
+                "customer_charge": {"name": "Customer Charge", "simulated_cost": 8.24, "difference": 0.0, "type": "fixed", "controllable": "No"},
+                "bgs_rate": {"name": "BGS Supply", "simulated_cost": 92.40, "difference": 8.40, "type": "variable", "controllable": "No"},
+                "distribution_rate": {"name": "Distribution", "simulated_cost": 36.0, "difference": 0.0, "type": "variable", "controllable": "Yes"}
+            }
+        }
+        payload = {
+            "uploaded_bill": uploaded_bill,
+            "simulation_results": simulation_results,
+            "scenario_inputs": {"changes": {"bgs_rate": 10.0}}
+        }
+        resp = client.post("/impact/explain", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "explanation" in data
+
+    def test_chat_endpoint(self, client):
+        uploaded_bill = {"usage_kwh": 800, "total_bill": 160.62}
+        simulation_results = {
+            "base_bill": 160.62,
+            "simulated_bill": 172.50,
+            "total_impact": 11.88,
+            "usage_change_kwh": 0.0,
+            "learned_elasticity": -0.20,
+            "decomposition": {
+                "direct_price_effect": 11.0,
+                "indirect_behavioral_effect": 0.0,
+                "weather_effect": 0.0,
+                "interaction_effect": 0.0
+            },
+            "contributions": {
+                "customer_charge": {"name": "Customer Charge", "simulated_cost": 8.24, "difference": 0.0, "type": "fixed", "controllable": "No"},
+                "bgs_rate": {"name": "BGS Supply", "simulated_cost": 92.40, "difference": 8.40, "type": "variable", "controllable": "No"},
+                "distribution_rate": {"name": "Distribution", "simulated_cost": 36.0, "difference": 0.0, "type": "variable", "controllable": "Yes"}
+            }
+        }
+        payload = {
+            "message": "Why did BGS Supply increase?",
+            "history": [],
+            "uploaded_bill": uploaded_bill,
+            "simulation_results": simulation_results
+        }
+        resp = client.post("/impact/chat", json=payload)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        assert "answer" in data
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

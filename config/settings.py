@@ -96,8 +96,22 @@ class DataSourceSettings(BaseSettings):
         extra = "ignore"
 
 
+class LLMSettings(BaseSettings):
+    """LLM service configuration."""
+    provider: str = "ollama"
+    model: str = "qwen3:8b"
+    base_url: str = "http://127.0.0.1:11434"
+
+    class Config:
+        env_prefix = "LLM_"
+        env_file = str(BASE_DIR / ".env")
+        extra = "ignore"
+
+
 # Singleton instances
 db_settings = DatabaseSettings()
 api_settings = APISettings()
 model_settings = ModelSettings()
 data_settings = DataSourceSettings()
+llm_settings = LLMSettings()
+

@@ -40,7 +40,8 @@
     box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
   }
   .panel-operational:hover {
-    @apply border-white/20 bg-[#18181B];
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   }
   
   .panel-chart {

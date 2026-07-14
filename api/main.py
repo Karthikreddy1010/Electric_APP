@@ -350,6 +350,7 @@ from api.routes.tariffs import router as tariffs_router
 from api.routes.service_territory import router as service_territory_router
 from api.routes.customers import router as customers_router
 from api.routes.bill import router as bill_router
+from api.routes.llm import router as llm_router
 
 app.include_router(health_router)
 app.include_router(auth_router)
@@ -359,6 +360,7 @@ app.include_router(billing_router)
 app.include_router(geo_insights_router)
 app.include_router(impact_router)
 app.include_router(bill_impact_router)
+app.include_router(llm_router)
 app.include_router(benchmark_router)
 app.include_router(forecast_router)
 

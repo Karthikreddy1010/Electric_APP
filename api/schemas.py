@@ -219,6 +219,56 @@ class WhatIfV2Request(BaseModel):
         None, description="Named scenario preset: cold_winter, hot_summer, high_market, low_usage, conservation"
     )
     n_simulations: int = Field(2000, ge=500, le=10000)
+    base_rates: Optional[dict[str, float]] = Field(None, description="Baseline rates from the uploaded bill")
+    base_costs: Optional[dict[str, float]] = Field(None, description="Baseline costs from the uploaded bill")
+
+class ImpactExplainRequest(BaseModel):
+    uploaded_bill: dict = Field(..., description="Structured bill object")
+    simulation_results: dict = Field(..., description="Simulation results dictionary")
+    scenario_inputs: dict = Field(..., description="Slider changes and usage override")
+
+class ImpactExplainResponse(BaseModel):
+    success: bool
+    explanation: str
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ImpactChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = Field(default_factory=list)
+    uploaded_bill: dict
+    simulation_results: dict
+
+class ImpactChatResponse(BaseModel):
+    success: bool
+    answer: str
+
+class UniversalLLMExplainRequest(BaseModel):
+    task: str = Field(..., description="Task identifier e.g. bill_analysis, impact, forecast, overview, recommendations, benchmark, geo")
+    context_data: dict = Field(..., description="Structured JSON context matching task schema")
+    bypass_cache: bool = Field(False, description="Whether to bypass cache")
+
+class UniversalLLMExplainResponse(BaseModel):
+    success: bool
+    text: str
+    explanation: str
+    metadata: dict
+
+class UniversalLLMChatRequest(BaseModel):
+    task: str = Field("chat", description="Task identifier")
+    message: str = Field(..., description="User query text")
+    history: list[ChatMessage] = Field(default_factory=list)
+    context_data: dict = Field(..., description="Context data dictionary")
+    current_tab: str = Field("Impact", description="Active frontend tab")
+
+class UniversalLLMChatResponse(BaseModel):
+    success: bool
+    answer: str
+    text: str
+    metadata: dict
+
 
 class BillDecomposition(BaseModel):
     direct_price_effect: float
