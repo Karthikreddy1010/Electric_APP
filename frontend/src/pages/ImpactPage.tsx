@@ -519,7 +519,7 @@ const ImpactPage = () => {
     if (!simulation) return { status: "Passed", checks };
 
     // 1. Component Sum matches Total Bill
-    const sumComponents = Object.values(simContribs).reduce((acc: number, curr: any) => acc + (curr.simulated_cost || 0), 0);
+    const sumComponents: number = (Object.values(simContribs) as any[]).reduce((acc: number, curr: any) => acc + (curr.simulated_cost || 0), 0);
     const absDiff = Math.abs(sumComponents - simulatedBill);
     if (absDiff < 0.05) {
       checks.push({ label: "Component Sum check", status: "Passed", desc: `Total simulated bill sum matching components precisely.` });

@@ -8,6 +8,7 @@ import logging
 import io
 import re
 import socket
+import time
 import asyncio
 import ollama
 from reportlab.lib.pagesizes import LETTER
