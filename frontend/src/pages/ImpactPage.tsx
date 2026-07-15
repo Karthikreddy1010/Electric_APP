@@ -25,7 +25,7 @@ import {
   ThermometerSun, Lightbulb, BarChart3, Info,
   Cpu, RefreshCw, ShieldCheck, ShieldAlert,
   Flame, Snowflake, Zap, Leaf, Plug, Network, Building2,
-  Trash2, Plus, MessageSquare, Send, CheckCircle2, AlertTriangle, AlertCircle
+  Trash2, Plus, MessageSquare, Send, CheckCircle2, AlertTriangle, AlertCircle, Copy, Download
 } from 'lucide-react';
 import React from 'react';
 
@@ -76,6 +76,40 @@ const fmt = (v: number, forceSign = false) => {
   if (forceSign) return `${sign}$${abs}`;
   return `$${abs}`;
 };
+
+const getComponentColor = (name: string, type?: string) => {
+  if (type === 'base' || name === 'Base Bill' || name === 'Baseline') return '#697487'; // Gray
+  if (type === 'final' || name === 'Final Bill' || name === 'Total Bill' || name === 'Current Total') return '#2F6BFF'; // Primary Blue
+  if (type === 'increase') return '#D64545'; // Alert Red
+  if (type === 'decrease') return '#27AE60'; // Savings Green
+
+  switch (name) {
+    case 'Cust Charge':
+    case 'Fixed':
+      return '#8E44AD'; // Purple
+    case 'Supply (BGS)':
+    case 'Supply':
+      return '#F5B041'; // Warning Amber
+    case 'Distribution':
+      return '#16A085'; // Energy Teal
+    case 'Transmission':
+      return '#2CA6FF'; // Electric Cyan
+    case 'SBC':
+      return '#27AE60'; // Savings Green
+    case 'NUG':
+      return '#E67E22'; // Orange
+    case 'Riders':
+      return '#8E44AD'; // Purple
+    case 'Transition':
+      return '#27AE60'; // Savings Green
+    case 'Tax':
+    case 'Taxes':
+      return '#D64545'; // Alert Red
+    default:
+      return '#2F6BFF'; // Primary Blue
+  }
+};
+
 
 const getConfidenceLevel = (std: number, mean: number) => {
   const cv = mean > 0 ? std / mean : 0;
@@ -143,15 +177,16 @@ const ImpactPage = () => {
 
   // Dynamic Simulator overrides (key is rate Key, e.g. bgs_rate)
   const [componentOverrides, setComponentOverrides] = useState<Record<string, number>>({});
-  const [kwh, setKwh] = useState<number>(750);
+  const [kwh, setKwh] = useState<number>(() => uploadedBill?.usage_kwh || 750);
   const [scenario, setScenario] = useState<string | null>(null);
+  const [prevUploadedBillId, setPrevUploadedBillId] = useState<string | null>(null);
 
-  // Sync kwh with uploaded bill
-  useEffect(() => {
+  if (uploadedBill?.customer_id !== prevUploadedBillId) {
+    setPrevUploadedBillId(uploadedBill?.customer_id ?? null);
     if (uploadedBill?.usage_kwh) {
       setKwh(uploadedBill.usage_kwh);
     }
-  }, [uploadedBill]);
+  }
 
   // Dynamic component listing from structured bill components
   const activeComponents = useMemo(() => {
@@ -195,7 +230,7 @@ const ImpactPage = () => {
 
   // Query: Investment Annualized Scenarios
   const { data: customerSimulations } = useQuery({
-    queryKey: ['customer-simulations', uploadedBill],
+    queryKey: ['customer-simulations', uploadedBill?.customer_id || uploadedBill?.bill_date],
     queryFn: async () => {
       const res = await axios.post('/bill/simulation', uploadedBill);
       return res.data.scenarios;
@@ -205,7 +240,7 @@ const ImpactPage = () => {
 
   // Query: Main Simulation endpoint
   const { data: simulation, isLoading: isSimLoading } = useQuery({
-    queryKey: ['impact-simulation-combined', changes, debouncedKwh, debouncedScenario],
+    queryKey: ['impact-simulation-combined', uploadedBill?.customer_id || uploadedBill?.bill_date, changes, debouncedKwh, debouncedScenario],
     queryFn: async () => {
       const payload = {
         changes,
@@ -221,9 +256,50 @@ const ImpactPage = () => {
     placeholderData: (prev) => prev
   });
 
+  // Core baseline billing values (safely accessed before early return)
+  const utilityBill = uploadedBill?.total_bill || 0;
+  const simulatedBill = simulation?.simulated_bill ?? utilityBill;
+
+  // Dynamic Validation layer
+  const validationResults = useMemo(() => {
+    const checks: Array<{ label: string; status: string; desc: string }> = [];
+    if (!simulation) return { status: "Passed", checks };
+
+    const contribs = simulation.contributions || {};
+    // 1. Component Sum matches Total Bill
+    const sumComponents: number = (Object.values(contribs) as any[]).reduce((acc: number, curr: any) => acc + (curr.simulated_cost || 0), 0);
+    const absDiff = Math.abs(sumComponents - simulatedBill);
+    if (absDiff < 0.05) {
+      checks.push({ label: "Component Sum check", status: "Passed", desc: `Total simulated bill sum matching components precisely.` });
+    } else {
+      checks.push({ label: "Component Sum check", status: "Warning", desc: `Component sum variance of $${absDiff.toFixed(2)}.` });
+    }
+
+    // 2. Negative Cost bounds
+    const hasNegative = Object.values(contribs).some((curr: any) => (curr.simulated_cost || 0) < 0);
+    if (!hasNegative) {
+      checks.push({ label: "No Negative Costs check", status: "Passed", desc: "No components contain invalid negative charges." });
+    } else {
+      checks.push({ label: "No Negative Costs check", status: "Error", desc: "Simulation triggered invalid negative charges." });
+    }
+
+    // 3. Negative Rate bounds
+    const hasNegativeRates = Object.values(contribs).some((curr: any) => (curr.simulated_rate || 0) < 0);
+    if (!hasNegativeRates) {
+      checks.push({ label: "Rates Validity check", status: "Passed", desc: "All simulated rate components are positive and valid." });
+    } else {
+      checks.push({ label: "Rates Validity check", status: "Error", desc: "Simulation contains negative or invalid rate definitions." });
+    }
+
+    const hasError = checks.some(c => c.status === "Error");
+    const hasWarning = checks.some(c => c.status === "Warning");
+    const status = hasError ? "Error" : (hasWarning ? "Warning" : "Passed");
+    return { status, checks };
+  }, [simulatedBill, simulation]);
+
   // Query: Baseline/Current Bill actual decomposition
   const { data: baselineDecomp } = useQuery({
-    queryKey: ['impact-baseline-decomp', uploadedBill?.usage_kwh],
+    queryKey: ['impact-baseline-decomp', uploadedBill?.customer_id || uploadedBill?.bill_date, uploadedBill?.usage_kwh],
     queryFn: async () => {
       const payload = {
         changes: {},
@@ -239,7 +315,7 @@ const ImpactPage = () => {
 
   // Query: DML Elasticity Diagnostics
   const { data: dmlData } = useQuery({
-    queryKey: ['dml-causal-diagnostics', uploadedBill],
+    queryKey: ['dml-causal-diagnostics', uploadedBill?.customer_id || uploadedBill?.bill_date],
     queryFn: async () => {
       return (await axios.post('/impact/causal-v2', { treatment: 'bgs_rate' })).data;
     },
@@ -247,16 +323,17 @@ const ImpactPage = () => {
   });
 
   // Scenario persistence states
-  const [savedScenarios, setSavedScenarios] = useState<any[]>([]);
+  const [savedScenarios, setSavedScenarios] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem('impact_scenarios');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
   const [newScenarioName, setNewScenarioName] = useState('');
   const [comparedIds, setComparedIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('impact_scenarios');
-    if (saved) {
-      try { setSavedScenarios(JSON.parse(saved)); } catch (e) { console.error(e); }
-    }
-  }, []);
 
   const handleSaveScenario = () => {
     if (!newScenarioName.trim() || !simulation) return;
@@ -290,6 +367,28 @@ const ImpactPage = () => {
     setScenario(null);
     setKwh(s.kwh);
     setComponentOverrides(s.changes);
+  };
+
+  const handleDuplicateScenario = (s: any) => {
+    const dupScen = {
+      ...s,
+      id: Math.random().toString(36).substring(7),
+      name: `${s.name} (Copy)`,
+      timestamp: new Date().toLocaleString(),
+    };
+    const updated = [...savedScenarios, dupScen];
+    setSavedScenarios(updated);
+    localStorage.setItem('impact_scenarios', JSON.stringify(updated));
+  };
+
+  const handleExportScenarios = () => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(savedScenarios, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `electricai-scenarios-export-${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   // Toggle scenario in comparison
@@ -351,6 +450,7 @@ const ImpactPage = () => {
     }
   };
 
+  // Early return moved below hook definitions to comply with Rules of Hooks
   if (!uploadedBill) {
     return (
       <EmptyBillState
@@ -362,9 +462,7 @@ const ImpactPage = () => {
     );
   }
 
-  // Core baseline billing values
-  const utilityBill = uploadedBill.total_bill || 0;
-  const simulatedBill = simulation?.simulated_bill ?? utilityBill;
+  // Core baseline billing values (declared at top of component)
   const deltaBill = simulation?.total_impact ?? (simulatedBill - utilityBill);
   const deltaPct = utilityBill > 0 ? (deltaBill / utilityBill) * 100 : 0;
 
@@ -391,18 +489,47 @@ const ImpactPage = () => {
     { key: "sales_tax", name: "State Sales Taxes (6.625%)", value: salesTax, pct: utilityBill > 0 ? round(salesTax / utilityBill * 100, 1) : 0, type: "Tax" }
   ];
 
-  // Baseline waterfall dataset
-  const baseWaterfallData = [
-    { name: 'Baseline', value: utilityBill, type: 'base' },
-    { name: 'Price Eff', value: baseDirectPrice, type: baseDirectPrice >= 0 ? 'increase' : 'decrease' },
-    { name: 'Behavior', value: baseBehaviorShift, type: baseBehaviorShift >= 0 ? 'increase' : 'decrease' },
-    { name: 'Weather', value: baseWeatherEffect, type: baseWeatherEffect >= 0 ? 'increase' : 'decrease' },
-    { name: 'Current Total', value: utilityBill, type: 'final' }
-  ].filter(d => Math.abs(d.value) > 0.05 || d.type === 'base' || d.type === 'final');
+  // Causal Variance Breakdown — show absolute component costs from baseline decomp so chart is never empty.
+  // Fall back to computing costs from uploadedBill if baselineDecomp has not loaded yet.
+  const baseContribs = baselineDecomp?.contributions || {};
+  const baseWaterfallData = (() => {
+    // Prefer baselineDecomp.contributions absolute costs
+    const componentMap = [
+      { name: 'Cust Charge', key: 'customer_charge', fallback: uploadedBill.monthly_service_charge || 0 },
+      { name: 'Supply (BGS)', key: 'bgs_rate', fallback: uploadedBill.supply_charge || 0 },
+      { name: 'Distribution', key: 'distribution_rate', fallback: round((uploadedBill.delivery_charge || 0) - (uploadedBill.monthly_service_charge || 0), 2) },
+      { name: 'Transmission', key: 'transmission_rate', fallback: (uploadedBill.rates?.transmission_rate || 0) * (uploadedBill.usage_kwh || 0) },
+      { name: 'SBC', key: 'sbc_rate', fallback: (uploadedBill.rates?.sbc_rate || 0) * (uploadedBill.usage_kwh || 0) },
+      { name: 'NUG', key: 'nug_rate', fallback: (uploadedBill.rates?.nug_rate || 0) * (uploadedBill.usage_kwh || 0) },
+      { name: 'Tax', key: 'sales_tax', fallback: uploadedBill.tax || 0 },
+    ];
+    return componentMap
+      .map(c => ({
+        name: c.name,
+        value: baseContribs[c.key]?.base_cost ?? c.fallback,
+        type: c.key === 'customer_charge' ? 'fixed' : c.key === 'sales_tax' ? 'tax' : 'variable'
+      }))
+      .filter(d => d.value > 0.01);
+  })();
 
-  // Waterfall Chart datasets
-  // Sequence: Base Bill -> Customer Charge -> Distribution -> Supply -> Transmission -> Transition -> SBC -> Riders -> NUG -> Taxes -> Final Bill
+  // Deterministic Waterfall Chart datasets
+  // When overrides are active: show delta bars (cost change per component)
+  // When no overrides: show absolute cost bars so Transmission & BGS are always visible
   const simContribs = simulation?.contributions || {};
+  const hasAnyChanges = Object.keys(changes).length > 0 || scenario !== null;
+
+  // Build absolute component costs from simulation (always available)
+  const absCC = simContribs.customer_charge?.simulated_cost ?? simContribs.customer_charge?.base_cost ?? (uploadedBill.monthly_service_charge || 0);
+  const absDist = simContribs.distribution_rate?.simulated_cost ?? simContribs.distribution_rate?.base_cost ?? round((uploadedBill.delivery_charge || 0) - (uploadedBill.monthly_service_charge || 0), 2);
+  const absSupply = simContribs.bgs_rate?.simulated_cost ?? simContribs.bgs_rate?.base_cost ?? (uploadedBill.supply_charge || 0);
+  const absTrans = simContribs.transmission_rate?.simulated_cost ?? simContribs.transmission_rate?.base_cost ?? ((uploadedBill.rates?.transmission_rate || 0) * (uploadedBill.usage_kwh || 0));
+  const absTransition = simContribs.transition_rate?.simulated_cost ?? simContribs.transition_rate?.base_cost ?? 0;
+  const absSbc = simContribs.sbc_rate?.simulated_cost ?? simContribs.sbc_rate?.base_cost ?? ((uploadedBill.rates?.sbc_rate || 0) * (uploadedBill.usage_kwh || 0));
+  const absRiders = simContribs.rider_rate?.simulated_cost ?? simContribs.rider_rate?.base_cost ?? 0;
+  const absNug = simContribs.nug_rate?.simulated_cost ?? simContribs.nug_rate?.base_cost ?? ((uploadedBill.rates?.nug_rate || 0) * (uploadedBill.usage_kwh || 0));
+  const absTax = simContribs.sales_tax?.simulated_cost ?? simContribs.sales_tax?.base_cost ?? (uploadedBill.tax || 0);
+
+  // Delta values for when changes are active
   const deltaCC = simContribs.customer_charge?.difference || 0;
   const deltaDist = simContribs.distribution_rate?.difference || 0;
   const deltaSupply = simContribs.bgs_rate?.difference || 0;
@@ -413,32 +540,59 @@ const ImpactPage = () => {
   const deltaNug = simContribs.nug_rate?.difference || 0;
   const deltaTax = simContribs.sales_tax?.difference || 0;
 
-  const waterfallSequence = [
-    { name: 'Base Bill', value: utilityBill, start: 0, end: utilityBill, type: 'base' },
-    { name: 'Cust Charge', value: deltaCC, start: utilityBill, end: utilityBill + deltaCC, type: deltaCC >= 0 ? 'increase' : 'decrease' },
-    { name: 'Distribution', value: deltaDist, start: utilityBill + deltaCC, end: utilityBill + deltaCC + deltaDist, type: deltaDist >= 0 ? 'increase' : 'decrease' },
-    { name: 'Supply (BGS)', value: deltaSupply, start: utilityBill + deltaCC + deltaDist, end: utilityBill + deltaCC + deltaDist + deltaSupply, type: deltaSupply >= 0 ? 'increase' : 'decrease' },
-    { name: 'Transmission', value: deltaTrans, start: utilityBill + deltaCC + deltaDist + deltaSupply, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans, type: deltaTrans >= 0 ? 'increase' : 'decrease' },
-    { name: 'Transition', value: deltaTransition, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition, type: deltaTransition >= 0 ? 'increase' : 'decrease' },
-    { name: 'SBC', value: deltaSbc, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc, type: deltaSbc >= 0 ? 'increase' : 'decrease' },
-    { name: 'Riders', value: deltaRiders, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders, type: deltaRiders >= 0 ? 'increase' : 'decrease' },
-    { name: 'NUG', value: deltaNug, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders + deltaNug, type: deltaNug >= 0 ? 'increase' : 'decrease' },
-    { name: 'Taxes', value: deltaTax, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders + deltaNug, end: simulatedBill, type: deltaTax >= 0 ? 'increase' : 'decrease' },
-    { name: 'Final Bill', value: simulatedBill, start: 0, end: simulatedBill, type: 'final' }
-  ];
+  // Choose between absolute-cost bar chart vs delta waterfall
+  // In baseline mode (no changes): show each component as a simple absolute bar
+  // In simulation mode (changes active): show delta waterfall stepping from Base to Final
+  const absoluteComponentData = [
+    { name: 'Supply (BGS)', value: absSupply, type: 'supply' },
+    { name: 'Distribution', value: absDist, type: 'delivery' },
+    { name: 'Transmission', value: absTrans, type: 'delivery' },
+    { name: 'SBC', value: absSbc, type: 'policy' },
+    { name: 'Riders', value: absRiders, type: 'policy' },
+    { name: 'NUG', value: absNug, type: 'policy' },
+    { name: 'Transition', value: absTransition, type: 'policy' },
+    { name: 'Tax', value: absTax, type: 'tax' },
+    { name: 'Cust Charge', value: absCC, type: 'fixed' },
+  ].filter(c => c.value > 0.01);
 
-  // Recharts waterfall stacked mapping
-  const waterfallChartData = waterfallSequence.map((step) => {
-    const barStart = Math.min(step.start, step.end);
-    const barHeight = Math.abs(step.end - step.start);
-    return {
-      name: step.name,
-      spacer: step.type === 'base' || step.type === 'final' ? 0 : barStart,
-      value: step.type === 'base' || step.type === 'final' ? step.value : barHeight,
-      type: step.type,
-      actualVal: step.value
-    };
-  }).filter(d => Math.abs(d.actualVal) > 0.005 || d.type === 'base' || d.type === 'final');
+  const waterfallChartData = (() => {
+    if (!hasAnyChanges) {
+      // Simple absolute bar chart — no spacer needed, each component shown directly
+      return absoluteComponentData.map(c => ({
+        name: c.name,
+        spacer: 0,        // always 0 so bars start from the x-axis
+        value: c.value,
+        type: c.type,
+        actualVal: c.value
+      }));
+    }
+
+    // Delta waterfall mode: show how each override changes the bill
+    const waterfallSequence = [
+      { name: 'Base Bill', value: utilityBill, start: 0, end: utilityBill, type: 'base' },
+      { name: 'Cust Charge', value: deltaCC, start: utilityBill, end: utilityBill + deltaCC, type: deltaCC >= 0 ? 'increase' : 'decrease' },
+      { name: 'Distribution', value: deltaDist, start: utilityBill + deltaCC, end: utilityBill + deltaCC + deltaDist, type: deltaDist >= 0 ? 'increase' : 'decrease' },
+      { name: 'Supply (BGS)', value: deltaSupply, start: utilityBill + deltaCC + deltaDist, end: utilityBill + deltaCC + deltaDist + deltaSupply, type: deltaSupply >= 0 ? 'increase' : 'decrease' },
+      { name: 'Transmission', value: deltaTrans, start: utilityBill + deltaCC + deltaDist + deltaSupply, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans, type: deltaTrans >= 0 ? 'increase' : 'decrease' },
+      { name: 'Transition', value: deltaTransition, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition, type: deltaTransition >= 0 ? 'increase' : 'decrease' },
+      { name: 'SBC', value: deltaSbc, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc, type: deltaSbc >= 0 ? 'increase' : 'decrease' },
+      { name: 'Riders', value: deltaRiders, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders, type: deltaRiders >= 0 ? 'increase' : 'decrease' },
+      { name: 'NUG', value: deltaNug, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders, end: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders + deltaNug, type: deltaNug >= 0 ? 'increase' : 'decrease' },
+      { name: 'Taxes', value: deltaTax, start: utilityBill + deltaCC + deltaDist + deltaSupply + deltaTrans + deltaTransition + deltaSbc + deltaRiders + deltaNug, end: simulatedBill, type: deltaTax >= 0 ? 'increase' : 'decrease' },
+      { name: 'Final Bill', value: simulatedBill, start: 0, end: simulatedBill, type: 'final' }
+    ];
+    return waterfallSequence.map((step) => {
+      const barStart = Math.min(step.start, step.end);
+      const barHeight = Math.abs(step.end - step.start);
+      return {
+        name: step.name,
+        spacer: step.type === 'base' || step.type === 'final' ? 0 : barStart,
+        value: step.type === 'base' || step.type === 'final' ? step.value : barHeight,
+        type: step.type,
+        actualVal: step.value
+      };
+    }).filter(d => Math.abs(d.actualVal) > 0.005 || d.type === 'base' || d.type === 'final');
+  })();
 
   // Sensitivity Drivers List for Section 2
   const sensitivityDrivers = [
@@ -455,13 +609,22 @@ const ImpactPage = () => {
   const simUsageDelta = simulation?.usage_change_kwh ?? 0;
 
   // Rate vs Usage Attribution Chart Data
-  const decompositionChartData = [
-    { name: 'Direct Price', value: simDirectPrice, fill: '#2F6BFF', desc: 'Cost variance due strictly to modified component rates' },
-    { name: 'Behavior Shift', value: simBehavior, fill: '#16A085', desc: 'Usage cost shifts from smart load shifting or efficiency' },
-    { name: 'Weather Shift', value: simWeather, fill: '#F5B041', desc: 'Consumption changes caused by degree-day temperature shocks' },
-    { name: 'Tax Effect', value: deltaTax, fill: '#2CA6FF', desc: 'Proportional sales tax adjustment' },
-    { name: 'Interaction', value: simInteraction, fill: '#E67E22', desc: 'Compounding variance from rates and usage shifting jointly' }
-  ].filter(d => Math.abs(d.value) > 0.01);
+  // In baseline mode: show absolute component costs so chart is never empty
+  // In simulation mode: show causal decomposition of bill changes
+  const decompositionChartData = hasAnyChanges
+    ? [
+        { name: 'Direct Price', value: simDirectPrice, fill: '#2F6BFF', desc: 'Cost variance due strictly to modified component rates' },
+        { name: 'Behavior Shift', value: simBehavior, fill: '#16A085', desc: 'Usage cost shifts from smart load shifting or efficiency' },
+        { name: 'Weather Shift', value: simWeather, fill: '#F5B041', desc: 'Consumption changes caused by degree-day temperature shocks' },
+        { name: 'Tax Effect', value: deltaTax, fill: '#2CA6FF', desc: 'Proportional sales tax adjustment' },
+        { name: 'Interaction', value: simInteraction, fill: '#E67E22', desc: 'Compounding variance from rates and usage shifting jointly' }
+      ].filter(d => Math.abs(d.value) > 0.01)
+    : absoluteComponentData.map(c => ({
+        name: c.name,
+        value: c.value,
+        fill: getComponentColor(c.name, c.type),
+        desc: `Absolute cost contribution of ${c.name} to your bill`
+      }));
 
   // Monte Carlo distribution statistics
   const simMean = simulation?.distribution?.mean ?? simulatedBill;
@@ -514,41 +677,6 @@ const ImpactPage = () => {
   });
 
   // Dynamic Validation layer
-  const validationResults = useMemo(() => {
-    const checks: Array<{ label: string; status: string; desc: string }> = [];
-    if (!simulation) return { status: "Passed", checks };
-
-    // 1. Component Sum matches Total Bill
-    const sumComponents: number = (Object.values(simContribs) as any[]).reduce((acc: number, curr: any) => acc + (curr.simulated_cost || 0), 0);
-    const absDiff = Math.abs(sumComponents - simulatedBill);
-    if (absDiff < 0.05) {
-      checks.push({ label: "Component Sum check", status: "Passed", desc: `Total simulated bill sum matching components precisely.` });
-    } else {
-      checks.push({ label: "Component Sum check", status: "Warning", desc: `Component sum variance of $${absDiff.toFixed(2)}.` });
-    }
-
-    // 2. Negative Cost bounds
-    const hasNegative = Object.values(simContribs).some((curr: any) => (curr.simulated_cost || 0) < 0);
-    if (!hasNegative) {
-      checks.push({ label: "No Negative Costs check", status: "Passed", desc: "No components contain invalid negative charges." });
-    } else {
-      checks.push({ label: "No Negative Costs check", status: "Error", desc: "Simulation triggered invalid negative charges." });
-    }
-
-    // 3. Negative Rate bounds
-    const hasNegativeRates = Object.values(simContribs).some((curr: any) => (curr.simulated_rate || 0) < 0);
-    if (!hasNegativeRates) {
-      checks.push({ label: "Rates Validity check", status: "Passed", desc: "All simulated rate components are positive and valid." });
-    } else {
-      checks.push({ label: "Rates Validity check", status: "Error", desc: "Simulation contains negative or invalid rate definitions." });
-    }
-
-    const hasError = checks.some(c => c.status === "Error");
-    const hasWarning = checks.some(c => c.status === "Warning");
-    const status = hasError ? "Error" : (hasWarning ? "Warning" : "Passed");
-    return { status, checks };
-  }, [simContribs, simulatedBill, simulation]);
-
   return (
     <div className="bg-bg-primary text-text-primary space-y-10 font-sans pb-16 px-4 md:px-8 pt-6">
 
@@ -706,11 +834,7 @@ const ImpactPage = () => {
                   />
                   <Bar dataKey="value" radius={[2, 2, 0, 0]} maxBarSize={40}>
                     {baseWaterfallData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={
-                        entry.type === 'base'      ? 'var(--text-secondary)' :
-                        entry.type === 'increase'  ? 'var(--alert-red)' :
-                        entry.type === 'decrease'  ? 'var(--savings-green)' : 'var(--primary-blue)'
-                      } />
+                      <Cell key={`cell-${index}`} fill={getComponentColor(entry.name, entry.type)} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -938,8 +1062,8 @@ const ImpactPage = () => {
             const baseRate = c.formula_val?.split('/')[0]?.replace('$', '') || '0.0000';
             const simRate = (parseFloat(baseRate) * (1 + overrideVal / 100)).toFixed(5);
             
-            let substituted = "";
-            let sym = "";
+            let substituted: string;
+            let sym: string;
             if (rateKey === 'customer_charge') {
               sym = "Fixed Customer Charge";
               substituted = `$${simRate} (Base $${parseFloat(baseRate).toFixed(2)} ${overrideVal !== 0 ? `with ${overrideVal > 0 ? '+' : ''}${overrideVal}% override` : 'flat'})`;
@@ -1163,35 +1287,55 @@ const ImpactPage = () => {
           <div className="panel-chart flex flex-col justify-between h-[360px]">
             <div>
               <span className="text-xs uppercase tracking-wider text-text-secondary block mb-1">Waterfall Cost Progression</span>
-              <h4 className="text-sm font-bold text-text-primary">Deterministic component changes step progress</h4>
+              <h4 className="text-sm font-bold text-text-primary">
+                {hasAnyChanges ? 'Deterministic component changes step progress' : 'Bill cost breakdown by component'}
+              </h4>
             </div>
 
             <div className="flex-1 min-h-[200px] mt-4">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={waterfallChartData} margin={{ top: 10, right: 15, left: -25, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 8, fontWeight: 600 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontFamily: 'IBM Plex Mono' }} tickFormatter={(v) => `$${v}`} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }}
-                    itemStyle={{ fontSize: '11px', color: 'var(--text-primary)' }}
-                    formatter={(_v: any, _name: any, props: any) => [`$${props.payload.actualVal.toFixed(2)}`, props.payload.type === 'base' || props.payload.type === 'final' ? 'Bill Total' : 'Cost shift']}
-                  />
-                  <Bar dataKey="spacer" stackId="a" fill="transparent" />
-                  <Bar dataKey="value" stackId="a" radius={[2, 2, 0, 0]}>
-                    {waterfallChartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={
-                        entry.type === 'base'      ? '#697487' :
-                        entry.type === 'final'     ? '#2F6BFF' :
-                        entry.type === 'increase'  ? '#D64545' : '#27AE60'
-                      } />
-                    ))}
-                  </Bar>
-                </BarChart>
+                {hasAnyChanges ? (
+                  // Delta waterfall mode: stacked spacer + value bars
+                  <BarChart data={waterfallChartData} margin={{ top: 10, right: 15, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 8, fontWeight: 600 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontFamily: 'IBM Plex Mono' }} tickFormatter={(v) => `$${v}`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }}
+                      itemStyle={{ fontSize: '11px', color: 'var(--text-primary)' }}
+                      formatter={(_v: any, _name: any, props: any) => [`$${props.payload.actualVal.toFixed(2)}`, props.payload.type === 'base' || props.payload.type === 'final' ? 'Bill Total' : 'Cost change']}
+                    />
+                    <Bar dataKey="spacer" stackId="a" fill="transparent" />
+                    <Bar dataKey="value" stackId="a" radius={[2, 2, 0, 0]}>
+                      {waterfallChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={getComponentColor(entry.name, entry.type)} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                ) : (
+                  // Baseline mode: simple absolute bar chart, no stacking
+                  <BarChart data={waterfallChartData} margin={{ top: 10, right: 15, left: -25, bottom: 0 }} barCategoryGap="20%">
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 8, fontWeight: 600 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: 'var(--text-secondary)', fontSize: 9, fontFamily: 'IBM Plex Mono' }} tickFormatter={(v) => `$${v.toFixed(0)}`} />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }}
+                      itemStyle={{ fontSize: '11px', color: 'var(--text-primary)' }}
+                      formatter={(_v: any, _name: any, props: any) => [`$${props.payload.actualVal.toFixed(2)}`, 'Component Cost']}
+                    />
+                    <Bar dataKey="value" radius={[3, 3, 0, 0]} maxBarSize={55}>
+                      {waterfallChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={getComponentColor(entry.name, entry.type)} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                )}
               </ResponsiveContainer>
             </div>
             <div className="text-[10px] text-text-secondary font-sans mt-1 text-center font-medium">
-              Illustrates how each simulated variance steps from the original Base Bill to the new Final simulated bill.
+              {hasAnyChanges
+                ? 'Illustrates how each simulated variance steps from the original Base Bill to the new Final simulated bill.'
+                : 'Absolute cost of each billing component. Move sliders above to see how changes affect the bill.'}
             </div>
           </div>
 
@@ -1199,7 +1343,9 @@ const ImpactPage = () => {
           <div className="panel-chart flex flex-col justify-between h-[360px]">
             <div>
               <span className="text-xs uppercase tracking-wider text-text-secondary block mb-1">Causal Factor Analysis</span>
-              <h4 className="text-sm font-bold text-text-primary">Decomposition of simulated bill deviations ($)</h4>
+              <h4 className="text-sm font-bold text-text-primary">
+                {hasAnyChanges ? 'Decomposition of simulated bill deviations ($)' : 'Absolute cost by billing component ($)'}
+              </h4>
             </div>
 
             <div className="flex-1 min-h-[200px] mt-4">
@@ -1417,9 +1563,20 @@ const ImpactPage = () => {
 
           {/* Saved Scenarios Manager */}
           <div className="lg:col-span-2 panel-operational p-5 h-[360px] flex flex-col">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block mb-3 border-b border-border-hairline pb-2">
-              Saved Scenarios Directory
-            </span>
+            <div className="flex justify-between items-center mb-3 border-b border-border-hairline pb-2">
+              <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">
+                Saved Scenarios Directory
+              </span>
+              {savedScenarios.length > 0 && (
+                <button
+                  onClick={handleExportScenarios}
+                  className="flex items-center gap-1 text-[9px] font-bold text-primary-blue hover:underline bg-transparent border-none cursor-pointer"
+                  title="Export Scenarios to JSON"
+                >
+                  <Download size={10} /> Export
+                </button>
+              )}
+            </div>
             <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar text-xs">
               {savedScenarios.length === 0 ? (
                 <div className="text-center text-text-secondary py-12 font-sans">No saved configurations found. Create a scenario to save active inputs.</div>
@@ -1451,8 +1608,16 @@ const ImpactPage = () => {
                           Load
                         </button>
                         <button
+                          onClick={() => handleDuplicateScenario(s)}
+                          className="p-1.5 text-text-secondary hover:text-primary-blue transition-colors"
+                          title="Duplicate Scenario"
+                        >
+                          <Copy size={13} />
+                        </button>
+                        <button
                           onClick={() => handleDeleteScenario(s.id)}
                           className="p-1.5 text-text-secondary hover:text-alert-red transition-colors"
+                          title="Delete Scenario"
                         >
                           <Trash2 size={13} />
                         </button>

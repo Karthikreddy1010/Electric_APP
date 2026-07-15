@@ -122,9 +122,26 @@ async def init_db() -> None:
     try:
         async with _async_engine.begin() as conn:
             await conn.execute(text("ALTER TABLE auth_users ADD COLUMN active_bill_id VARCHAR(36)"))
-        logger.info("Migrated: added active_bill_id to auth_users")
     except Exception:
         pass
+
+    ai_cols = [
+        ("ai_status", "VARCHAR(20) DEFAULT 'pending'"),
+        ("ai_explanation", "TEXT"),
+        ("ai_recommendations", "TEXT"),
+        ("ai_model", "VARCHAR(50)"),
+        ("ai_prompt_version", "VARCHAR(20)"),
+        ("ai_latency_ms", "FLOAT"),
+        ("ai_retry_count", "INTEGER DEFAULT 0"),
+        ("ai_error_reason", "TEXT"),
+        ("ai_generated_at", "DATETIME")
+    ]
+    for col_name, col_type in ai_cols:
+        try:
+            async with _async_engine.begin() as conn:
+                await conn.execute(text(f"ALTER TABLE user_bills ADD COLUMN {col_name} {col_type}"))
+        except Exception:
+            pass
 
     logger.info("Database initialized — all tables created/verified")
 

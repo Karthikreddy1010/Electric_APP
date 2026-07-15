@@ -1,0 +1,49 @@
+=================================================================
+TESTING LLM SERVICE GENERATION QUALITY VIA OLLAMA (qwen3:4b)
+=================================================================
+
+1. Generating Bill Analysis Audit Report...
+Validation Status: False
+Fallback Used: True
+Generated Text:
+
+### 📝 Executive Bill Summary
+Your total electricity bill from **PSE&G** for billing period **Jun 2026** is **$144.20** for **780.0 kWh** at an effective tariff rate of **$0.1849/kWh**.
+
+---
+
+### 🔍 Charge Breakdown & Controllability
+1. **Supply Charges (Generation): $85.00** — *Controllable.* Charges for energy generation commodity.
+2. **Delivery & Service Charges: $42.50** — *Partially Controllable.* Fixed customer charge plus grid distribution fee.
+3. **State Sales Taxes & Adjustments: $8.46** — *Mandatory.* NJ State Sales Tax (6.625%).
+
+---
+
+### 💡 Recommendations
+- Shift non-essential consumption to off-peak grid hours (10 PM to 8 AM).
+- Inspect HVAC cooling loads during peak summer heat waves.
+
+-----------------------------------------------------------------
+
+2. Generating PDF Report Narrative...
+Validation Status: False
+Fallback Used: True
+Generated Text:
+
+### 📝 Executive Bill Summary
+Your total electricity bill from **Utility Provider** for billing period **Current Billing Period** is **$0.00** for **0.0 kWh** at an effective tariff rate of **$0.0000/kWh**.
+
+---
+
+### 🔍 Charge Breakdown & Controllability
+1. **Supply Charges (Generation): $0.00** — *Controllable.* Charges for energy generation commodity.
+2. **Delivery & Service Charges: $0.00** — *Partially Controllable.* Fixed customer charge plus grid distribution fee.
+3. **State Sales Taxes & Adjustments: $0.00** — *Mandatory.* NJ State Sales Tax (6.625%).
+
+---
+
+### 💡 Recommendations
+- Shift non-essential consumption to off-peak grid hours (10 PM to 8 AM).
+- Inspect HVAC cooling loads during peak summer heat waves.
+
+=================================================================

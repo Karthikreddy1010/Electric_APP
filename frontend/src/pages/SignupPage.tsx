@@ -8,7 +8,7 @@ import { loadSlim } from '@tsparticles/slim';
 
 // ─── Floating Neon Particles ─────────────────────────────────────────────────
 function InteractiveBackground() {
-  const particlesInit = async (engine: any) => {
+  const particlesInit = async (engine: Parameters<typeof loadSlim>[0]) => {
     await loadSlim(engine);
   };
 

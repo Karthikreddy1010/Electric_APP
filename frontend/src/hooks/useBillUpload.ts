@@ -88,12 +88,21 @@ export function useBillUpload() {
         addLog('✅ Bill saved to your account.');
 
         if (uploadRes.data?.bill) {
-          const partialBill: Partial<BillData> = {
-            total_bill: uploadRes.data.bill.total_bill,
-            usage_kwh: uploadRes.data.bill.usage_kwh,
-            bill_date: uploadRes.data.bill.filename,
+          const billData: BillData = {
+            ...uploadRes.data.bill_data,
+            analysis_results: uploadRes.data.analysis_results,
+            contribution: uploadRes.data.contribution,
+            sensitivity: uploadRes.data.sensitivity,
+            ranking: uploadRes.data.ranking,
+            drivers: uploadRes.data.drivers,
+            insights: uploadRes.data.insights,
+            forecast_results: uploadRes.data.forecast_results,
+            simulation_results: uploadRes.data.simulation_results,
+            regional_comparison: uploadRes.data.regional_comparison,
+            recommendations: uploadRes.data.recommendations
           };
-          setBillData(partialBill as BillData, [], null);
+          const ocrData: OcrRun[] = uploadRes.data.ocr_runs ?? [];
+          setBillData(billData, ocrData, uploadRes.data.explanation);
         }
 
         invalidateDashboard();
@@ -114,6 +123,7 @@ export function useBillUpload() {
           ranking: uploadRes.data.ranking,
           drivers: uploadRes.data.drivers,
           insights: uploadRes.data.insights,
+          forecast_results: uploadRes.data.forecast_results,
         };
 
         const ocrData: OcrRun[] = uploadRes.data.ocr_runs ?? [];

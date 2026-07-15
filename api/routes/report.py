@@ -10,7 +10,6 @@ import re
 import socket
 import time
 import asyncio
-import ollama
 from reportlab.lib.pagesizes import LETTER
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
@@ -160,80 +159,57 @@ def _get_report_data_and_prompt():
 
 @router.post("/report/generate")
 async def generate_report():
-    prompt, fallback_text, _, _ = _get_report_data_and_prompt()
+    from api.services.llm.llm_service import llm_service
+    analysis = compute_bill_analysis()
     
-    async def generate_stream():
-        try:
-            # Step 1: Rapid socket check to see if Ollama is listening
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(0.1)
-            res = sock.connect_ex(('127.0.0.1', 11434))
-            sock.close()
-            if res != 0:
-                raise RuntimeError("Ollama daemon offline")
+    top_driver = analysis['all_features'][0]
+    share = top_driver['share_pct']
+    fallback_text = f"Your electricity bill for {analysis['current_month']} is mainly driven by {top_driver['label']} costs, which account for about {share:.1f}% of the total."
 
-            client = ollama.AsyncClient(timeout=1.5)
-            response = await client.chat(
-                model="qwen3:4b",
-                messages=[{"role": "user", "content": prompt}],
-                options={
-                    "temperature": 0.2,
-                    "num_predict": 250
-                },
-                stream=True
-            )
-            
-            start_time = time.time()
-            # Step 2: Retrieve streamed tokens with a strict timeout to prevent hangs
-            while True:
-                try:
-                    chunk = await asyncio.wait_for(response.__anext__(), timeout=1.0)
-                    if 'message' in chunk and 'content' in chunk['message']:
-                        yield chunk['message']['content']
-                    if time.time() - start_time > 10.0:
-                        yield "\n\n[Generation stopped: Time limit exceeded]"
-                        break
-                except StopAsyncIteration:
-                    break
-        except Exception as e:
-            # Transparently return fallback if AI is offline, slow, or times out
-            logger.warning(f"Ollama streaming report generation failed: {e or type(e).__name__}. Using deterministic fallback.")
+    context_data = {
+        "total_bill": analysis["base_bill"],
+        "current_month": analysis["current_month"],
+        "top_features": analysis["all_features"][:3],
+        "insights": analysis["insights"]
+    }
+
+    try:
+        generator = llm_service.stream_explanation(
+            task="report",
+            context_data=context_data
+        )
+        return StreamingResponse(generator, media_type="text/plain")
+    except Exception as e:
+        logger.warning(f"Centralized streaming report failed: {e}. Using fallback.")
+        async def fallback_generator():
             yield f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
-            
-    return StreamingResponse(generate_stream(), media_type="text/plain")
+        return StreamingResponse(fallback_generator(), media_type="text/plain")
 
 
 @router.post("/report/pdf")
 async def generate_pdf():
-    prompt, fallback_text, month, analysis = _get_report_data_and_prompt()
+    from api.services.llm.llm_service import llm_service
+    analysis = compute_bill_analysis()
     
-    try:
-        # Step 1: Rapid socket check to see if Ollama is listening
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.1)
-        res = sock.connect_ex(('127.0.0.1', 11434))
-        sock.close()
-        if res != 0:
-            raise RuntimeError("Ollama daemon offline")
+    top_driver = analysis['all_features'][0]
+    share = top_driver['share_pct']
+    fallback_text = f"Your electricity bill for {analysis['current_month']} is mainly driven by {top_driver['label']} costs, which account for about {share:.1f}% of the total."
 
-        # Non-streaming for PDF
-        client = ollama.AsyncClient(timeout=1.5)
-        
-        async def fetch_chat():
-            return await client.chat(
-                model="qwen3:4b",
-                messages=[{"role": "user", "content": prompt}],
-                options={
-                    "temperature": 0.2,
-                    "num_predict": 250
-                }
-            )
-        
-        # Enforce 1.5s strict timeout
-        response = await asyncio.wait_for(fetch_chat(), timeout=1.5)
-        text = response['message']['content']
+    context_data = {
+        "total_bill": analysis["base_bill"],
+        "current_month": analysis["current_month"],
+        "top_features": analysis["all_features"][:3],
+        "insights": analysis["insights"]
+    }
+
+    try:
+        res = await llm_service.generate_explanation(
+            task="report",
+            context_data=context_data
+        )
+        text = res["explanation"]
     except Exception as e:
-        logger.warning(f"Ollama PDF report generation failed: {e or type(e).__name__}. Using deterministic fallback.")
+        logger.warning(f"Centralized PDF report LLM call failed: {e}. Using fallback.")
         text = f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
     
     buffer = io.BytesIO()
@@ -256,5 +232,5 @@ async def generate_pdf():
     return StreamingResponse(
         buffer, 
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename=bill_report_{month}.pdf"}
+        headers={"Content-Disposition": f"attachment; filename=bill_report_{analysis['current_month']}.pdf"}
     )

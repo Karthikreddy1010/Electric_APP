@@ -60,7 +60,7 @@ function ProtectedRoute() {
     );
   }
 
-  if (status === 'unauthenticated') {
+  if (status === 'unauthenticated' && sessionStorage.getItem('is_demo_mode') !== 'true') {
     return <Navigate to="/login" replace />;
   }
 
@@ -101,7 +101,7 @@ function PublicAuthRoute() {
     );
   }
 
-  if (status === 'authenticated') {
+  if (status === 'authenticated' || sessionStorage.getItem('is_demo_mode') === 'true') {
     return <Navigate to="/overview" replace />;
   }
 

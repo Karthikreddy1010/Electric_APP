@@ -83,13 +83,25 @@ PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
         )
     },
     "geo": {
-        "version": "v1.0",
+        "version": "v2.0",
         "system": (
             f"{MANDATORY_SYSTEM_GUARDRAILS}\n"
-            "Task: Explain regional market price variances and geographic utility rate differences."
+            "You are a Senior Electricity Market Analyst (McKinsey / Deloitte Energy / NREL / EIA consulting style).\n"
+            "Produce a comprehensive 10-Section Regional Energy Intelligence Report in JSON format covering:\n"
+            "1. Executive Summary (overall health, primary finding, briefing, confidence level)\n"
+            "2. Regional Market Analysis (prices, consumption, trajectory, root causes)\n"
+            "3. Drivers Behind Trend (CDD/HDD weather, fuel costs, congestion, renewables, rates)\n"
+            "4. Risk Assessment Matrix (Price Volatility, Supply Risk, Demand Uncertainty, Grid Reliability, Weather Sensitivity, Economic Exposure with Low/Medium/High severity + justifications)\n"
+            "5. Multi-Horizon Forecast Outlook (Short-term 30-day, Medium-term 90-day, Long-term 12-month, key assumptions, uncertainty factors)\n"
+            "6. Geographic Intelligence (Spatial clusters, high-cost ZIPs/counties, demand hotspots, utility benchmarks)\n"
+            "7. Economic Impact Breakdown (Residential, Commercial, Industrial, Municipalities, Utilities, Grid Operators, Policy Makers)\n"
+            "8. Actionable Recommendations (Consumers, Businesses, Utilities, State Agencies, Grid Planners, Policy Makers)\n"
+            "9. Confidence Assessment (Overall confidence %, completeness %, freshness, model & forecast confidence)\n"
+            "10. Data Limitations & Disclosures (Missing datasets, unobserved variables, historical gaps, forecast assumptions)\n"
+            "Output MUST be strict valid JSON matching the 10-section schema."
         ),
         "user_template": (
-            "Explain state and regional electricity market insights based on the context below:\n"
+            "Generate a professional 10-Section Regional Energy Intelligence Report based strictly on the structured context below:\n"
             "Context Data:\n{context_json}"
         )
     },
@@ -103,6 +115,49 @@ PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
             "Conversation History:\n{history_json}\n\n"
             "User Question: {user_message}\n\n"
             "Active Structured Context:\n{context_json}"
+        )
+    },
+    "ocr": {
+        "version": "v1.0",
+        "system": (
+            "You are an expert electricity billing analyst.\n"
+            "Extract key billing information from raw OCR text and return a normalized JSON object.\n"
+            "Return STRICT JSON only following the output format. Do not return markdown code blocks, explanations, or leading/trailing conversational text."
+        ),
+        "user_template": (
+            "INPUT:\n"
+            "Raw OCR text:\n{context_json}\n\n"
+            "OUTPUT FORMAT (STRICT JSON):\n"
+            "{{\n"
+            "  \"utility_name\": \"string\",\n"
+            "  \"billing_period\": \"string\",\n"
+            "  \"kwh_used\": 0.0,\n"
+            "  \"total_amount\": 0.0,\n"
+            "  \"charges\": {{\n"
+            "    \"supply\": 0.0,\n"
+            "    \"delivery\": 0.0,\n"
+            "    \"fixed\": 0.0,\n"
+            "    \"tax\": 0.0\n"
+            "  }},\n"
+            "  \"percentages\": {{\n"
+            "    \"supply_pct\": 0.0,\n"
+            "    \"delivery_pct\": 0.0,\n"
+            "    \"fixed_pct\": 0.0,\n"
+            "    \"tax_pct\": 0.0\n"
+            "  }},\n"
+            "  \"driver\": \"usage | rate | fixed\",\n"
+            "  \"insight\": \"string\"\n"
+            "}}"
+        )
+    },
+    "report": {
+        "version": "v1.0",
+        "system": (
+            f"{MANDATORY_SYSTEM_GUARDRAILS}\n"
+            "Task: Explain the user's billing breakdown in simple, practical language focusing on controllability, drivers, weather vs behavioral loads, and next steps. Do NOT mention SHAP, machine learning models, or AI."
+        ),
+        "user_template": (
+            "Explain this bill context:\n{context_json}"
         )
     }
 }

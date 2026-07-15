@@ -23,7 +23,21 @@ import apiClient from '../lib/apiClient.ts';
 // ─── Upload Interface ─────────────────────────────────────────────────────────
 
 const UploadView = () => {
-  const upload = useBillUpload();
+  const {
+    currentStep,
+    isScanning,
+    isDragOver,
+    selectedFile,
+    scanLogs,
+    useExample,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    fileInputRef,
+    handleFileSelect,
+    runAnalysis,
+    selectExample,
+  } = useBillUpload();
 
   const WORKFLOW_STEPS = [
     { step: 1, label: 'Upload bill',       desc: 'Select file' },
@@ -53,8 +67,8 @@ const UploadView = () => {
       {/* Workflow Steps */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4 p-5 bg-bg-surface border border-border-hairline rounded-md shadow-sm">
         {WORKFLOW_STEPS.map((s) => {
-          const isCompleted = upload.currentStep > s.step;
-          const isActive = upload.currentStep === s.step;
+          const isCompleted = currentStep > s.step;
+          const isActive = currentStep === s.step;
           return (
             <div key={s.step} className="flex flex-col text-xs font-sans">
               <div className="flex items-center gap-2">
@@ -79,24 +93,24 @@ const UploadView = () => {
         {/* Drop Zone + Actions */}
         <div className="lg:col-span-7 space-y-6">
           <div
-            onDragOver={upload.handleDragOver}
-            onDragLeave={upload.handleDragLeave}
-            onDrop={upload.handleDrop}
-            onClick={() => upload.fileInputRef.current?.click()}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
             className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-all duration-300 flex flex-col items-center justify-center min-h-[300px] relative overflow-hidden group bg-bg-surface ${
-              upload.isDragOver
+              isDragOver
                 ? 'border-primary-blue bg-primary-blue/5 shadow-inner'
                 : 'border-border-hairline hover:border-primary-blue/50 hover:bg-bg-primary/50'
             }`}
           >
             <input
               type="file"
-              ref={upload.fileInputRef}
-              onChange={upload.handleFileSelect}
+              ref={fileInputRef}
+              onChange={handleFileSelect}
               accept=".pdf,.png,.jpg,.jpeg"
               className="hidden"
             />
-            {upload.isScanning && (
+            {isScanning && (
               <div className="absolute inset-0 z-10 pointer-events-none">
                 <div className="w-full h-0.5 bg-primary-blue/50 absolute left-0" style={{ animation: 'sweep 2.5s infinite linear' }} />
               </div>
@@ -105,7 +119,7 @@ const UploadView = () => {
               <Upload size={22} />
             </div>
             <h3 className="text-sm font-semibold text-text-primary">
-              {upload.selectedFile ? upload.selectedFile.name : 'Drag and drop your electricity bill PDF here'}
+              {selectedFile ? selectedFile.name : 'Drag and drop your electricity bill PDF here'}
             </h3>
             <p className="text-[10px] text-text-secondary mt-1 font-mono-numbers">Supports PDF, PNG, JPG, JPEG</p>
             <button type="button" className="mt-6 bg-bg-surface border border-border-hairline hover:border-text-secondary px-4 py-2 rounded-md text-xs font-semibold text-text-primary transition-all shadow-sm">
@@ -115,18 +129,18 @@ const UploadView = () => {
 
           <div className="flex items-center gap-4">
             <button
-              onClick={upload.runAnalysis}
-              disabled={upload.isScanning || (!upload.selectedFile && !upload.useExample)}
+              onClick={runAnalysis}
+              disabled={isScanning || (!selectedFile && !useExample)}
               className="flex-1 bg-primary-blue text-white hover:bg-primary-blue/90 font-semibold px-6 py-3.5 rounded-md shadow-sm active:scale-[0.99] disabled:bg-bg-primary disabled:text-text-secondary disabled:border disabled:border-border-hairline disabled:pointer-events-none transition-all flex items-center justify-center gap-2 text-xs"
             >
-              {upload.isScanning
+              {isScanning
                 ? <><RefreshCw size={14} className="animate-spin" /> Extracting bill telemetry...</>
                 : <><Play size={14} fill="currentColor" /> Analyze bill</>
               }
             </button>
-            {!upload.useExample && (
+            {!useExample && (
               <button
-                onClick={upload.selectExample}
+                onClick={selectExample}
                 className="bg-bg-surface border border-border-hairline hover:bg-bg-primary text-text-primary font-semibold px-5 py-3.5 rounded-md text-xs transition-all shadow-sm"
               >
                 Use sample bill
@@ -143,20 +157,20 @@ const UploadView = () => {
                 <Terminal size={14} className="text-primary-blue" /> Processing telemetry logs
               </h3>
               <div className="mt-4 font-mono text-[10px] space-y-2 text-text-primary max-h-[220px] overflow-y-auto pr-1">
-                {upload.scanLogs.map((log: string, idx: number) => (
+                {scanLogs.map((log: string, idx: number) => (
                   <div key={idx} className="flex gap-2">
                     <span className="text-text-secondary shrink-0">&gt;</span>
                     <span>{log}</span>
                   </div>
                 ))}
-                {upload.isScanning && (
+                {isScanning && (
                   <div className="flex gap-2 text-primary-blue items-center">
                     <span className="shrink-0">&gt;</span>
                     <RefreshCw size={8} className="animate-spin" />
                     <span>Processing matrix pipelines...</span>
                   </div>
                 )}
-                {!upload.isScanning && upload.scanLogs.length === 0 && (
+                {!isScanning && scanLogs.length === 0 && (
                   <div className="text-text-secondary italic">Awaiting document feed to launch analysis logs...</div>
                 )}
               </div>
@@ -164,7 +178,7 @@ const UploadView = () => {
 
             {/* Sample bill preview */}
             <div className="border-t border-border-hairline pt-4 mt-6">
-              {upload.useExample && !upload.selectedFile && !upload.isScanning ? (
+              {useExample && !selectedFile && !isScanning ? (
                 <div className="bg-bg-primary border border-border-hairline rounded-md p-4 space-y-3">
                   <div className="flex justify-between items-start border-b border-border-hairline pb-2">
                     <div className="flex items-center gap-2">
@@ -189,12 +203,12 @@ const UploadView = () => {
                     </div>
                   </div>
                 </div>
-              ) : upload.selectedFile ? (
+              ) : selectedFile ? (
                 <div className="border border-border-hairline bg-bg-primary rounded-md p-6 flex flex-col items-center justify-center text-center">
                   <FileText size={32} className="text-primary-blue mb-2" />
-                  <h4 className="text-xs font-bold text-text-primary truncate max-w-[200px]">{upload.selectedFile.name}</h4>
+                  <h4 className="text-xs font-bold text-text-primary truncate max-w-[200px]">{selectedFile.name}</h4>
                   <p className="text-[10px] text-text-secondary mt-1 font-mono-numbers">
-                    {(upload.selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                   </p>
                   <div className="mt-3 bg-savings-green/10 text-savings-green border border-savings-green/20 px-2.5 py-1 rounded-[4px] text-[10px] font-bold flex items-center gap-1.5">
                     <ShieldCheck size={12} /> Ready for secure ingestion scan
@@ -220,7 +234,7 @@ const UploadView = () => {
 
 const AnalysisView = () => {
   const { uploadedBill, ocrRuns } = useBill();
-  const upload = useBillUpload();
+  const { handleReset } = useBillUpload();
   const [activeTab, setActiveTab] = useState<'breakdown' | 'validation' | 'summaries' | 'comparison'>('breakdown');
   const [expandedComp, setExpandedComp] = useState<string | null>(null);
   const [activeBbox, setActiveBbox] = useState<string | null>(null);
@@ -349,7 +363,7 @@ const AnalysisView = () => {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={upload.handleReset}
+            onClick={handleReset}
             className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-4 py-2.5 rounded-md text-xs font-semibold transition-all shadow-sm flex items-center gap-2"
           >
             <Upload size={14} /> Upload Another Bill

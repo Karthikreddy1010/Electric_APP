@@ -5,7 +5,7 @@ import re
 from datetime import date, datetime, timezone
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update, delete, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies.auth_deps import get_current_user
 from api.state import app_state
 from api.services.bill_impact_engine import bill_impact_engine
+from api.services.llm.background_worker import process_bill_ai_task
+from api.services.llm.deterministic_fallback import DeterministicFallback
 from api.routes.bill import (
     generate_ocr_runs,
     generate_mock_bill,
@@ -72,88 +74,22 @@ def _user_response(user: User, bills_count: int, total_savings: float) -> dict:
     }
 
 async def generate_explanation(bill_data: dict) -> str:
-    """Generates an LLM explanation of the charges in the bill, with a deterministic fallback."""
-    import ollama
-
-    tot = bill_data.get("total_bill", 138.90)
-    use = bill_data.get("usage_kwh", 750.0)
-    fixed = bill_data.get("monthly_service_charge", 8.24)
-    delivery = bill_data.get("delivery_charge", 41.25)
-    supply = bill_data.get("supply_charge", 81.00)
-    tax = bill_data.get("tax", 8.41)
-    utility = bill_data.get("utility", "PSE&G")
-    period = bill_data.get("billing_period", "Jun 2026")
-    daily_cost = bill_data.get("average_daily_cost", 4.63)
-    rate = bill_data.get("effective_rate", 0.1852)
-
-    fixed_pct = round((fixed / tot * 100), 1) if tot > 0 else 0
-    delivery_pct = round((delivery / tot * 100), 1) if tot > 0 else 0
-    supply_pct = round((supply / tot * 100), 1) if tot > 0 else 0
-    tax_pct = round((tax / tot * 100), 1) if tot > 0 else 0
-
-    fallback_markdown = f"""### 📝 Bill Summary
-Your total bill from **{utility}** for the billing period **{period}** is **${tot:.2f}** for **{use:.1f} kWh** of electricity. This averages to about **${daily_cost:.2f} per day** at an effective rate of **${rate:.4f} per kWh**.
-
----
-
-### 🔍 Charge Breakdown & Controllability
-1. **Supply Charges (Generation): ${supply:.2f} ({supply_pct}%)** — *Controllable.* This pays for the actual electricity consumed. Lowering your overall consumption will directly reduce this amount.
-2. **Delivery Charges (Distribution & Transmission): ${delivery:.2f} ({delivery_pct}%)** — *Partially Controllable.* This includes a fixed service charge of **${fixed:.2f}** ({fixed_pct}%) for connection maintenance and variable fees for local line infrastructure.
-3. **State Taxes & Adjustments: ${tax:.2f} ({tax_pct}%)** — *Uncontrollable.* Mandatory state sales tax of 6.625%.
-
----
-
-### 📈 Why Your Bill Changed
-Based on seasonal heating and cooling trends:
-- **Weather Impact**: Higher outdoor temperatures increase cooling loads, causing high air conditioning demand. Air conditioning accounts for approximately **18% to 25%** of summer usage spikes.
-- **Wholesale Jitter**: Supply rates fluctuated slightly based on grid congestion, but the standard tariff rate remains stable at the fixed BGS rate schedule.
-
----
-
-### 💡 Savings Opportunities & Recommendations
-- **Peak Hours Shift**: High transmission costs occur during peak grid hours. Shift laundry, dishwasher loads, and EV charging to off-peak times (typically 10 PM to 8 AM) to mitigate grid strain.
-- **Thermostat Adjustments**: Setting the cooling thermostat to 78°F instead of 72°F can reduce supply charges by **8-12%** during peak summer months.
-- **Smart Thermostat Program**: Enrolling in the {utility} smart energy program provides a one-time bill credit and automatic peak usage trimming.
-"""
-
-    prompt = f"""
-    You are an expert electricity billing analyst.
-    Explain this bill in plain, friendly language for a non-technical customer:
-    - Utility Company: {utility}
-    - Billing Period: {period}
-    - Total Bill: ${tot:.2f}
-    - Usage: {use:.1f} kWh
-    - Fixed Charge: ${fixed:.2f}
-    - Delivery Charge: ${delivery:.2f}
-    - Supply Charge: ${supply:.2f}
-    - Tax: ${tax:.2f}
-
-    Format your output cleanly in Markdown with these specific headers:
-    ### 📝 Bill Summary
-    ### 🔍 Charge Breakdown & Controllability
-    ### 📈 Why Your Bill Changed
-    ### 💡 Savings Opportunities & Recommendations
-    Do NOT mention SHAP values, database keys, or models. Use simple, helpful terms.
-    """
+    """Generates an LLM explanation of the charges in the bill using centralized LLM service."""
+    from api.services.llm.llm_service import llm_service
+    from api.services.llm.context_builder import ContextBuilder
 
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.15)
-        res = sock.connect_ex(('127.0.0.1', 11434))
-        sock.close()
-        if res != 0:
-            return fallback_markdown
-
-        client = ollama.AsyncClient(timeout=2.0)
-        response = await client.chat(
-            model="qwen3:4b",
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0.2, "num_predict": 350}
+        ctx = ContextBuilder.build_bill_analysis_context(bill_data)
+        res = await llm_service.generate_explanation(
+            task="bill_analysis",
+            context_data=ctx
         )
-        content = response['message']['content'].strip()
-        return content if len(content) > 50 else fallback_markdown
-    except Exception:
-        return fallback_markdown
+        return res["explanation"]
+    except Exception as e:
+        logger.warning(f"Centralized explanation in users.py failed: {e}. Serving fallback.")
+        from api.services.llm.deterministic_fallback import DeterministicFallback
+        ctx = ContextBuilder.build_bill_analysis_context(bill_data)
+        return DeterministicFallback.generate_bill_analysis_fallback(ctx)
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
@@ -279,6 +215,7 @@ async def list_user_bills(
 
 @router.post("/me/bills", status_code=status.HTTP_201_CREATED)
 async def upload_user_bill(
+    background_tasks: BackgroundTasks,
     file: Optional[UploadFile] = File(None),
     dev_mock: bool = Form(False),
     current_user: User = Depends(get_current_user),
@@ -354,7 +291,8 @@ async def upload_user_bill(
     weather_hdd = hdd_map.get(month, 0.0)
     insights = bill_impact_engine.generate_personalized_insights(analysis_res, weather_cdd, weather_hdd)
 
-    explanation_txt = await generate_explanation(bill)
+    # Deterministic immediate explanation snippet (instant pre-render)
+    explanation_txt = DeterministicFallback.get_fallback("bill_analysis", {"bill": bill, "task": "bill_analysis"})
 
     ensemble = app_state.get("forecast_model")
     if ensemble is None:
@@ -389,7 +327,6 @@ async def upload_user_bill(
             logger.warning(f"Failed to calculate scaled forecast: {fe}")
             scaled_forecast = []
 
-
     new_bill = UserBill(
         user_id=current_user.id,
         filename=fname,
@@ -404,6 +341,8 @@ async def upload_user_bill(
         analysis_results=analysis_res,
         insights=insights,
         explanation=explanation_txt,
+        ai_status="generating",
+        ai_explanation=explanation_txt,
         forecast_results={"forecast": scaled_forecast},
         simulation_results={},
         regional_comparison={
@@ -419,6 +358,18 @@ async def upload_user_bill(
 
     current_user.active_bill_id = new_bill.id
     db.add(current_user)
+    await db.flush()
+
+    # Queue async background worker for AI generation
+    background_tasks.add_task(process_bill_ai_task, new_bill.id)
+
+    # Recalculate forecast for the user since history changed!
+    from api.services.forecast_service import recalculate_user_forecasts
+    await recalculate_user_forecasts(current_user.id, db, new_bill.id)
+    await db.flush()
+
+    from api.cache import invalidate_all_caches
+    invalidate_all_caches()
 
     audit = AuditLog(
         user_id=current_user.id,
@@ -444,7 +395,45 @@ async def upload_user_bill(
             "filename": new_bill.filename,
             "total_bill": new_bill.total_bill,
             "usage_kwh": new_bill.usage_kwh,
-        }
+        },
+        "bill_data": bill,
+        "ocr_runs": ocr,
+        "analysis_results": analysis_res,
+        "insights": insights,
+        "explanation": explanation_txt,
+        "forecast_results": new_bill.forecast_results,
+        "simulation_results": new_bill.simulation_results,
+        "regional_comparison": new_bill.regional_comparison,
+        "recommendations": new_bill.recommendations,
+        "ai_status": new_bill.ai_status
+    }
+
+
+@router.post("/me/bills/{bill_id}/regenerate-ai")
+async def regenerate_user_bill_ai(
+    bill_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Triggers manual background AI regeneration for a specific bill."""
+    res = await db.execute(
+        select(UserBill).where(UserBill.id == bill_id, UserBill.user_id == current_user.id)
+    )
+    bill = res.scalars().first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    bill.ai_status = "generating"
+    db.add(bill)
+    await db.commit()
+
+    background_tasks.add_task(process_bill_ai_task, bill.id)
+    return {
+        "success": True,
+        "message": "AI regeneration queued in background.",
+        "ai_status": "generating",
+        "bill_id": bill.id
     }
 
 
@@ -461,6 +450,7 @@ async def delete_user_bill(
         raise HTTPException(status_code=404, detail="Bill not found.")
 
     await db.delete(bill)
+    await db.flush()
 
     if current_user.active_bill_id == id:
         next_bill_res = await db.execute(
@@ -472,6 +462,15 @@ async def delete_user_bill(
         next_bill = next_bill_res.scalars().first()
         current_user.active_bill_id = next_bill.id if next_bill else None
         db.add(current_user)
+        await db.flush()
+
+    if current_user.active_bill_id:
+        from api.services.forecast_service import recalculate_user_forecasts
+        await recalculate_user_forecasts(current_user.id, db, current_user.active_bill_id)
+        await db.flush()
+
+    from api.cache import invalidate_all_caches
+    invalidate_all_caches()
 
     audit = AuditLog(
         user_id=current_user.id,
@@ -586,20 +585,44 @@ async def get_user_dashboard(
     )
     all_bills = all_bills_res.scalars().all()
 
+    # Force recalculation if forecast results are missing or in old format
+    if not active_bill.forecast_results or "status" not in active_bill.forecast_results:
+        from api.services.forecast_service import recalculate_user_forecasts
+        await recalculate_user_forecasts(current_user.id, db, active_bill.id)
+        await db.flush()
+        await db.refresh(active_bill)
+
+    forecast_results = active_bill.forecast_results or {}
+    forecast_next_month = 0.0
+    if forecast_results.get("status") == "success":
+        forecast_next_month = forecast_results.get("predicted_bill", 0.0)
+
+    # Let's calculate actual change percentages dynamically
+    bill_change_pct = 2.4
+    usage_change_pct = 1.2
+    rate_change_pct = 0.8
+    if len(all_bills) >= 2:
+        latest_bill = all_bills[0]
+        prev_bill = all_bills[1]
+        if prev_bill.total_bill > 0:
+            bill_change_pct = round(((latest_bill.total_bill - prev_bill.total_bill) / prev_bill.total_bill * 100.0), 2)
+        if prev_bill.usage_kwh > 0:
+            usage_change_pct = round(((latest_bill.usage_kwh - prev_bill.usage_kwh) / prev_bill.usage_kwh * 100.0), 2)
+        latest_rate = latest_bill.bill_data.get("effective_rate") or (latest_bill.total_bill / latest_bill.usage_kwh if latest_bill.usage_kwh > 0 else 0)
+        prev_rate = prev_bill.bill_data.get("effective_rate") or (prev_bill.total_bill / prev_bill.usage_kwh if prev_bill.usage_kwh > 0 else 0)
+        if prev_rate > 0:
+            rate_change_pct = round(((latest_rate - prev_rate) / prev_rate * 100.0), 2)
+
     kpis = {
         "current_bill": active_bill.total_bill,
         "usage_kwh": active_bill.usage_kwh,
         "effective_rate": active_bill.bill_data.get("effective_rate", 0.1852),
-        "forecast_next_month": active_bill.total_bill * 1.04,
-        "bill_change_pct": 2.4,
-        "usage_change_pct": 1.2,
-        "rate_change_pct": 0.8,
+        "forecast_next_month": forecast_next_month,
+        "bill_change_pct": bill_change_pct,
+        "usage_change_pct": usage_change_pct,
+        "rate_change_pct": rate_change_pct,
         "state_rank": active_bill.regional_comparison.get("state_rank", 8),
     }
-
-    forecast_data = active_bill.forecast_results.get("forecast", [])
-    if forecast_data:
-        kpis["forecast_next_month"] = sum(f.get("predicted_cost", 0.0) for f in forecast_data[-30:])
 
     return {
         "has_active_bill": True,
@@ -609,7 +632,11 @@ async def get_user_dashboard(
         "ocr_runs": active_bill.ocr_results,
         "analysis_results": active_bill.analysis_results,
         "insights": active_bill.insights,
-        "explanation": active_bill.explanation,
+        "explanation": active_bill.ai_explanation or active_bill.explanation,
+        "ai_status": active_bill.ai_status or "completed",
+        "ai_explanation": active_bill.ai_explanation or active_bill.explanation,
+        "ai_recommendations": active_bill.ai_recommendations or "",
+        "ai_error_reason": active_bill.ai_error_reason,
         "forecast_results": active_bill.forecast_results,
         "simulation_results": active_bill.simulation_results,
         "regional_comparison": active_bill.regional_comparison,

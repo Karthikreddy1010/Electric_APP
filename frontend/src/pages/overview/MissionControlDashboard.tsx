@@ -8,7 +8,8 @@
 import React, { useState } from 'react';
 import { useBill } from '../../context/BillContext.tsx';
 import { useNavigation } from '../../context/NavigationContext.tsx';
-import { useUserDashboard } from '../../hooks/useUserDashboard.ts';
+import { useUserDashboard, useInvalidateDashboard } from '../../hooks/useUserDashboard.ts';
+import apiClient from '../../lib/apiClient.ts';
 import RecentBillsCard from '../../components/shared/RecentBillsCard.tsx';
 import {
   TrendingUp,
@@ -25,11 +26,11 @@ import {
   Upload,
   Activity,
   CheckCircle2,
-  Clock,
   AlertTriangle,
   ChevronRight,
   Sliders,
-  Award
+  Award,
+  Info
 } from 'lucide-react';
 
 // ─── Sparkline SVG Helper ─────────────────────────────────────────────────────
@@ -61,6 +62,296 @@ const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
   );
 };
 
+// ─── Forecast SVG Chart Helper ────────────────────────────────────────────────
+interface ForecastChartProps {
+  historical: { date: string; total_bill: number }[];
+  forecastValue: number;
+  lower: number;
+  upper: number;
+}
+
+const ForecastChart = ({ historical, forecastValue, lower, upper }: ForecastChartProps) => {
+  const histValues = historical.map(h => h.total_bill);
+  const allValues = [...histValues, forecastValue, lower, upper];
+  const minVal = Math.min(...allValues) * 0.95;
+  const maxVal = Math.max(...allValues) * 1.05;
+  const range = maxVal - minVal || 1;
+  const width = 110;
+  const height = 30;
+  const n = histValues.length + 1; // historical + forecast point
+  
+  // Calculate coordinates
+  const points = historical.map((h, i) => {
+    const x = (i / (n - 1)) * width;
+    const y = height - ((h.total_bill - minVal) / range) * (height - 6) - 3;
+    return { x, y, val: h.total_bill };
+  });
+  
+  const fx = width;
+  const fy = height - ((forecastValue - minVal) / range) * (height - 6) - 3;
+  const fyLower = height - ((lower - minVal) / range) * (height - 6) - 3;
+  const fyUpper = height - ((upper - minVal) / range) * (height - 6) - 3;
+  
+  // Last historical point for connecting lines
+  const lastPt = points[points.length - 1];
+  
+  return (
+    <svg width={width} height={height} className="overflow-visible shrink-0">
+      <defs>
+        {/* Shaded confidence interval band */}
+        <linearGradient id="bandGradient" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.0" />
+          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.25" />
+        </linearGradient>
+      </defs>
+      
+      {/* 1. Shaded Confidence Band (Funnel from last historical point to forecast upper/lower bounds) */}
+      {lastPt && (
+        <polygon
+          points={`${lastPt.x},${lastPt.y} ${fx},${fyUpper} ${fx},${fyLower}`}
+          fill="url(#bandGradient)"
+          className="transition-all"
+        />
+      )}
+      
+      {/* 2. Historical Trend Line */}
+      <path
+        d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+        fill="none"
+        stroke="#2563eb"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      
+      {/* 3. Trend Line to Forecast Point */}
+      {lastPt && (
+        <line
+          x1={lastPt.x}
+          y1={lastPt.y}
+          x2={fx}
+          y2={fy}
+          stroke="#f59e0b"
+          strokeWidth="1.5"
+          strokeDasharray="3,3"
+          strokeLinecap="round"
+        />
+      )}
+      
+      {/* 4. Historical Points (solid blue dots) */}
+      {points.map((p, i) => (
+        <circle
+          key={i}
+          cx={p.x}
+          cy={p.y}
+          r="3"
+          fill="#2563eb"
+          className="transition-all"
+        />
+      ))}
+      
+      {/* 5. Forecast Point (amber dot) */}
+      <circle
+        cx={fx}
+        cy={fy}
+        r="4.5"
+        fill="#f59e0b"
+        stroke="#ffffff"
+        strokeWidth="1.5"
+        className="transition-all"
+      />
+    </svg>
+  );
+};
+
+// ─── Tooltip Helper ───────────────────────────────────────────────────────────
+const InfoTooltip = ({ modelUsed }: { modelUsed?: string }) => {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative inline-block ml-1 align-middle leading-none">
+      <button 
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={() => setShow(!show)}
+        className="text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded-full hover:bg-slate-100"
+        aria-label="Forecast Information"
+      >
+        <Info size={12} />
+      </button>
+      {show && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-slate-900 text-white rounded-lg p-3 text-[11px] shadow-lg border border-slate-700 z-50 space-y-2 leading-relaxed">
+          <div>
+            <strong className="text-amber-400 block mb-0.5">How Prediction was Generated</strong>
+            <span>Blended {modelUsed || "Prophet + SARIMA Ensemble"} scaling based on seasonal weather patterns and historical load curves.</span>
+          </div>
+          <div>
+            <strong className="text-amber-400 block mb-0.5">Data Used</strong>
+            <span>3–6 months of user billing history merged with daily Balancing Area demand and NOAA local weather history.</span>
+          </div>
+          <div>
+            <strong className="text-amber-400 block mb-0.5">Forecast Limitations</strong>
+            <span>Assumes consistent facility operations; sensitive to major grid pricing spikes or extreme weather deviations.</span>
+          </div>
+          <div>
+            <strong className="text-amber-400 block mb-0.5">Confidence Meaning</strong>
+            <span>Derived from user billing history length, weather correlation, and grid model prediction MAPE.</span>
+          </div>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Forecast KPI Card ────────────────────────────────────────────────────────
+const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; navigate: any }) => {
+  const isUnavailable = !forecastResults || forecastResults.status === "unavailable";
+  
+  if (isUnavailable) {
+    const billsAvailable = forecastResults?.bills_available ?? 0;
+    const progressPct = forecastResults?.readiness_pct ?? Math.round((billsAvailable / 3) * 100);
+    
+    return (
+      <div
+        id="kpi-forecast"
+        className="bg-white rounded-xl border border-slate-200/90 p-4 transition-all duration-200 flex flex-col justify-between shadow-xs select-none"
+        style={{ borderTop: "3px solid #cbd5e1", minHeight: "170px" }}
+      >
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 text-slate-500 shrink-0">
+              <BarChart3 size={16} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Next Month Forecast</span>
+          </div>
+          <div className="text-sm font-extrabold text-slate-400 mt-2">
+            Forecast Unavailable
+          </div>
+          <div className="text-[10px] text-slate-500 font-medium leading-normal mt-1">
+            {forecastResults?.reason || "Upload at least 3–6 consecutive monthly bills to generate a reliable forecast."}
+          </div>
+        </div>
+        
+        <div className="space-y-1 mt-4">
+          <div className="flex justify-between text-[9px] font-semibold text-slate-500">
+            <span>Bills Available: {billsAvailable} / 6</span>
+            <span>{progressPct}% Ready</span>
+          </div>
+          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-slate-400 rounded-full transition-all" 
+              style={{ width: `${Math.min(100, (billsAvailable / 6) * 100)}%` }} 
+            />
+          </div>
+          <div className="text-[9px] text-slate-400 font-medium italic mt-1">
+            Upload additional bills to enable AI forecasting.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const {
+    predicted_bill,
+    expected_change_pct,
+    confidence_score,
+    confidence_level,
+    forecast_date,
+    model_used,
+    model_version,
+    key_drivers,
+    confidence_interval,
+    historical_bills
+  } = forecastResults;
+
+  const isPositive = expected_change_pct >= 0;
+  const badgeColor = confidence_level === "Very High" 
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+    : confidence_level === "High"
+    ? "bg-blue-50 text-blue-700 border-blue-200"
+    : confidence_level === "Medium"
+    ? "bg-amber-50 text-amber-700 border-amber-200"
+    : "bg-rose-50 text-rose-700 border-rose-200";
+
+  return (
+    <div
+      id="kpi-forecast"
+      onClick={() => navigate('Forecast')}
+      className="bg-white rounded-xl border border-slate-200/90 p-4 transition-all duration-200 flex flex-col group shadow-xs cursor-pointer hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5"
+      style={{ borderTop: "3px solid #f59e0b", minHeight: "170px" }}
+    >
+      {/* Top row */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between w-full min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600 shrink-0">
+              <BarChart3 size={16} />
+            </div>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Next Month Forecast</span>
+            <InfoTooltip modelUsed={model_used} />
+          </div>
+          <ArrowUpRight
+            size={14}
+            className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+          />
+        </div>
+        
+        {/* Status & Confidence Badge */}
+        <div className="flex justify-between items-center w-full mt-1 min-w-0">
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${badgeColor}`}>
+            {confidence_level === "Low" ? "Low Confidence Prediction" : `${confidence_score.toFixed(0)}% ${confidence_level}`}
+          </span>
+          <span className="text-[9px] font-semibold text-slate-400">
+            {model_version}
+          </span>
+        </div>
+      </div>
+
+      {/* Main value */}
+      <div className="flex items-baseline gap-1 mt-2">
+        <span className="text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-mono truncate">
+          ${predicted_bill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      </div>
+
+      {/* Key Drivers Badges */}
+      <div className="flex flex-wrap gap-1 mt-2.5">
+        {key_drivers.slice(0, 2).map((d: string) => (
+          <span key={d} className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 truncate max-w-[90px]" title={d}>
+            {d}
+          </span>
+        ))}
+      </div>
+
+      <div className="flex-1" />
+
+      {/* Bottom section: Expected Change, Date, Chart */}
+      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 min-w-0">
+        <div className="flex-1 min-w-0 space-y-0.5">
+          <div className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
+            isPositive ? "text-rose-700 bg-rose-50 border-rose-200" : "text-emerald-700 bg-emerald-50 border-emerald-200"
+          }`}>
+            {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+            <span>{Math.abs(expected_change_pct).toFixed(1)}%</span>
+          </div>
+          <div className="text-[8px] text-slate-400 font-medium leading-tight truncate" title={`Forecast Date: ${forecast_date}`}>
+            As of {forecast_date}
+          </div>
+        </div>
+
+        {/* Visual Forecast Chart */}
+        {historical_bills && (
+          <ForecastChart
+            historical={historical_bills.slice(-3)}
+            forecastValue={predicted_bill}
+            lower={confidence_interval[0]}
+            upper={confidence_interval[1]}
+          />
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ─── 1. Executive Dashboard Header ─────────────────────────────────────────────
 const ExecutiveHeader = ({
   utilityName,
@@ -71,68 +362,47 @@ const ExecutiveHeader = ({
   billingCycle: string;
   tariff: string;
 }) => {
-  const navigate = useNavigation();
-
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 md:p-6 mb-6">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs p-4 md:p-5 mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
         {/* Title & Organization */}
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               Executive Energy Intelligence
             </h1>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
-              <Sparkles size={11} className="text-blue-600" /> ElectricAI Enterprise
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
+              <Sparkles size={12} className="text-blue-600" /> ElectricAI Enterprise
             </span>
           </div>
-          <p className="text-xs md:text-sm text-slate-500 font-medium">
+          <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed">
             Operational telemetry and high-precision financial analysis for enterprise facilities
           </p>
         </div>
 
-        {/* Metadata Badges & User Pill */}
-        <div className="flex items-center gap-3 flex-wrap text-xs text-slate-600">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200/80">
-            <Zap size={13} className="text-blue-600" />
-            <span className="font-semibold text-slate-800">{utilityName}</span>
+        {/* Active Context Indicators */}
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100 flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Utility Provider</span>
+            <span className="font-semibold text-slate-700 truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
           </div>
-
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200/80">
-            <Clock size={13} className="text-slate-500" />
-            <span>Cycle: <strong className="text-slate-800 font-medium">{billingCycle}</strong></span>
-          </div>
-
-          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200/80">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Tariff: <strong className="text-slate-800 font-medium">{tariff}</strong></span>
-          </div>
-
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-            <button
-              onClick={() => navigate('Settings')}
-              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-100 transition-colors text-slate-700 text-xs font-semibold"
-              title="User Profile"
-            >
-              <div className="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                EA
-              </div>
-              <span className="hidden xl:inline text-slate-800">Energy Admin</span>
-            </button>
+          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100 flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Rate Schedule</span>
+            <span className="font-semibold text-slate-700 truncate max-w-[200px]" title={tariff}>{tariff}</span>
           </div>
         </div>
       </div>
 
       {/* Sync Status Sub-bar */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
           <span>Last synchronized: <strong>5 mins ago</strong></span>
           <span className="text-slate-300">•</span>
           <span className="text-slate-500">Data confidence: 99.4%</span>
         </div>
-        <div className="text-slate-400 text-[11px] hidden sm:block">
-          Grid Model API v2.4 • Standard Billing Period
+        <div className="text-slate-400 text-[11px] hidden sm:block font-medium">
+          Grid Model API v2.4 • Period: <strong className="text-slate-600 font-semibold">{billingCycle}</strong>
         </div>
       </div>
     </div>
@@ -182,52 +452,71 @@ const ExecutiveKpiCard = ({
     <div
       id={id}
       onClick={() => targetTab && navigate(targetTab)}
-      className={`bg-white rounded-xl border border-slate-200 p-4 transition-all duration-200 flex flex-col justify-between group ${
-        targetTab ? 'cursor-pointer hover:border-slate-300 hover:shadow-md' : 'cursor-default'
+      className={`bg-white rounded-xl border border-slate-200/90 p-4 transition-all duration-200 flex flex-col group shadow-xs ${
+        targetTab ? 'cursor-pointer hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5' : 'cursor-default'
       }`}
-      style={{ borderTop: `3px solid ${accentColor}` }}
+      style={{ borderTop: `3px solid ${accentColor}`, minHeight: '170px' }}
       aria-label={`${label}: ${value}${unit || ''}`}
     >
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
+      {/* Top section: icon, label, badge */}
+      <div className="flex flex-col gap-1.5 mb-2">
+        <div className="flex items-center justify-between w-full min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-700"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-700 shrink-0"
               style={{ backgroundColor: `${accentColor}15` }}
             >
               {utilityIcon}
             </div>
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{label}</span>
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate" title={label}>{label}</span>
           </div>
-          {statusBadge ? (
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${statusBadge.color}`}>
-              {statusBadge.text}
-            </span>
-          ) : targetTab ? (
+          {targetTab && !statusBadge && (
             <ArrowUpRight
               size={14}
-              className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"
+              className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
             />
-          ) : null}
+          )}
         </div>
-
-        <div className="flex items-baseline gap-1 mt-1">
-          <span className="text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-mono">
-            {value}
-          </span>
-          {unit && <span className="text-xs font-medium text-slate-500">{unit}</span>}
-        </div>
+        {statusBadge && (
+          <div className="flex justify-between items-center w-full mt-0.5 min-w-0">
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusBadge.color}`} title={statusBadge.text}>
+              {statusBadge.text}
+            </span>
+            {targetTab && (
+              <ArrowUpRight
+                size={14}
+                className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              />
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-end justify-between">
-        <div className="space-y-1">
+      {/* Value */}
+      <div className="flex items-baseline gap-1 mt-1.5">
+        <span className="text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-mono truncate">
+          {value}
+        </span>
+        {unit && <span className="text-xs font-semibold text-slate-500">{unit}</span>}
+      </div>
+
+      {/* Spacer to push bottom section down uniformly */}
+      <div className="flex-1" />
+
+      {/* Bottom section: change badge, subtext, sparkline — always aligned to bottom */}
+      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-3 min-w-0">
+        <div className="flex-1 min-w-0 space-y-1">
           {changePct !== undefined && (
-            <div className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${badgeTextColor}`}>
-              {isPositive ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-              <span>{Math.abs(changePct).toFixed(1)}% {changeLabel ? changeLabel : ''}</span>
+            <div className={`inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-md border max-w-full ${badgeTextColor}`}>
+              {isPositive ? <TrendingUp size={11} className="shrink-0" /> : <TrendingDown size={11} className="shrink-0" />}
+              <span className="truncate">{Math.abs(changePct).toFixed(1)}% {changeLabel ? changeLabel : ''}</span>
             </div>
           )}
-          {subtext && <div className="text-[10px] text-slate-500 font-medium">{subtext}</div>}
+          {subtext && (
+            <div className="text-[10px] text-slate-500 font-medium leading-tight truncate" title={subtext}>
+              {subtext}
+            </div>
+          )}
         </div>
         <Sparkline data={sparklineData} color={accentColor} />
       </div>
@@ -241,13 +530,68 @@ const ExecutiveAiSummary = ({
   billChangePct,
   savingsOpportunity,
   forecastBill,
+  aiStatus = "completed",
+  aiExplanation,
+  activeBillId,
 }: {
   currentBill: number;
   billChangePct: number;
   savingsOpportunity: number;
   forecastBill: number;
+  aiStatus?: string;
+  aiExplanation?: string;
+  activeBillId?: string;
 }) => {
   const navigate = useNavigation();
+  const invalidateDashboard = useInvalidateDashboard();
+  const [isRegenerating, setIsRegenerating] = useState(false);
+
+  const handleRegenerate = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!activeBillId || isRegenerating) return;
+    try {
+      setIsRegenerating(true);
+      await apiClient.post(`/users/me/bills/${activeBillId}/regenerate-ai`);
+      invalidateDashboard();
+    } catch (err) {
+      console.warn("Manual AI regeneration failed:", err);
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  const statusBadge = (() => {
+    if (aiStatus === 'generating') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-300 border border-blue-400/30 animate-pulse">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+          Generating AI Insights...
+        </span>
+      );
+    }
+    if (aiStatus === 'offline' || aiStatus === 'fallback') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
+          <Info size={11} className="text-amber-400" />
+          AI Offline (Deterministic Active)
+        </span>
+      );
+    }
+    if (aiStatus === 'failed') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-400/30">
+          <AlertTriangle size={11} className="text-rose-400" />
+          AI Temporarily Delayed
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+        <CheckCircle2 size={11} className="text-emerald-400" />
+        AI Insights Ready
+      </span>
+    );
+  })();
 
   return (
     <div className="relative overflow-hidden bg-slate-900 rounded-2xl p-6 text-white shadow-xl border border-slate-800 mb-8">
@@ -262,22 +606,33 @@ const ExecutiveAiSummary = ({
               <Sparkles size={20} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-bold text-white tracking-tight">Executive AI Summary</h2>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
-                  Focal Point
-                </span>
+                {statusBadge}
               </div>
               <p className="text-xs text-slate-400 mt-0.5">Automated synthesis across billing telemetry and load curves</p>
             </div>
           </div>
 
-          <button
-            onClick={() => navigate('Impact & Simulation')}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shrink-0 self-start sm:self-auto"
-          >
-            <Sparkles size={14} /> Ask AI Assistant
-          </button>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            {activeBillId && (
+              <button
+                onClick={handleRegenerate}
+                disabled={isRegenerating || aiStatus === 'generating'}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold border border-slate-700 transition-all shrink-0"
+                title="Regenerate AI insights without re-running deterministic bill math"
+              >
+                <Sparkles size={13} className={isRegenerating ? 'animate-spin text-blue-400' : 'text-slate-400'} />
+                <span>{isRegenerating ? 'Queuing...' : 'Regenerate AI'}</span>
+              </button>
+            )}
+            <button
+              onClick={() => navigate('Impact & Simulation')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shrink-0"
+            >
+              <Sparkles size={14} /> Ask AI Assistant
+            </button>
+          </div>
         </div>
 
         {/* 4 Summary Cards Grid */}
@@ -288,7 +643,9 @@ const ExecutiveAiSummary = ({
               +{billChangePct.toFixed(1)}% demand surge
             </div>
             <div className="text-xs text-slate-300 mt-1 leading-relaxed">
-              Peak demand charges increased due to weekday afternoon HVAC cooling cycles.
+              {aiExplanation
+                ? aiExplanation.slice(0, 120) + '...'
+                : 'Peak demand charges increased due to weekday afternoon HVAC cooling cycles.'}
             </div>
           </div>
 
@@ -313,10 +670,12 @@ const ExecutiveAiSummary = ({
           <div className="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
             <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">Forecast Trend</div>
             <div className="text-sm font-semibold text-amber-300 font-mono">
-              ${forecastBill > 0 ? forecastBill.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '44,200.00'} (+2.1%)
+              {forecastBill > 0 ? `$${forecastBill.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : 'Unavailable'}
             </div>
             <div className="text-xs text-slate-300 mt-1 leading-relaxed">
-              ML ensemble models project a +2.1% increase next cycle based on degree days.
+              {forecastBill > 0 
+                ? 'ML ensemble models project next cycle costs based on weather patterns and degree days.' 
+                : 'Upload at least 3 consecutive bills to enable AI forecast projections.'}
             </div>
           </div>
         </div>
@@ -665,7 +1024,7 @@ const MissionControlDashboard = () => {
   const currentBill = uploadedBill?.total_bill ?? kpisFromDb?.current_bill ?? 42850.00;
   const usageKwh = uploadedBill?.usage_kwh ?? kpisFromDb?.usage_kwh ?? 145200;
   const effectiveRate = uploadedBill?.effective_rate ?? kpisFromDb?.effective_rate ?? (usageKwh > 0 ? currentBill / usageKwh : 0.295);
-  const forecastBill = kpisFromDb?.forecast_next_month ?? (currentBill > 2000 ? 44200.00 : Math.round(currentBill * 1.04 * 100) / 100);
+  const forecastBill = dashboardData?.forecast_results?.status === "success" ? (kpisFromDb?.forecast_next_month ?? 0.0) : 0.0;
   const billChangePct = kpisFromDb?.bill_change_pct ?? 3.2;
   const usageChangePct = kpisFromDb?.usage_change_pct ?? -1.5;
   const rateChangePct = kpisFromDb?.rate_change_pct ?? 0.0;
@@ -786,7 +1145,15 @@ const MissionControlDashboard = () => {
       {/* 2. KPI Summary Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         {KPI_CARDS.map((kpi) => (
-          <ExecutiveKpiCard key={kpi.id} {...kpi} />
+          kpi.id === 'kpi-forecast' ? (
+            <ForecastKpiCard 
+              key={kpi.id} 
+              forecastResults={dashboardData?.forecast_results} 
+              navigate={navigate} 
+            />
+          ) : (
+            <ExecutiveKpiCard key={kpi.id} {...kpi} />
+          )
         ))}
       </div>
 
@@ -796,6 +1163,9 @@ const MissionControlDashboard = () => {
         billChangePct={billChangePct}
         savingsOpportunity={savingsOpportunity}
         forecastBill={forecastBill}
+        aiStatus={dashboardData?.ai_status}
+        aiExplanation={dashboardData?.ai_explanation || dashboardData?.explanation || undefined}
+        activeBillId={dashboardData?.active_bill_id || undefined}
       />
 
       {/* 4. Main Analytics Grid (2-column layout with expanded Smart Alerts) */}

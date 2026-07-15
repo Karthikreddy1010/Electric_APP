@@ -862,6 +862,17 @@ class CustomerBill(Base):
     ocr_text = Column(Text)
     json_path = Column(String(255))
 
+    # Async AI Status & Persistence Fields
+    ai_status = Column(String(20), default="pending")  # pending, generating, completed, failed, offline
+    ai_explanation = Column(Text, nullable=True)
+    ai_recommendations = Column(Text, nullable=True)
+    ai_model = Column(String(50), nullable=True)
+    ai_prompt_version = Column(String(20), nullable=True)
+    ai_latency_ms = Column(Float, nullable=True)
+    ai_retry_count = Column(Integer, default=0)
+    ai_error_reason = Column(Text, nullable=True)
+    ai_generated_at = Column(DateTime, nullable=True)
+
 
 class CustomerUsageHistory(Base):
     """

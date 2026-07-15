@@ -15,6 +15,7 @@ class LLMResponseMetadata:
     validated: bool = True
     cache_hit: bool = False
     fallback_used: bool = False
+    fallback_reason: Optional[str] = None
     latency_ms: float = 0.0
     validation_errors: List[str] = field(default_factory=list)
 

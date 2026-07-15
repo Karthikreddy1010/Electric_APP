@@ -17,17 +17,13 @@ export default function VerifyEmailPage() {
   const navigate = useNavigate();
   const token = searchParams.get('token');
 
-  const [state, setState] = useState<VerifyState>('verifying');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [state, setState] = useState<VerifyState>(() => token ? 'verifying' : 'error');
+  const [errorMsg, setErrorMsg] = useState(() => token ? '' : 'Verification link is missing a token. Please check your email and try again.');
   const [resendEmail, setResendEmail] = useState('');
   const [resendSent, setResendSent] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setErrorMsg('Verification link is missing a token. Please check your email and try again.');
-      setState('error');
-      return;
-    }
+    if (!token) return;
 
     apiClient.post('/auth/verify-email', { token })
       .then(() => {

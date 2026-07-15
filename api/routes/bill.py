@@ -382,6 +382,39 @@ async def upload_bill(
     weather_hdd = hdd_map.get(month, 0.0)
     insights = bill_impact_engine.generate_personalized_insights(analysis_res, weather_cdd, weather_hdd)
 
+    ensemble = app_state.get("forecast_model")
+    if ensemble is None:
+        try:
+            from models.forecast_model import ElectricityDemandForecaster
+            ensemble = ElectricityDemandForecaster()
+            ensemble.train_and_evaluate()
+            app_state["forecast_model"] = ensemble
+        except Exception:
+            ensemble = None
+
+    scaled_forecast = []
+    if ensemble:
+        try:
+            forecast_results = ensemble.get_forecast(days=30, model_type="ensemble")
+            avg_daily = bill["usage_kwh"] / bill["days"] if bill["days"] > 0 else 25.0
+            valid_preds = [fc["predicted_demand"] for fc in forecast_results if fc["predicted_demand"] is not None]
+            sum_pred = sum(valid_preds)
+            avg_grid = sum_pred / len(valid_preds) if len(valid_preds) > 0 else 1.0
+            rate = bill["effective_rate"]
+            
+            for fc in forecast_results:
+                grid_val = fc["predicted_demand"] if fc["predicted_demand"] is not None else fc["historical_demand"]
+                ratio = grid_val / avg_grid if avg_grid > 0 else 1.0
+                user_day_usage = avg_daily * ratio
+                scaled_forecast.append({
+                    "date": fc["date"],
+                    "value": round(user_day_usage, 2),
+                    "predicted_cost": round(user_day_usage * rate, 2)
+                })
+        except Exception as fe:
+            logger.warning(f"Failed to calculate scaled forecast for guest: {fe}")
+            scaled_forecast = []
+
     return {
         "success": True,
         "bill_data": bill,
@@ -391,7 +424,8 @@ async def upload_bill(
         "sensitivity": sensitivity,
         "ranking": ranking,
         "drivers": drivers,
-        "insights": insights
+        "insights": insights,
+        "forecast_results": {"forecast": scaled_forecast}
     }
 
 
@@ -503,117 +537,115 @@ async def run_ocr(file: Optional[UploadFile] = File(None)):
 @router.post("/explain")
 async def explain_bill(req: BillDataInput):
     """Generates an LLM explanation of the charges in the bill, with a deterministic fallback."""
-    import ollama
+    from api.services.llm.llm_service import llm_service
+    from api.services.llm.context_builder import ContextBuilder
 
-    # Calculate variables for prompt and fallback
-    tot = req.total_bill
-    use = req.usage_kwh
-    fixed = req.monthly_service_charge
-    delivery = req.delivery_charge
-    supply = req.supply_charge
-    tax = req.tax
-    utility = req.utility
-    period = req.billing_period
-
-    # Percentages
-    fixed_pct = round((fixed / tot * 100), 1) if tot > 0 else 0
-    delivery_pct = round((delivery / tot * 100), 1) if tot > 0 else 0
-    supply_pct = round((supply / tot * 100), 1) if tot > 0 else 0
-    tax_pct = round((tax / tot * 100), 1) if tot > 0 else 0
-
-    # Deterministic fallback text
-    fallback_markdown = f"""### 📝 Bill Summary
-Your total bill from **{utility}** for the billing period **{period}** is **${tot:.2f}** for **{use:.1f} kWh** of electricity. This averages to about **${req.average_daily_cost:.2f} per day** at an effective rate of **${req.effective_rate:.4f} per kWh**.
-
----
-
-### 🔍 Charge Breakdown & Controllability
-1. **Supply Charges (Generation): ${supply:.2f} ({supply_pct}%)** — *Controllable.* This pays for the actual electricity consumed. Lowering your overall consumption will directly reduce this amount.
-2. **Delivery Charges (Distribution & Transmission): ${delivery:.2f} ({delivery_pct}%)** — *Partially Controllable.* This includes a fixed service charge of **${fixed:.2f}** ({fixed_pct}%) for connection maintenance and variable fees for local line infrastructure.
-3. **State Taxes & Adjustments: ${tax:.2f} ({tax_pct}%)** — *Uncontrollable.* Mandatory state sales tax of 6.625%.
-
----
-
-### 📈 Why Your Bill Changed
-Based on seasonal heating and cooling trends:
-- **Weather Impact**: Higher outdoor temperatures increase cooling loads, causing high air conditioning demand. Air conditioning accounts for approximately **18% to 25%** of summer usage spikes.
-- **Wholesale Jitter**: Supply rates fluctuated slightly based on grid congestion, but the standard tariff rate remains stable at the fixed BGS rate schedule.
-
----
-
-### 💡 Savings Opportunities & Recommendations
-- **Peak Hours Shift**: High transmission costs occur during peak grid hours. Shift laundry, dishwasher loads, and EV charging to off-peak times (typically 10 PM to 8 AM) to mitigate grid strain.
-- **Thermostat Adjustments**: Setting the cooling thermostat to 78°F instead of 72°F can reduce supply charges by **8-12%** during peak summer months.
-- **Smart Thermostat Program**: Enrolling in the {utility} smart energy program provides a one-time bill credit and automatic peak usage trimming.
-"""
-
-    prompt = f"""
-    You are an expert electricity billing analyst.
-    Explain this bill in plain, friendly language for a non-technical customer:
-    - Utility Company: {utility}
-    - Billing Period: {period}
-    - Total Bill: ${tot:.2f}
-    - Usage: {use:.1f} kWh
-    - Fixed Charge: ${fixed:.2f}
-    - Delivery Charge: ${delivery:.2f}
-    - Supply Charge: ${supply:.2f}
-    - Tax: ${tax:.2f}
-
-    Format your output cleanly in Markdown with these specific headers:
-    ### 📝 Bill Summary
-    ### 🔍 Charge Breakdown & Controllability
-    ### 📈 Why Your Bill Changed
-    ### 💡 Savings Opportunities & Recommendations
-    Do NOT mention SHAP values, database keys, or models. Use simple, helpful terms.
-    """
+    uploaded_bill = {
+        "utility": req.utility,
+        "customer_id": req.customer_id,
+        "rate_schedule": req.rate_schedule,
+        "billing_period": req.billing_period,
+        "usage_kwh": req.usage_kwh,
+        "total_bill": req.total_bill,
+        "effective_rate": req.effective_rate,
+        "monthly_service_charge": req.monthly_service_charge,
+        "delivery_charge": req.delivery_charge,
+        "supply_charge": req.supply_charge,
+        "tax": req.tax,
+    }
 
     try:
-        # Check if Ollama is listening locally
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.15)
-        res = sock.connect_ex(('127.0.0.1', 11434))
-        sock.close()
-        if res != 0:
-            raise RuntimeError("Ollama daemon offline")
-
-        client = ollama.AsyncClient(timeout=2.0)
-        response = await client.chat(
-            model="qwen3:4b",
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": 0.2, "num_predict": 350}
+        ctx = ContextBuilder.build_bill_analysis_context(uploaded_bill)
+        res = await llm_service.generate_explanation(
+            task="bill_analysis",
+            context_data=ctx
         )
-        content = response['message']['content'].strip()
-        if len(content) > 50:
-            return {"success": True, "explanation": content}
-        else:
-            return {"success": True, "explanation": fallback_markdown}
+        return {"success": True, "explanation": res["explanation"]}
     except Exception as e:
-        logger.warning(f"Ollama explanation failed ({e or type(e).__name__}). Using deterministic fallback.")
-        return {"success": True, "explanation": fallback_markdown}
+        logger.warning(f"Centralized explanation failed ({e or type(e).__name__}). Using fallback.")
+        from api.services.llm.deterministic_fallback import DeterministicFallback
+        ctx = ContextBuilder.build_bill_analysis_context(uploaded_bill)
+        fallback = DeterministicFallback.generate_bill_analysis_fallback(ctx)
+        return {"success": True, "explanation": fallback}
 
 
 @router.post("/summarize")
 async def summarize_bill(req: BillDataInput):
-    """Generates a concise bill summary."""
-    summary_text = (
-        f"Your {req.utility} bill of ${req.total_bill:.2f} for {req.usage_kwh:.1f} kWh "
-        f"covers {req.days} days ({req.average_daily_usage:.1f} kWh/day). "
-        f"Supply comprises {round((req.supply_charge / req.total_bill * 100), 1)}% of your cost, "
-        f"while delivery makes up {round((req.delivery_charge / req.total_bill * 100), 1)}%."
-    )
-    return {"success": True, "summary": summary_text}
+    """Generates a concise bill summary using centralized LLM service."""
+    from api.services.llm.llm_service import llm_service
+    from api.services.llm.context_builder import ContextBuilder
+
+    uploaded_bill = {
+        "utility": req.utility,
+        "customer_id": req.customer_id,
+        "rate_schedule": req.rate_schedule,
+        "billing_period": req.billing_period,
+        "usage_kwh": req.usage_kwh,
+        "total_bill": req.total_bill,
+        "effective_rate": req.effective_rate,
+        "monthly_service_charge": req.monthly_service_charge,
+        "delivery_charge": req.delivery_charge,
+        "supply_charge": req.supply_charge,
+        "tax": req.tax,
+    }
+
+    try:
+        ctx = ContextBuilder.build_bill_analysis_context(uploaded_bill)
+        res = await llm_service.generate_explanation(
+            task="overview",
+            context_data=ctx
+        )
+        return {"success": True, "summary": res["explanation"]}
+    except Exception as e:
+        logger.warning(f"Centralized summary failed ({e or type(e).__name__}). Using fallback.")
+        summary_text = (
+            f"Your {req.utility} bill of ${req.total_bill:.2f} for {req.usage_kwh:.1f} kWh "
+            f"covers {req.days} days ({req.average_daily_usage:.1f} kWh/day). "
+            f"Supply comprises {round((req.supply_charge / req.total_bill * 100), 1)}% of your cost, "
+            f"while delivery makes up {round((req.delivery_charge / req.total_bill * 100), 1)}%."
+        )
+        return {"success": True, "summary": summary_text}
 
 
 @router.post("/recommendations")
 async def get_recommendations(req: BillDataInput):
-    """Returns general savings recommendations based on the bill."""
-    recs = [
-        {"title": "Adjust Cooling Setpoints", "desc": "Keep your thermostat at 78°F during summer afternoons. Each degree lower raises your AC supply costs by 3-5%.", "savings_est": 12.50},
-        {"title": "Shift Laundry and Dishwashing", "desc": "Operate high-consumption appliances during off-peak windows (before 8 AM or after 10 PM) to avoid distribution demand peaks.", "savings_est": 8.00},
-        {"title": "Upgrade to LED Bulbs", "desc": "Replace the top 5 high-use incandescent bulbs in your home with LEDs to trim about 30 kWh monthly.", "savings_est": 5.40},
-        {"title": "Unplug Phantom Loads", "desc": "Use smart power strips for entertainment centers and computer monitors to cut standby electricity usage.", "savings_est": 4.20}
-    ]
-    return {"success": True, "recommendations": recs}
+    """Returns general savings recommendations based on the bill using centralized LLM service."""
+    from api.services.llm.llm_service import llm_service
+    from api.services.llm.context_builder import ContextBuilder
+
+    uploaded_bill = {
+        "utility": req.utility,
+        "customer_id": req.customer_id,
+        "rate_schedule": req.rate_schedule,
+        "billing_period": req.billing_period,
+        "usage_kwh": req.usage_kwh,
+        "total_bill": req.total_bill,
+        "effective_rate": req.effective_rate,
+        "monthly_service_charge": req.monthly_service_charge,
+        "delivery_charge": req.delivery_charge,
+        "supply_charge": req.supply_charge,
+        "tax": req.tax,
+    }
+
+    try:
+        ctx = ContextBuilder.build_bill_analysis_context(uploaded_bill)
+        res = await llm_service.generate_explanation(
+            task="recommendations",
+            context_data=ctx
+        )
+        recs = [
+            {"title": "Custom Energy Audit", "desc": res["explanation"], "savings_est": 15.00}
+        ]
+        return {"success": True, "recommendations": recs}
+    except Exception as e:
+        logger.warning(f"Centralized recommendations failed ({e or type(e).__name__}). Using fallback.")
+        recs = [
+            {"title": "Adjust Cooling Setpoints", "desc": "Keep your thermostat at 78°F during summer afternoons. Each degree lower raises your AC supply costs by 3-5%.", "savings_est": 12.50},
+            {"title": "Shift Laundry and Dishwashing", "desc": "Operate high-consumption appliances during off-peak windows (before 8 AM or after 10 PM) to avoid distribution demand peaks.", "savings_est": 8.00},
+            {"title": "Upgrade to LED Bulbs", "desc": "Replace the top 5 high-use incandescent bulbs in your home with LEDs to trim about 30 kWh monthly.", "savings_est": 5.40},
+            {"title": "Unplug Phantom Loads", "desc": "Use smart power strips for entertainment centers and computer monitors to cut standby electricity usage.", "savings_est": 4.20}
+        ]
+        return {"success": True, "recommendations": recs}
 
 
 @router.post("/simulation")

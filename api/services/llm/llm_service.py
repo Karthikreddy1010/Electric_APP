@@ -1,7 +1,7 @@
 """
 Centralized LLM Orchestrator Service.
 Handles provider resolution, prompt assembly, response caching, code-level validation,
-1-attempt retry strategy, and deterministic fallback generation.
+1-attempt retry strategy, deterministic fallback generation, and telemetry gathering.
 """
 import time
 import logging
@@ -17,6 +17,7 @@ from api.services.llm.response_validator import ResponseValidator
 from api.services.llm.cache_manager import llm_cache
 from api.services.llm.deterministic_fallback import DeterministicFallback
 from api.services.llm.metadata import LLMResponseMetadata
+from api.services.llm.metrics import llm_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +40,14 @@ class LLMService:
         task: str,
         context_data: Dict[str, Any],
         user_message: str = "",
-        bypass_cache: bool = False
+        bypass_cache: bool = False,
+        **kwargs: Any
     ) -> Dict[str, Any]:
         """
         Executes full LLM pipeline:
-        Context -> Prompt -> Cache Check -> LLM Provider Call -> Code-level Validation -> 1 Retry -> Fallback.
+        Context -> Prompt -> Cache Check -> LLM Provider Call -> Code-level Validation -> Guardrail Retry -> Fallback.
         """
+        import json
         start_time = time.time()
         model_name = self.provider.model
         provider_name = self._get_provider_name()
@@ -64,24 +67,28 @@ class LLMService:
                 cached["metadata"]["cache_hit"] = True
                 return cached
 
-        # Check if provider is reachable
+        # Pre-flight Reachability & Model Availability Checks
         if not self.provider.is_available():
-            logger.info(f"LLM Provider {provider_name} unavailable. Serving deterministic fallback.")
+            reason = f"Provider {provider_name} is offline or unreachable at base_url."
+            logger.info(f"LLM Provider {provider_name} unavailable. Serving deterministic fallback. Reason: {reason}")
+            llm_metrics.record_fallback()
             fallback_text = DeterministicFallback.get_fallback(task, context_data, user_message)
             meta = LLMResponseMetadata(
                 model=model_name,
                 provider=provider_name,
                 prompt_version=prompt_ver,
-                validated=True,
+                validated=False,
                 cache_hit=False,
                 fallback_used=True,
+                fallback_reason=reason,
                 latency_ms=round((time.time() - start_time) * 1000, 2),
-                validation_errors=["Provider offline. Used deterministic fallback."]
+                validation_errors=[reason]
             )
             return {
                 "success": True,
                 "text": fallback_text,
                 "explanation": fallback_text,
+                "answer": fallback_text,
                 "metadata": meta.to_dict()
             }
 
@@ -94,12 +101,24 @@ class LLMService:
             generated_text = await self.provider.generate(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
-                temperature=0.2
+                temperature=0.2,
+                **kwargs
             )
-            is_valid, val_errors = ResponseValidator.validate(generated_text, context_data)
+            if task == "ocr":
+                try:
+                    json.loads(generated_text)
+                    is_valid = True
+                except Exception as je:
+                    is_valid = False
+                    val_errors.append(f"Invalid OCR JSON: {je}")
+            else:
+                is_valid, val_errors = ResponseValidator.validate(generated_text, context_data)
         except Exception as e:
-            logger.warning(f"Attempt 1 LLM generation error: {e}")
+            logger.warning(f"Attempt 1 LLM generation exception: {e}")
             val_errors.append(str(e))
+
+        if not is_valid:
+            llm_metrics.record_validation_failure()
 
         # Attempt 2: Retry with Tighter Constraints & Lower Temperature (if Attempt 1 invalid)
         if not is_valid:
@@ -114,19 +133,31 @@ class LLMService:
                 generated_text = await self.provider.generate(
                     prompt=retry_user,
                     system_prompt=retry_sys,
-                    temperature=0.0
+                    temperature=0.0,
+                    **kwargs
                 )
-                is_valid, val_errors = ResponseValidator.validate(generated_text, context_data)
+                if task == "ocr":
+                    try:
+                        json.loads(generated_text)
+                        is_valid = True
+                    except Exception as je:
+                        is_valid = False
+                        val_errors.append(f"Invalid OCR JSON in retry: {je}")
+                else:
+                    is_valid, val_errors = ResponseValidator.validate(generated_text, context_data)
             except Exception as e:
-                logger.warning(f"Attempt 2 LLM generation error: {e}")
+                logger.warning(f"Attempt 2 LLM generation exception: {e}")
                 val_errors.append(str(e))
 
-        # Handle Final Result
+        # Handle Final Result / Fallback
         fallback_used = False
+        fallback_reason = None
         if not is_valid:
-            logger.warning("LLM response validation failed twice. Using deterministic fallback text.")
+            fallback_reason = f"LLM generation failed validation twice. Errors: {'; '.join(val_errors)}"
+            logger.warning(f"LLM validation failed. Falling back to deterministic output. Reason: {fallback_reason}")
             generated_text = DeterministicFallback.get_fallback(task, context_data, user_message)
             fallback_used = True
+            llm_metrics.record_fallback()
 
         latency_ms = round((time.time() - start_time) * 1000, 2)
         meta = LLMResponseMetadata(
@@ -136,6 +167,7 @@ class LLMService:
             validated=is_valid,
             cache_hit=False,
             fallback_used=fallback_used,
+            fallback_reason=fallback_reason,
             latency_ms=latency_ms,
             validation_errors=val_errors
         )
@@ -166,6 +198,7 @@ class LLMService:
         )
 
         if not self.provider.is_available():
+            llm_metrics.record_fallback()
             fallback_text = DeterministicFallback.get_fallback(task, context_data, user_message)
             yield fallback_text
             return
@@ -179,7 +212,9 @@ class LLMService:
                 yield token
         except Exception as e:
             logger.error(f"Error streaming from LLM provider: {e}")
+            llm_metrics.record_fallback()
             fallback_text = DeterministicFallback.get_fallback(task, context_data, user_message)
             yield fallback_text
 
 llm_service = LLMService()
+

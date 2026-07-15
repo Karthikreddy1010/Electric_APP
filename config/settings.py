@@ -97,10 +97,18 @@ class DataSourceSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
-    """LLM service configuration."""
+    """LLM service configuration with production timeouts and retry policies."""
     provider: str = "ollama"
-    model: str = "qwen3:8b"
+    model: str = "qwen3:4b"
     base_url: str = "http://127.0.0.1:11434"
+    connect_timeout: float = 5.0
+    read_timeout: float = 30.0
+    write_timeout: float = 10.0
+    total_timeout: float = 45.0
+    max_retries: int = 2
+    backoff_factor: float = 1.5
+    keep_alive: str = "5m"
+    stream: bool = False
 
     class Config:
         env_prefix = "LLM_"

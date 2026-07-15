@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Save, User, Zap, MapPin, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 
@@ -6,38 +6,27 @@ const SettingsPage = () => {
   const { user, updateProfile } = useAuth();
 
   // ── Profile form state ────────────────────────────────────────────────────
-  const [profile, setProfile] = useState({
-    first_name: '',
-    last_name: '',
-    zip_code: '',
-    utility_provider: '',
-  });
+  const [profile, setProfile] = useState(() => ({
+    first_name: user?.first_name ?? '',
+    last_name: user?.last_name ?? '',
+    zip_code: user?.zip_code ?? '',
+    utility_provider: user?.utility_provider ?? '',
+  }));
 
   // ── Preferences state ────────────────────────────────────────────────────
-  const [preferences, setPreferences] = useState({
-    dml_enabled: true,
-    llm_enabled: true,
-    ocr_animation_enabled: true,
-    notifications_enabled: true,
-    theme: 'dark',
+  const [preferences, setPreferences] = useState(() => {
+    const prefs = user?.preferences as Record<string, any> ?? {};
+    return {
+      dml_enabled: prefs.dml_enabled ?? true,
+      llm_enabled: prefs.llm_enabled ?? true,
+      ocr_animation_enabled: prefs.ocr_animation_enabled ?? true,
+      notifications_enabled: prefs.notifications_enabled ?? true,
+      theme: prefs.theme ?? 'dark',
+    };
   });
 
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
-
-  // Hydrate form from live user data
-  useEffect(() => {
-    if (user) {
-      setProfile({
-        first_name: user.first_name ?? '',
-        last_name: user.last_name ?? '',
-        zip_code: user.zip_code ?? '',
-        utility_provider: user.utility_provider ?? '',
-      });
-      const prefs = user.preferences as Partial<typeof preferences> ?? {};
-      setPreferences((prev) => ({ ...prev, ...prefs }));
-    }
-  }, [user]);
 
   const handleProfileChange = (key: keyof typeof profile, value: string) => {
     setProfile((prev) => ({ ...prev, [key]: value }));
@@ -63,7 +52,7 @@ const SettingsPage = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-16 font-sans">
+    <div key={user?.id || 'guest'} className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-16 font-sans">
       <div>
         <span className="bg-primary-blue/10 text-primary-blue text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-[6px]">
           Account Settings

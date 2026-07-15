@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useUserDashboard, USER_DASHBOARD_KEY } from '../hooks/useUserDashboard.ts';
 import { USER_BILLS_KEY } from '../hooks/useUserBills.ts';
@@ -79,10 +79,22 @@ export interface BillData {
   canonical_bill?: any;
   rates?: Record<string, number>;
   costs?: Record<string, number>;
+  forecast_results?: { forecast: any[] };
 }
 
 // ─── Context Interface ────────────────────────────────────────────────────────
 
+/**
+ * BillContext — Production bill state management.
+ *
+ * Replaces the mock BillContext from Phase C1.
+ *
+ * Unified context for storing, restoring, and switching between guest (sessionStorage)
+ * and authenticated (database) bills.
+ *
+ * This context is the SINGLE SOURCE OF TRUTH for the currently active bill.
+ * All dashboard features should read from useBill() to remain synced.
+ */
 interface BillContextType {
   uploadedBill: BillData | null;
   ocrRuns: OcrRun[] | null;
@@ -111,23 +123,25 @@ function isGuestOrDemo(): boolean {
 
 export const BillContextProvider = ({ children }: { children: React.ReactNode }) => {
   // ── Guest / Demo state (sessionStorage-backed, unchanged) ──────────────────
-  const [guestBill, setGuestBill] = useState<BillData | null>(null);
-  const [guestOcr, setGuestOcr] = useState<OcrRun[] | null>(null);
-  const [guestExplanation, setGuestExplanation] = useState<string | null>(null);
-
-  // Restore guest state from sessionStorage on mount
-  useEffect(() => {
+  const [guestBill, setGuestBill] = useState<BillData | null>(() => {
     try {
       const cachedBill = sessionStorage.getItem('bill_data');
-      const cachedOcr = sessionStorage.getItem('ocr_data');
-      const cachedExplanation = sessionStorage.getItem('explain_data');
-      setGuestBill(cachedBill ? JSON.parse(cachedBill) : null);
-      setGuestOcr(cachedOcr ? JSON.parse(cachedOcr) : null);
-      setGuestExplanation(cachedExplanation ?? null);
-    } catch (e) {
-      console.error('Failed to restore cached bill state:', e);
+      return cachedBill ? JSON.parse(cachedBill) : null;
+    } catch {
+      return null;
     }
-  }, []);
+  });
+  const [guestOcr, setGuestOcr] = useState<OcrRun[] | null>(() => {
+    try {
+      const cachedOcr = sessionStorage.getItem('ocr_data');
+      return cachedOcr ? JSON.parse(cachedOcr) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [guestExplanation, setGuestExplanation] = useState<string | null>(() => {
+    return sessionStorage.getItem('explain_data') ?? null;
+  });
 
   // ── Authenticated state (TanStack Query / DB-backed) ──────────────────────
   const { data: dashboardData } = useUserDashboard();
@@ -141,6 +155,8 @@ export const BillContextProvider = ({ children }: { children: React.ReactNode })
     ? {
         ...(dashboardData!.bill_data as unknown as BillData),
         analysis_results: dashboardData!.analysis_results as BillData['analysis_results'],
+        rates: (dashboardData!.analysis_results as any)?.rates || (dashboardData!.bill_data as any)?.rates,
+        costs: (dashboardData!.analysis_results as any)?.costs || (dashboardData!.bill_data as any)?.costs,
         sensitivity: (dashboardData!.analysis_results as Record<string, unknown>)?.sensitivity as SensitivityItem[] ?? undefined,
         ranking: (dashboardData!.analysis_results as Record<string, unknown>)?.ranking as RankingItem[] ?? undefined,
         drivers: (dashboardData!.analysis_results as Record<string, unknown>)?.drivers as DriversData ?? undefined,
@@ -160,8 +176,29 @@ export const BillContextProvider = ({ children }: { children: React.ReactNode })
   // When the user clicks "Upload another", this forces hasBill to false
   // even though a DB bill still exists, so the UploadView is shown again.
   const [resetOverride, setResetOverride] = useState(false);
+  const [prevActiveBillId, setPrevActiveBillId] = useState<string | null>(null);
 
-  const uploadedBill = resetOverride ? null : (hasDbBill && !guestOverride) ? dbBill : guestBill;
+  const currentActiveBillId = dashboardData?.active_bill_id ?? null;
+  if (currentActiveBillId !== prevActiveBillId) {
+    setPrevActiveBillId(currentActiveBillId);
+    if (hasDbBill && guestOverride) {
+      setGuestOverride(false);
+    }
+  }
+
+  const rawUploadedBill = resetOverride ? null : (hasDbBill && !guestOverride) ? dbBill : guestBill;
+  const uploadedBill = React.useMemo(() => {
+    if (!rawUploadedBill) return null;
+    const base = rawUploadedBill;
+    const rates = base.rates || (base.analysis_results as any)?.rates;
+    const costs = base.costs || (base.analysis_results as any)?.costs;
+    return {
+      ...base,
+      rates,
+      costs
+    };
+  }, [rawUploadedBill]);
+
   const ocrRuns      = resetOverride ? null : (hasDbBill && !guestOverride) ? dbOcr  : guestOcr;
   const billExplanation = resetOverride ? null : (hasDbBill && !guestOverride) ? dbExplanation : guestExplanation;
   const hasBill = !!(uploadedBill);
@@ -203,13 +240,6 @@ export const BillContextProvider = ({ children }: { children: React.ReactNode })
     // Clear the reset override so the new bill is visible
     setResetOverride(false);
   }, [hasDbBill]);
-
-  // When the dashboard query refreshes with fresh DB data, clear the local override
-  useEffect(() => {
-    if (hasDbBill && guestOverride) {
-      setGuestOverride(false);
-    }
-  }, [dashboardData?.active_bill_id]);
 
   const clearBillData = useCallback(() => {
     setGuestBill(null);

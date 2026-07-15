@@ -172,3 +172,108 @@ class TestLLMAPIRoutes:
             body = resp.json()
             assert body["success"] is True
             assert "answer" in body
+
+    def test_llm_metrics_endpoint(self):
+        with TestClient(app) as client:
+            resp = client.get("/api/v1/llm/metrics")
+            assert resp.status_code == 200
+            body = resp.json()
+            assert body["status"] == "success"
+            assert "metrics" in body
+            assert "total_requests" in body["metrics"]
+            assert "tokens" in body["metrics"]
+            assert "latency_ms" in body["metrics"]
+
+
+class TestOllamaProviderResilienceAndMetrics:
+    def test_prompt_hash_computation(self):
+        h1 = OllamaProvider.compute_prompt_hash("Test Prompt 1")
+        h2 = OllamaProvider.compute_prompt_hash("Test Prompt 1")
+        h3 = OllamaProvider.compute_prompt_hash("Test Prompt 2")
+        assert h1 == h2
+        assert h1 != h3
+        assert len(h1) == 12
+
+    @pytest.mark.anyio
+    async def test_empty_prompt_validation(self):
+        provider = OllamaProvider()
+        with pytest.raises(ValueError, match="empty prompt"):
+            await provider.generate("")
+
+    @pytest.mark.anyio
+    async def test_mocked_transient_failure_and_retry(self, monkeypatch):
+        provider = OllamaProvider(model="qwen3:4b")
+        monkeypatch.setattr(provider, "is_available", lambda: True)
+
+        call_count = 0
+
+        async def mock_post(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                import httpx
+                raise httpx.ConnectTimeout("Connection timed out")
+            # Return valid response on attempt 2
+            class MockResponse:
+                status_code = 200
+                content = b'{"response": "Retry succeeded!"}'
+                def json(self):
+                    return {"response": "Retry succeeded!", "prompt_eval_count": 10, "eval_count": 15}
+            return MockResponse()
+
+        client = provider.get_client()
+        monkeypatch.setattr(client, "post", mock_post)
+
+        res = await provider.generate("Test prompt for retry")
+        assert res == "Retry succeeded!"
+        assert call_count == 2
+
+    @pytest.mark.anyio
+    async def test_mocked_read_timeout_fast_fail(self, monkeypatch):
+        provider = OllamaProvider(model="qwen3:4b")
+        monkeypatch.setattr(provider, "is_available", lambda: True)
+
+        async def mock_post(*args, **kwargs):
+            import httpx
+            raise httpx.ReadTimeout("Read timed out after 30s")
+
+        client = provider.get_client()
+        monkeypatch.setattr(client, "post", mock_post)
+
+        with pytest.raises(RuntimeError, match="read timeout"):
+            await provider.generate("Test prompt for fast fail")
+
+    @pytest.mark.anyio
+    async def test_mocked_404_fast_fail(self, monkeypatch):
+        provider = OllamaProvider(model="nonexistent-model")
+        monkeypatch.setattr(provider, "is_available", lambda: True)
+
+        async def mock_post(*args, **kwargs):
+            class Mock404Response:
+                status_code = 404
+                text = "model 'nonexistent-model' not found"
+                content = b"model not found"
+            return Mock404Response()
+
+        client = provider.get_client()
+        monkeypatch.setattr(client, "post", mock_post)
+
+        with pytest.raises(RuntimeError, match="not found"):
+            await provider.generate("Test prompt")
+
+    def test_metrics_collector_recording(self):
+        from api.services.llm.metrics import LLMMetricsCollector
+        metrics = LLMMetricsCollector()
+        metrics.record_request_start()
+        metrics.record_success(latency_ms=120.5, prompt_tokens=50, eval_tokens=100)
+        metrics.record_retry()
+        metrics.record_fallback()
+
+        snapshot = metrics.get_snapshot()
+        assert snapshot["total_requests"] == 1
+        assert snapshot["successful_requests"] == 1
+        assert snapshot["retry_count"] == 1
+        assert snapshot["fallback_count"] == 1
+        assert snapshot["tokens"]["combined_tokens_total"] == 150
+        assert snapshot["latency_ms"]["average"] == 120.5
+

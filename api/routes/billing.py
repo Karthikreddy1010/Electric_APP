@@ -182,80 +182,26 @@ def parse_deterministic_bill(text: str) -> dict:
 @router.post("/analyze-ocr", response_model=BillAnalysisResponse)
 async def analyze_ocr(req: BillAnalysisRequest):
     """
-    Parse raw OCR bill text using local Ollama model qwen3:4b.
-    Falls back to deterministic regex parsing if Ollama is offline.
+    Parse raw OCR bill text using the centralized LLM service.
+    Falls back to deterministic regex parsing if LLM is offline or fails.
     """
-    import ollama
     import json
-
-    prompt = f"""
-    You are an expert electricity billing analyst.
-
-    You are given raw OCR text extracted from an electricity bill. The text may be messy, incomplete, or unstructured.
-
-    Your task is to:
-    1. Extract key billing information
-    2. Normalize it into structured JSON
-    3. Calculate component percentages
-    4. Determine what is driving the bill (usage vs rates vs fixed)
-    5. Provide a short, clear explanation
-
-    INPUT:
-    Raw OCR text of electricity bill:
-    {req.bill_text}
-
-    INSTRUCTIONS:
-    * Extract: utility_name, billing_period, total_amount, kwh_used, supply_charges, delivery_charges, fixed_charges, taxes.
-    * Normalize numbers (no currency symbols)
-    * Percentages = (component / total_amount) * 100
-    * Driver = usage (if usage is high) | rate (if rate/kWh > $0.25) | fixed (if fixed_pct > 20)
-
-    OUTPUT FORMAT (STRICT JSON)
-    Return ONLY valid JSON:
-    {{
-      "utility_name": "string",
-      "billing_period": "string",
-      "kwh_used": 0.0,
-      "total_amount": 0.0,
-      "charges": {{
-        "supply": 0.0,
-        "delivery": 0.0,
-        "fixed": 0.0,
-        "tax": 0.0
-      }},
-      "percentages": {{
-        "supply_pct": 0.0,
-        "delivery_pct": 0.0,
-        "fixed_pct": 0.0,
-        "tax_pct": 0.0
-      }},
-      "driver": "usage | rate | fixed",
-      "insight": "string"
-    }}
-    """
+    from api.services.llm.llm_service import llm_service
 
     try:
-        # Socket check for local Ollama
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(0.1)
-        res = sock.connect_ex(('127.0.0.1', 11434))
-        sock.close()
-        if res != 0:
-            raise RuntimeError("Ollama offline")
-
-        client = ollama.AsyncClient()
+        # Request OCR parse from centralized LLM service
+        res = await llm_service.generate_explanation(
+            task="ocr",
+            context_data={"bill_text": req.bill_text},
+            format="json"
+        )
         
-        async def fetch_chat():
-            return await client.chat(
-                model="qwen3:4b",
-                messages=[{"role": "user", "content": prompt}],
-                options={"temperature": 0.1, "num_predict": 1000},
-                format="json"
-            )
-            
-        response = await asyncio.wait_for(fetch_chat(), timeout=3.0)
-        content = response['message']['content'].strip()
-        parsed = json.loads(content)
+        # Check if fallback was used
+        if res.get("metadata", {}).get("fallback_used", False):
+            logger.warning("Centralized LLM service used fallback. Running deterministic fallback.")
+            return parse_deterministic_bill(req.bill_text)
+
+        parsed = json.loads(res["text"])
         
         # Ensure all required structure exists
         output = {
@@ -279,9 +225,6 @@ async def analyze_ocr(req: BillAnalysisRequest):
             "insight": parsed.get("insight")
         }
         return output
-    except (asyncio.TimeoutError, TimeoutError):
-        logger.warning("Ollama parsing timed out (limit: 3.0s). Running deterministic fallback.")
-        return parse_deterministic_bill(req.bill_text)
     except Exception as e:
         logger.warning(f"Ollama parsing failed: {e or type(e).__name__}. Running deterministic fallback.")
         return parse_deterministic_bill(req.bill_text)

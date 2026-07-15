@@ -1,4 +1,4 @@
-import { useMemo, memo, useEffect } from 'react';
+import { useMemo, memo, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import { scaleQuantile, scaleOrdinal } from 'd3-scale';
 import L from 'leaflet';
@@ -25,7 +25,7 @@ const UTILITY_COLORS = [
 // Helper component to auto-fit map bounds to the GeoJSON layer
 const MapFitter = ({ geoJsonData, selectedZip }: { geoJsonData: any, selectedZip?: string | null }) => {
   const map = useMap();
-  const fittedRef = useMemo(() => ({ current: null as string | null }), []);
+  const fittedRef = useRef<string | null>(null);
   
   useEffect(() => {
     if (geoJsonData && geoJsonData.features && geoJsonData.features.length > 0) {
@@ -50,7 +50,7 @@ const MapFitter = ({ geoJsonData, selectedZip }: { geoJsonData: any, selectedZip
         map.flyToBounds(bounds, { padding: [20, 20], duration: 1.5 });
       }
     }
-  }, [geoJsonData, selectedZip, map, fittedRef]);
+  }, [geoJsonData, selectedZip, map]);
 
   return null;
 };

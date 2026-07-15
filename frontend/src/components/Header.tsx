@@ -106,9 +106,6 @@ const Header = () => {
                 <div className="w-6 h-6 rounded-full bg-primary-blue/15 border border-primary-blue/30 flex items-center justify-center text-[10px] font-bold text-primary-blue">
                   {initials}
                 </div>
-                <span className="text-[11px] font-semibold text-text-primary hidden sm:block max-w-[80px] truncate">
-                  {user.first_name} {user.last_name}
-                </span>
                 <ChevronDown
                   size={12}
                   className={`text-text-secondary transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`}

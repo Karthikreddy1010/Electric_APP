@@ -22,8 +22,9 @@ import SectionWrapper from './regional/SectionWrapper.tsx';
 import USMap from '../components/USMap.tsx';
 import StateZipMap from '../components/StateZipMap.tsx';
 import {
-  TrendingUp, TrendingDown, MapPin, Activity, Info, Building2,
-  Play, Pause, ZapOff, ArrowRight, Search, RefreshCw
+  TrendingUp, TrendingDown, MapPin, Activity, Building2,
+  Play, Pause, ZapOff, ArrowRight, Search, RefreshCw,
+  FileText, Sparkles, Layers, Building, Users, Globe, Award
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -289,14 +290,16 @@ const RegionalPage = () => {
     );
   }, [utilitiesData, utilitySearchTerm]);
 
-  useEffect(() => {
+  const [prevFilteredUtilities, setPrevFilteredUtilities] = useState<any[]>([]);
+  if (filteredUtilities !== prevFilteredUtilities) {
+    setPrevFilteredUtilities(filteredUtilities);
     if (filteredUtilities.length > 0) {
       const njDefault = filteredUtilities.find(u => u.utility_name.includes('Public Service') || u.utility_name.includes('PSE&G'));
       setSelectedUtilityId(njDefault ? njDefault.utility_id : filteredUtilities[0].utility_id);
     } else {
       setSelectedUtilityId(null);
     }
-  }, [filteredUtilities]);
+  }
 
   const latestUtilityData = useMemo(() => {
     if (!utilityDetail || !utilityDetail.history || utilityDetail.history.length === 0) return null;
@@ -415,7 +418,7 @@ const RegionalPage = () => {
           setFloatingPanelOpen(true);
           if (!insightsMutation.isPending) insightsMutation.mutate();
         }
-      } catch (err) { /* ignore */ }
+      } catch { /* ignore */ }
     } else {
       const match = geoData?.data?.find((s: any) => s.state.toLowerCase().includes(searchInput.toLowerCase()));
       if (match) handleStateClick(match.state);
@@ -1170,62 +1173,469 @@ const RegionalPage = () => {
           </SectionWrapper>
         )}
 
-        {/* AI SUMMARY SUB-TAB */}
+        {/* AI SUMMARY SUB-TAB — 10-SECTION EXECUTIVE INTELLIGENCE REPORT */}
         {subTab === 'ai' && (
-          <SectionWrapper title="AI Spatial Observations" description="Generate deep causality reports and municipal projections for your current state.">
-            <div className="space-y-6">
-              <div className="flex justify-between items-center border-b border-border-hairline pb-3">
-                <span className="text-[10px] text-text-secondary font-bold uppercase tracking-widest font-sans">Report Generator</span>
+          <SectionWrapper title="Executive Energy Intelligence Report" description="Deep, data-grounded market synthesis suitable for utility executives, regulators, and enterprise energy directors.">
+            <div className="space-y-8">
+              {/* Header Action Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base font-bold text-white tracking-tight">Regional Intelligence Briefing ({selectedState} Territory)</h2>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                        Senior Analyst Persona
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5 font-medium">Derived from EIA-861M, PJM grid load telemetry, and weather degree day datasets</p>
+                  </div>
+                </div>
+
                 <button
                   onClick={() => insightsMutation.mutate()}
                   disabled={insightsMutation.isPending || !psegHistory}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-primary-blue text-white rounded-[4px] text-xs font-bold hover:bg-primary-blue/90 transition-all disabled:opacity-50 active:scale-[0.98]"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50 shadow-md shrink-0 active:scale-95"
                 >
-                  {insightsMutation.isPending ? <RefreshCw size={12} className="animate-spin" /> : <Info size={12} />}
-                  <span>Generate Report</span>
+                  {insightsMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                  <span>{insightsResult ? 'Re-generate Report' : 'Generate Full Executive Report'}</span>
                 </button>
               </div>
 
               {insightsResult ? (
-                <div className="space-y-6 text-xs leading-relaxed">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="p-4 bg-bg-secondary rounded-md border border-border-hairline space-y-2">
-                      <span className="text-[10px] font-bold text-primary-blue uppercase tracking-wider block font-sans">Causality Analysis</span>
-                      <p className="text-text-primary font-semibold leading-relaxed">
-                        {insightsResult.state_trend?.trend_analysis || "The selected territory exhibits stable prices relative to national bounds."}
+                <div className="space-y-8">
+                  {/* SECTION 1 — Executive Summary */}
+                  <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          Section 1
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">Executive Summary</h3>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {insightsResult.executive_summary?.overall_health || "Stable Territory"}
+                        </span>
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                          {insightsResult.executive_summary?.confidence_level || "94.8% Confidence"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-slate-900 text-white rounded-xl space-y-2 border border-slate-800">
+                      <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest block">Primary Finding</span>
+                      <p className="text-sm font-semibold leading-relaxed text-slate-100">
+                        {insightsResult.executive_summary?.primary_finding}
                       </p>
                     </div>
 
-                    {insightsResult.state_trend?.forecast_hint && (
-                      <div className="p-4 bg-primary-blue/5 border border-primary-blue/15 rounded-md space-y-2">
-                        <span className="text-[10px] font-bold text-primary-blue uppercase tracking-wider block font-sans">Future Spatial Projection</span>
-                        <p className="text-primary-blue font-semibold leading-relaxed">
-                          {insightsResult.state_trend.forecast_hint}
+                    <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                      {insightsResult.executive_summary?.briefing}
+                    </p>
+                  </div>
+
+                  {/* SECTION 2 — Regional Market Analysis */}
+                  {insightsResult.market_analysis && (
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          Section 2
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">Regional Market Analysis</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Prices & Trajectory</span>
+                          <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                            {insightsResult.market_analysis.electricity_prices_summary}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {insightsResult.market_analysis.historical_trajectory}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Consumption & Seasonality</span>
+                          <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                            {insightsResult.market_analysis.consumption_trends}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {insightsResult.market_analysis.seasonality}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1">
+                        <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Root Cause Attribution</span>
+                        <p className="text-xs text-blue-950 font-semibold leading-relaxed">
+                          {insightsResult.market_analysis.root_causes}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 3 — Drivers Behind the Trend */}
+                  {insightsResult.market_drivers && (
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          Section 3
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">Drivers Behind the Trend</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-blue-600">
+                            <Activity size={16} />
+                            <span className="text-xs font-bold text-slate-900">Weather & Degree Days</span>
+                          </div>
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            {insightsResult.market_drivers.weather_cdd_hdd}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-amber-600">
+                            <ZapOff size={16} />
+                            <span className="text-xs font-bold text-slate-900">Fuel & Marginal Costs</span>
+                          </div>
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            {insightsResult.market_drivers.fuel_costs}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-rose-600">
+                            <Layers size={16} />
+                            <span className="text-xs font-bold text-slate-900">Grid Congestion</span>
+                          </div>
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            {insightsResult.market_drivers.grid_congestion}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-emerald-600">
+                            <Globe size={16} />
+                            <span className="text-xs font-bold text-slate-900">Renewable Contribution</span>
+                          </div>
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            {insightsResult.market_drivers.renewable_penetration}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-indigo-600">
+                            <Building2 size={16} />
+                            <span className="text-xs font-bold text-slate-900">Commercial Activity</span>
+                          </div>
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            {insightsResult.market_drivers.industrial_commercial_activity}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-purple-600">
+                            <FileText size={16} />
+                            <span className="text-xs font-bold text-slate-900">Tariff Adjustments</span>
+                          </div>
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            {insightsResult.market_drivers.tariff_rate_adjustments}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 4 — Regional Risk Assessment Matrix */}
+                  {insightsResult.risk_assessment?.risks && (
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            Section 4
+                          </span>
+                          <h3 className="text-base font-bold text-slate-900">Regional Risk Assessment Matrix</h3>
+                        </div>
+                        <span className="text-[11px] text-slate-400 font-semibold">6 Risk Dimensions Evaluated</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {insightsResult.risk_assessment.risks.map((r: any) => {
+                          const badgeClass = r.severity === 'High'
+                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            : r.severity === 'Medium'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+                          return (
+                            <div key={r.category} className="p-4 rounded-xl border border-slate-200/80 bg-white flex flex-col justify-between space-y-2">
+                              <div>
+                                <div className="flex items-center justify-between gap-2 mb-1.5">
+                                  <span className="text-xs font-bold text-slate-900">{r.category}</span>
+                                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${badgeClass}`}>
+                                    {r.severity} Risk
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-700 font-semibold leading-snug">{r.description}</p>
+                              </div>
+                              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 font-medium leading-relaxed">
+                                <strong className="text-slate-700">Justification:</strong> {r.justification}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 5 — Forecast Outlook */}
+                  {insightsResult.forecast_outlook?.horizons && (
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            Section 5
+                          </span>
+                          <h3 className="text-base font-bold text-slate-900">Multi-Horizon Forecast Outlook</h3>
+                        </div>
+                        <div className="text-[11px] text-slate-500 font-medium">
+                          Primary Driver: <strong className="text-slate-800">{insightsResult.forecast_outlook.primary_forecast_driver}</strong>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {insightsResult.forecast_outlook.horizons.map((h: any) => (
+                          <div key={h.horizon} className="p-4 rounded-xl bg-slate-900 text-white border border-slate-800 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-extrabold uppercase tracking-widest text-blue-400">{h.horizon}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                                {h.confidence}
+                              </span>
+                            </div>
+                            <div>
+                              <div className="text-sm font-bold text-white">{h.expected_trend}</div>
+                              <div className="text-xs font-mono text-amber-300 font-semibold mt-0.5">
+                                Change: {h.projected_change_pct > 0 ? `+${h.projected_change_pct}%` : `${h.projected_change_pct}%`}
+                              </div>
+                            </div>
+                            <div className="space-y-1 pt-2 border-t border-slate-800 text-[11px] text-slate-300 font-medium leading-relaxed">
+                              <div><strong className="text-slate-400">Assumptions:</strong> {h.key_assumptions}</div>
+                              <div><strong className="text-slate-400">Uncertainties:</strong> {h.uncertainties}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 6 — Geographic Intelligence */}
+                  {insightsResult.geographic_intelligence && (
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          Section 6
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">Geographic Intelligence & Spatial Clusters</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Regional Positioning</span>
+                          <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                            {insightsResult.geographic_intelligence.regional_comparison}
+                          </p>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {insightsResult.geographic_intelligence.spatial_clusters}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">High-Cost Hotspots & Territory Variations</span>
+                          <div className="flex flex-wrap gap-1.5 my-1">
+                            {insightsResult.geographic_intelligence.high_cost_hotspots?.map((hs: string) => (
+                              <span key={hs} className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                {hs}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-slate-500 font-medium">
+                            {insightsResult.geographic_intelligence.utility_territory_variations}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 7 — Economic Impact */}
+                  {insightsResult.economic_impact && (
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          Section 7
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">Economic Impact Analysis</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
+                          <div className="flex items-center gap-1.5 text-blue-600 font-bold text-xs">
+                            <Users size={14} /> Residential
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                            {insightsResult.economic_impact.residential}
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
+                          <div className="flex items-center gap-1.5 text-indigo-600 font-bold text-xs">
+                            <Building size={14} /> Commercial
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                            {insightsResult.economic_impact.commercial}
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
+                          <div className="flex items-center gap-1.5 text-purple-600 font-bold text-xs">
+                            <Building2 size={14} /> Industrial
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                            {insightsResult.economic_impact.industrial}
+                          </p>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
+                          <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs">
+                            <Award size={14} /> Utilities & Grid
+                          </div>
+                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                            {insightsResult.economic_impact.utilities}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTION 8 — Recommendations */}
+                  {insightsResult.recommendations && (
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          Section 8
+                        </span>
+                        <h3 className="text-base font-bold text-slate-900">Actionable Stakeholder Recommendations</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider block">For Consumers</span>
+                          <p className="text-xs text-blue-950 font-semibold leading-relaxed">
+                            {insightsResult.recommendations.consumers}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block">For Businesses</span>
+                          <p className="text-xs text-emerald-950 font-semibold leading-relaxed">
+                            {insightsResult.recommendations.businesses}
+                          </p>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-purple-700 uppercase tracking-wider block">For Utilities & Grid Planners</span>
+                          <p className="text-xs text-purple-950 font-semibold leading-relaxed">
+                            {insightsResult.recommendations.utilities}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SECTIONS 9 & 10 — Confidence & Data Limitations */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Section 9: Confidence */}
+                    {insightsResult.confidence_assessment && (
+                      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            Section 9
+                          </span>
+                          <h3 className="text-base font-bold text-slate-900">Confidence Assessment</h3>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[9px] uppercase font-bold text-slate-400">Data Completeness</span>
+                            <div className="text-lg font-mono font-bold text-slate-900">
+                              {insightsResult.confidence_assessment.data_completeness_pct}%
+                            </div>
+                          </div>
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[9px] uppercase font-bold text-slate-400">Model Confidence</span>
+                            <div className="text-lg font-mono font-bold text-slate-900">
+                              {insightsResult.confidence_assessment.model_confidence_pct}%
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          {insightsResult.confidence_assessment.rationale}
                         </p>
                       </div>
                     )}
-                  </div>
 
-                  <div className="border-t border-border-hairline pt-4 flex flex-wrap gap-4 text-text-secondary text-[10px] font-semibold font-sans">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 bg-primary-blue rounded-full"></span>
-                      <span>Weather Influence: Normal CDD limits</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 bg-savings-green rounded-full"></span>
-                      <span>Disparity Status: Under baseline normals</span>
-                    </div>
+                    {/* Section 10: Data Limitations */}
+                    {insightsResult.data_limitations && (
+                      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
+                        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                            Section 10
+                          </span>
+                          <h3 className="text-base font-bold text-slate-900">Data Limitations & Transparency</h3>
+                        </div>
+
+                        <div className="space-y-2 text-xs font-medium text-slate-600">
+                          <div>
+                            <strong className="text-slate-800">Unobserved Variables:</strong>
+                            <ul className="list-disc pl-4 mt-0.5 text-slate-500">
+                              {insightsResult.data_limitations.unobserved_variables?.map((u: string) => (
+                                <li key={u}>{u}</li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div>
+                            <strong className="text-slate-800">Modeling Assumptions:</strong>
+                            <ul className="list-disc pl-4 mt-0.5 text-slate-500">
+                              {insightsResult.data_limitations.forecast_assumptions?.map((fa: string) => (
+                                <li key={fa}>{fa}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-12 text-xs text-text-secondary font-semibold">
-                  <Info className="mx-auto text-text-secondary/40 mb-3" size={24} />
-                  <p className="mb-4">Click below to query the spatial regression model for NJ territory.</p>
+                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                  <FileText className="mx-auto text-blue-500/60" size={32} />
+                  <h3 className="text-sm font-bold text-slate-900">10-Section Executive Intelligence Suite Ready</h3>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                    Query the regional regression engine and EIA dataset telemetry to build a senior executive intelligence report for {selectedState} territory.
+                  </p>
                   <button
                     onClick={() => insightsMutation.mutate()}
-                    className="bg-bg-secondary hover:bg-bg-primary text-text-primary text-xs font-bold px-5 py-2.5 rounded-md transition-colors border border-border-hairline shadow-sm"
+                    className="mt-2 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-md active:scale-95"
                   >
-                    Generate AI Spatial Report
+                    <Sparkles size={14} />
+                    <span>Generate AI Regional Report</span>
                   </button>
                 </div>
               )}

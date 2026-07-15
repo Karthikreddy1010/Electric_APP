@@ -118,7 +118,6 @@ async def impact_causal_v2(req: CausalRequest):
 
 
 import socket
-import ollama
 from api.schemas import (
     ImpactExplainRequest, ImpactExplainResponse,
     ImpactChatRequest, ImpactChatResponse

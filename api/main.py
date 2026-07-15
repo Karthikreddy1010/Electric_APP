@@ -265,9 +265,49 @@ async def lifespan(app: FastAPI):
         except Exception as ex:
             logger.error(f"Geo data build fallback failed: {ex}")
 
+    # ── Step 7: Centralized LLM / Ollama Startup Validation ──────────────────
+    try:
+        from api.services.llm.llm_service import llm_service
+        logger.info("Verifying LLM / Ollama connection on startup...")
+        if llm_service.provider.is_available():
+            logger.info(f"Ollama server is reachable at {llm_service.provider.base_url}")
+            import httpx
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                resp = await client.get(f"{llm_service.provider.base_url.rstrip('/')}/api/tags")
+                if resp.status_code == 200:
+                    models_list = [m.get("name") for m in resp.json().get("models", [])]
+                    configured_model = llm_service.provider.model
+                    match_found = False
+                    for m_name in models_list:
+                        if m_name == configured_model or m_name.split(":")[0] == configured_model.split(":")[0]:
+                            match_found = True
+                            if m_name != configured_model:
+                                logger.warning(f"Configured model {configured_model} matches installed model {m_name}. Updating provider model to exact match.")
+                                llm_service.provider.model = m_name
+                            break
+                    if match_found:
+                        logger.info(f"Configured LLM model '{llm_service.provider.model}' exists and is ready for inference.")
+                    else:
+                        logger.warning(
+                            f"Configured LLM model '{configured_model}' not found in installed Ollama models: {models_list}. "
+                            "Will fall back to local deterministic templates if generation fails."
+                        )
+                else:
+                    logger.warning(f"Failed to query Ollama tags API. Status: {resp.status_code}")
+        else:
+            logger.warning(f"Ollama server unreachable at {llm_service.provider.base_url}. Running in degraded (fallback-only) mode.")
+    except Exception as llm_err:
+        logger.warning(f"Ollama startup validation skipped: {llm_err}")
+
     logger.info("Initialization complete -- all systems ready")
     yield
     logger.info("Shutting down...")
+    try:
+        from api.services.llm.ollama_provider import OllamaProvider
+        await OllamaProvider.close_client()
+        logger.info("Closed persistent LLM HTTP client session.")
+    except Exception as e:
+        logger.error(f"Failed to close LLM HTTP client session: {e}")
     try:
         await close_cache()
     except Exception as e:
@@ -326,7 +366,6 @@ from api.routes.auth_router import router as auth_router
 from api.routes.dashboard import router as dashboard_router
 from api.routes.billing import router as billing_router
 from api.routes.geo_insights import router as geo_insights_router
-from api.routes.impact import router as impact_router
 from api.routes.bill_impact import router as bill_impact_router
 from api.routes.benchmark import router as benchmark_router
 from api.routes.forecast import router as forecast_router
@@ -335,6 +374,7 @@ from api.routes.bgs import router as bgs_router
 from api.routes.municipal import router as municipal_router
 from api.routes.eia861 import router as eia861_router
 from api.routes.monitoring import router as monitoring_router
+from api.routes.llm_metrics import router as llm_metrics_router
 
 # New routers
 from api.routes.users import router as users_router
@@ -346,7 +386,6 @@ from api.routes.report import router as report_router
 from api.routes.simulate import router as simulate_router
 from api.routes.geo_boundaries import router as geo_boundaries_router
 from api.routes.metrics import router as metrics_router
-from api.routes.tariffs import router as tariffs_router
 from api.routes.service_territory import router as service_territory_router
 from api.routes.customers import router as customers_router
 from api.routes.bill import router as bill_router
@@ -358,9 +397,9 @@ app.include_router(users_router)
 app.include_router(dashboard_router)
 app.include_router(billing_router)
 app.include_router(geo_insights_router)
-app.include_router(impact_router)
 app.include_router(bill_impact_router)
 app.include_router(llm_router)
+app.include_router(llm_metrics_router)
 app.include_router(benchmark_router)
 app.include_router(forecast_router)
 

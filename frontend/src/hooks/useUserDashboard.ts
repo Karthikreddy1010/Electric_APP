@@ -42,6 +42,10 @@ export interface UserDashboardData {
   analysis_results: Record<string, unknown> | null;
   insights: string[] | null;
   explanation: string | null;
+  ai_status?: string;
+  ai_explanation?: string;
+  ai_recommendations?: string;
+  ai_error_reason?: string;
   forecast_results: Record<string, unknown> | null;
   simulation_results: Record<string, unknown> | null;
   regional_comparison: Record<string, unknown> | null;
@@ -61,10 +65,15 @@ export function useUserDashboard() {
       return res.data as UserDashboardData;
     },
     enabled: status === 'authenticated',
-    // Keep data fresh but avoid hammering the server
-    staleTime: 2 * 60 * 1000,   // 2 min before refetch
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data && data.ai_status === 'generating') {
+        return 3000; // Poll every 3 seconds while background AI worker generates response
+      }
+      return false;
+    },
     retry: (failureCount, error: unknown) => {
-      // Don't retry on auth errors — user will be redirected
       const status = (error as { response?: { status?: number } })?.response?.status;
       if (status === 401 || status === 403) return false;
       return failureCount < 2;
