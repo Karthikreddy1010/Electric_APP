@@ -213,15 +213,15 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
     return (
       <div
         id="kpi-forecast"
-        className="bg-white rounded-xl border border-slate-200/90 p-4 transition-all duration-200 flex flex-col justify-between shadow-xs select-none"
-        style={{ borderTop: "3px solid #cbd5e1", minHeight: "170px" }}
+        className="workspace-glass rounded-xl p-4 transition-all duration-200 flex flex-col justify-between select-none"
+        style={{ borderTop: "3px solid var(--text-secondary)", minHeight: "170px" }}
       >
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-slate-100 text-slate-500 shrink-0">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-bg-secondary text-text-secondary border border-border-hairline shrink-0">
               <BarChart3 size={16} />
             </div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Next Month Forecast</span>
+            <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Next Month Forecast</span>
           </div>
           <div className="text-sm font-extrabold text-slate-400 mt-2">
             Forecast Unavailable
@@ -232,13 +232,13 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
         </div>
         
         <div className="space-y-1 mt-4">
-          <div className="flex justify-between text-[9px] font-semibold text-slate-500">
+          <div className="flex justify-between text-[9px] font-semibold text-text-secondary">
             <span>Bills Available: {billsAvailable} / 6</span>
             <span>{progressPct}% Ready</span>
           </div>
-          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden border border-border-hairline">
             <div 
-              className="h-full bg-slate-400 rounded-full transition-all" 
+              className="h-full bg-text-secondary rounded-full transition-all" 
               style={{ width: `${Math.min(100, (billsAvailable / 6) * 100)}%` }} 
             />
           </div>
@@ -276,17 +276,17 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
     <div
       id="kpi-forecast"
       onClick={() => navigate('Forecast')}
-      className="bg-white rounded-xl border border-slate-200/90 p-4 transition-all duration-200 flex flex-col group shadow-xs cursor-pointer hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5"
-      style={{ borderTop: "3px solid #f59e0b", minHeight: "170px" }}
+      className="workspace-glass rounded-xl p-4 transition-all duration-200 flex flex-col group cursor-pointer hover:border-primary-blue/30 hover:-translate-y-0.5"
+      style={{ borderTop: "3px solid var(--warning-amber)", minHeight: "170px" }}
     >
       {/* Top row */}
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between w-full min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600 shrink-0">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-warning-amber/10 text-warning-amber border border-warning-amber/20 shrink-0">
               <BarChart3 size={16} />
             </div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate">Next Month Forecast</span>
+            <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider truncate">Next Month Forecast</span>
             <InfoTooltip modelUsed={model_used} />
           </div>
           <ArrowUpRight
@@ -308,7 +308,7 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
 
       {/* Main value */}
       <div className="flex items-baseline gap-1 mt-2">
-        <span className="text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-mono truncate">
+        <span className="text-xl lg:text-2xl font-extrabold text-text-primary tracking-tight font-mono truncate">
           ${predicted_bill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
@@ -316,7 +316,7 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
       {/* Key Drivers Badges */}
       <div className="flex flex-wrap gap-1 mt-2.5">
         {key_drivers.slice(0, 2).map((d: string) => (
-          <span key={d} className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 truncate max-w-[90px]" title={d}>
+          <span key={d} className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline truncate max-w-[90px]" title={d}>
             {d}
           </span>
         ))}
@@ -363,46 +363,46 @@ const ExecutiveHeader = ({
   tariff: string;
 }) => {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/90 shadow-xs p-4 md:p-5 mb-6">
+    <div className="workspace-glass rounded-xl p-4 md:p-5 mb-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
         {/* Title & Organization */}
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-xl md:text-2xl font-bold text-text-primary tracking-tight">
               Executive Energy Intelligence
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200/60">
-              <Sparkles size={12} className="text-blue-600" /> ElectricAI Enterprise
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary-blue/10 text-primary-blue border border-primary-blue/20">
+              <Sparkles size={12} className="text-primary-blue" /> ElectricAI Enterprise
             </span>
           </div>
-          <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed">
+          <p className="text-xs md:text-sm text-text-secondary font-medium leading-relaxed">
             Operational telemetry and high-precision financial analysis for enterprise facilities
           </p>
         </div>
 
         {/* Active Context Indicators */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100 flex flex-col">
-            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Utility Provider</span>
-            <span className="font-semibold text-slate-700 truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
+          <div className="px-3 py-1.5 rounded-lg bg-bg-secondary border border-border-hairline flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-text-secondary tracking-wider">Utility Provider</span>
+            <span className="font-semibold text-text-primary truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
           </div>
-          <div className="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-100 flex flex-col">
-            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Rate Schedule</span>
-            <span className="font-semibold text-slate-700 truncate max-w-[200px]" title={tariff}>{tariff}</span>
+          <div className="px-3 py-1.5 rounded-lg bg-bg-secondary border border-border-hairline flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-text-secondary tracking-wider">Rate Schedule</span>
+            <span className="font-semibold text-text-primary truncate max-w-[200px]" title={tariff}>{tariff}</span>
           </div>
         </div>
       </div>
 
       {/* Sync Status Sub-bar */}
-      <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-3.5 pt-3 border-t border-border-hairline flex items-center justify-between text-xs text-text-secondary">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
           <span>Last synchronized: <strong>5 mins ago</strong></span>
-          <span className="text-slate-300">•</span>
-          <span className="text-slate-500">Data confidence: 99.4%</span>
+          <span className="text-border-hairline">•</span>
+          <span>Data confidence: 99.4%</span>
         </div>
-        <div className="text-slate-400 text-[11px] hidden sm:block font-medium">
-          Grid Model API v2.4 • Period: <strong className="text-slate-600 font-semibold">{billingCycle}</strong>
+        <div className="text-text-secondary text-[11px] hidden sm:block font-medium">
+          Grid Model API v2.4 • Period: <strong className="text-text-primary font-semibold">{billingCycle}</strong>
         </div>
       </div>
     </div>
@@ -452,8 +452,8 @@ const ExecutiveKpiCard = ({
     <div
       id={id}
       onClick={() => targetTab && navigate(targetTab)}
-      className={`bg-white rounded-xl border border-slate-200/90 p-4 transition-all duration-200 flex flex-col group shadow-xs ${
-        targetTab ? 'cursor-pointer hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5' : 'cursor-default'
+      className={`workspace-glass rounded-xl p-4 transition-all duration-200 flex flex-col group ${
+        targetTab ? 'cursor-pointer hover:border-primary-blue/30 hover:-translate-y-0.5' : 'cursor-default'
       }`}
       style={{ borderTop: `3px solid ${accentColor}`, minHeight: '170px' }}
       aria-label={`${label}: ${value}${unit || ''}`}
@@ -494,10 +494,10 @@ const ExecutiveKpiCard = ({
 
       {/* Value */}
       <div className="flex items-baseline gap-1 mt-1.5">
-        <span className="text-xl lg:text-2xl font-extrabold text-slate-900 tracking-tight font-mono truncate">
+        <span className="text-xl lg:text-2xl font-extrabold text-text-primary tracking-tight font-mono truncate">
           {value}
         </span>
-        {unit && <span className="text-xs font-semibold text-slate-500">{unit}</span>}
+        {unit && <span className="text-xs font-semibold text-text-secondary">{unit}</span>}
       </div>
 
       {/* Spacer to push bottom section down uniformly */}
@@ -782,28 +782,28 @@ const ChartsSection = () => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
       {/* Left: 12-Month Electricity Usage Trend */}
-      <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
+      <div className="lg:col-span-7 workspace-glass rounded-xl p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <BarChart3 size={16} className="text-blue-600" /> 12-Month Electricity Usage Trend
+              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                <BarChart3 size={16} className="text-primary-blue" /> 12-Month Electricity Usage Trend
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">Historical consumption curve with seasonal baseline overlay</p>
+              <p className="text-xs text-text-secondary mt-0.5">Historical consumption curve with seasonal baseline overlay</p>
             </div>
-            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-xs font-semibold text-slate-600">
+            <div className="flex items-center gap-1 bg-bg-secondary p-0.5 rounded-lg text-xs font-semibold text-text-secondary border border-border-hairline">
               <button
                 onClick={() => setActiveTab('usage')}
-                className={`px-2.5 py-1 rounded-md transition-all ${
-                  activeTab === 'usage' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                  activeTab === 'usage' ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs' : 'hover:text-text-primary'
                 }`}
               >
                 kWh Usage
               </button>
               <button
                 onClick={() => setActiveTab('peak')}
-                className={`px-2.5 py-1 rounded-md transition-all ${
-                  activeTab === 'peak' ? 'bg-white text-slate-900 shadow-xs' : 'hover:text-slate-900'
+                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+                  activeTab === 'peak' ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs' : 'hover:text-text-primary'
                 }`}
               >
                 Peak Demand (kW)
@@ -860,23 +860,23 @@ const ChartsSection = () => {
           </div>
         </div>
 
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Peak Usage Month: <strong>August (162 MWh)</strong></span>
-          <span className="text-emerald-600 font-semibold">12-Mo Trailing Shift: -1.8%</span>
+        <div className="mt-4 pt-3 border-t border-border-hairline flex items-center justify-between text-xs text-text-secondary">
+          <span>Peak Usage Month: <strong className="text-text-primary">August (162 MWh)</strong></span>
+          <span className="text-savings-green font-semibold">12-Mo Trailing Shift: -1.8%</span>
         </div>
       </div>
 
       {/* Right: Bill Component Breakdown Donut */}
-      <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
+      <div className="lg:col-span-5 workspace-glass rounded-xl p-5 flex flex-col justify-between">
         <div>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <PieChart size={16} className="text-blue-600" /> Bill Component Breakdown
+              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                <PieChart size={16} className="text-primary-blue" /> Bill Component Breakdown
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">Distribution of utility charge line items</p>
+              <p className="text-xs text-text-secondary mt-0.5">Distribution of utility charge line items</p>
             </div>
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-bg-secondary text-text-secondary border border-border-hairline">
               Current Cycle
             </span>
           </div>
@@ -983,24 +983,24 @@ const QuickActions = () => {
           <div
             key={act.id}
             id={act.id}
-            className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:shadow-md hover:border-slate-300 transition-all flex flex-col justify-between group"
+            className="workspace-glass rounded-xl p-4 transition-all flex flex-col justify-between group hover:border-primary-blue/30 cursor-pointer"
           >
             <div className="space-y-2.5">
-              <div className="w-9 h-9 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center">
+              <div className="w-9 h-9 rounded-lg bg-bg-secondary border border-border-hairline flex items-center justify-center">
                 {act.icon}
               </div>
               <div>
-                <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                <h4 className="text-xs font-bold text-text-primary group-hover:text-primary-blue transition-colors">
                   {act.title}
                 </h4>
-                <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-1">{act.desc}</p>
+                <p className="text-[11px] text-text-secondary font-medium leading-relaxed mt-1">{act.desc}</p>
               </div>
             </div>
 
             <div className="pt-4 mt-2">
               <button
                 onClick={() => navigate(act.tab)}
-                className="w-full py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-blue-600 text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5"
+                className="w-full py-1.5 px-3 rounded-lg bg-primary-blue hover:opacity-90 text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>{act.buttonText}</span>
                 <ChevronRight size={12} />
@@ -1171,18 +1171,18 @@ const MissionControlDashboard = () => {
       {/* 4. Main Analytics Grid (2-column layout with expanded Smart Alerts) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
         {/* Left Column: Recent Billing History */}
-        <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-xs p-5 flex flex-col justify-between">
+        <div className="lg:col-span-5 workspace-glass rounded-xl p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-hairline">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <FileText size={16} className="text-blue-600" /> Recent Billing History
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                  <FileText size={16} className="text-primary-blue" /> Recent Billing History
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Historical audited monthly invoices</p>
+                <p className="text-xs text-text-secondary mt-0.5">Historical audited monthly invoices</p>
               </div>
               <button
                 onClick={() => navigate('Bill Analysis')}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                className="text-xs font-bold text-primary-blue hover:opacity-85 transition-all cursor-pointer"
               >
                 Full History →
               </button>
@@ -1192,15 +1192,15 @@ const MissionControlDashboard = () => {
         </div>
 
         {/* Right Column: Expanded Smart Alerts */}
-        <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div className="lg:col-span-7 workspace-glass rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-border-hairline">
             <div>
-              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <ShieldAlert size={16} className="text-amber-600" /> Smart Alerts & Facility Exceptions
+              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                <ShieldAlert size={16} className="text-warning-amber" /> Smart Alerts & Facility Exceptions
               </h3>
-              <p className="text-xs text-slate-500 mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
+              <p className="text-xs text-text-secondary mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
             </div>
-            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-warning-amber/10 text-warning-amber border border-warning-amber/20">
               3 Active Exceptions
             </span>
           </div>

@@ -467,8 +467,6 @@ const ImpactPage = () => {
   const deltaPct = utilityBill > 0 ? (deltaBill / utilityBill) * 100 : 0;
 
   const previousBill = utilityBill * 0.92;
-  const billDifference = utilityBill - previousBill;
-  const billDiffPct = previousBill > 0 ? (billDifference / previousBill) * 100 : 0;
 
   // Baseline decomposing factors
   const baseDirectPrice = baselineDecomp?.decomposition?.direct_price_effect ?? 0;
@@ -700,66 +698,20 @@ const ImpactPage = () => {
         </button>
       </div>
 
-      {/* SECTION 1: Current Bill Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-
-        {/* Bill comparison card */}
-        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-white to-[#F9FAFC]">
-          <div>
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Active billing cost</span>
-            <div className="text-3xl font-bold mt-2 font-mono-numbers text-text-primary">${utilityBill.toFixed(2)}</div>
-          </div>
-          <div className="flex justify-between items-center border-t border-border-hairline pt-3 mt-4 text-xs font-semibold text-text-secondary">
-            <span>Previous: ${previousBill.toFixed(2)}</span>
-            <span className={`px-2 py-0.5 rounded-[4px] font-mono-numbers text-[10px] font-bold border ${
-              billDifference > 0
-                ? 'text-alert-red bg-alert-red/10 border-alert-red/20'
-                : 'text-savings-green bg-savings-green/10 border-savings-green/20'
-            }`}>
-              {billDifference >= 0 ? '+' : '−'}${Math.abs(billDifference).toFixed(2)} ({billDiffPct >= 0 ? '+' : ''}{billDiffPct.toFixed(1)}%)
-            </span>
-          </div>
+      {/* SECTION 1: Weather summary */}
+      <div className="panel-insight flex flex-col justify-between p-5 border-primary-blue/20 bg-primary-blue/5 rounded-xl">
+        <div className="flex items-center gap-1.5 mb-2">
+          <ThermometerSun size={14} className="text-primary-blue" />
+          <span className="text-[10px] font-bold text-primary-blue uppercase tracking-widest block">Weather summary</span>
         </div>
-
-        {/* Effective Rate card */}
-        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-white to-[#F9FAFC]">
-          <div>
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Effective Tariff Rate</span>
-            <div className="text-3xl font-bold mt-2 font-mono-numbers text-text-primary">${uploadedBill.effective_rate?.toFixed(4)}</div>
-          </div>
-          <span className="text-[10px] text-text-secondary block border-t border-border-hairline pt-3 mt-4 font-medium">
-            Total cost divided by {uploadedBill.usage_kwh} kWh consumption
-          </span>
-        </div>
-
-        {/* Monthly usage */}
-        <div className="panel-operational flex flex-col justify-between p-5 bg-gradient-to-br from-white to-[#F9FAFC]">
-          <div>
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block">Billing cycle usage</span>
-            <div className="text-3xl font-bold mt-2 font-mono-numbers text-text-primary">{uploadedBill.usage_kwh?.toLocaleString()} kWh</div>
-          </div>
-          <div className="flex justify-between border-t border-border-hairline pt-3 mt-4 text-xs text-text-secondary">
-            <span>Cycle duration:</span>
-            <span className="font-mono-numbers font-bold text-text-primary">{uploadedBill.days || 30} days</span>
-          </div>
-        </div>
-
-        {/* Weather summary */}
-        <div className="panel-insight flex flex-col justify-between p-5 border-primary-blue/20 bg-primary-blue/5">
-          <div className="flex items-center gap-1.5 mb-2">
-            <ThermometerSun size={14} className="text-primary-blue" />
-            <span className="text-[10px] font-bold text-primary-blue uppercase tracking-widest block">Weather summary</span>
-          </div>
-          <p className="text-xs text-text-primary font-semibold leading-relaxed">
-            {baseWeatherEffect > 0.5
-              ? `Abnormal temperatures added an estimated ${fmt(baseWeatherEffect)} to this bill by raising cooling/heating demand.`
-              : baseWeatherEffect < -0.5
-                ? `Mild regional temperatures lowered HVAC demand, saving you ${fmt(Math.abs(baseWeatherEffect))} compared to normals.`
-                : `Typical weather patterns observed. Temperature deviations did not significantly affect this billing period.`
-            }
-          </p>
-        </div>
-
+        <p className="text-xs text-text-primary font-semibold leading-relaxed">
+          {baseWeatherEffect > 0.5
+            ? `Abnormal temperatures added an estimated ${fmt(baseWeatherEffect)} to this bill by raising cooling/heating demand.`
+            : baseWeatherEffect < -0.5
+              ? `Mild regional temperatures lowered HVAC demand, saving you ${fmt(Math.abs(baseWeatherEffect))} compared to normals.`
+              : `Typical weather patterns observed. Temperature deviations did not significantly affect this billing period.`
+          }
+        </p>
       </div>
 
       {/* SECTION 2: Bill Driver Analysis */}

@@ -1,11 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+
 :root {
-  --bg-primary: #09090B;
-  --bg-surface: #121214;
-  --bg-secondary: #18181B;
-  --border-hairline: #27272A;
-  --text-primary: #FAFAFA;
-  --text-secondary: #A1A1AA;
-  --primary-blue: #3B82F6;
+  /* ─── Typography Tokens ─── */
+  --font-sans: 'Fira Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'Fira Code', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+
+  --fs-display: 3rem;
+  --fs-h1: 1.875rem;
+  --fs-h2: 1.5rem;
+  --fs-h3: 1.25rem;
+  --fs-body: 0.875rem;
+  --fs-caption: 0.75rem;
+  --fs-label: 0.6875rem;
+
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* ─── Spacing Tokens ─── */
+  --sp-4: 0.25rem;
+  --sp-8: 0.5rem;
+  --sp-12: 0.75rem;
+  --sp-16: 1.0rem;
+  --sp-20: 1.25rem;
+  --sp-24: 1.5rem;
+  --sp-32: 2.0rem;
+  --sp-40: 2.5rem;
+  --sp-48: 3.0rem;
+  --sp-64: 4.0rem;
+
+  /* ─── Radius Tokens ─── */
+  --rad-xs: 2px;
+  --rad-sm: 4px;
+  --rad-md: 6px;
+  --rad-lg: 8px;
+  --rad-xl: 12px;
+  --rad-2xl: 16px;
+
+  /* ─── Shadows Tokens ─── */
+  --sh-soft: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --sh-floating: 0 16px 36px rgba(0, 0, 0, 0.4);
+  --sh-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  --sh-hover: 0 12px 24px -2px rgba(0, 0, 0, 0.3), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --sh-focus: 0 0 0 2px rgba(59, 130, 246, 0.5);
+  --sh-elevation: 0 24px 48px rgba(0, 0, 0, 0.5);
+
+  /* ─── Tailwind Core Color variables (Dark Mode by Default) ─── */
+  --bg-primary: #0A0F1D;            /* Deep Corporate Navy */
+  --bg-surface: rgba(18, 24, 38, 0.7); /* Frosted Dark Glass */
+  --bg-secondary: #121826;
+  --border-hairline: rgba(255, 255, 255, 0.1);
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --primary-blue: #3B82F6;          /* Vibrant Blue Accent */
   --energy-teal: #14B8A6;
   --electric-cyan: #06B6D4;
   --warning-amber: #F59E0B;
@@ -14,12 +62,20 @@
 }
 
 .light-theme {
+  /* ─── Tailwind Core Color variables (Light Mode) ─── */
   --bg-primary: #F8FAFC;
-  --bg-surface: #FFFFFF;
+  --bg-surface: rgba(255, 255, 255, 0.75); /* Frosted Light Glass */
   --bg-secondary: #F1F5F9;
-  --border-hairline: #E2E8F0;
-  --text-primary: #0F172A;
-  --text-secondary: #64748B;
+  --border-hairline: rgba(30, 64, 175, 0.1); /* Indigo/Blue Tinted Border */
+  --text-primary: #1E3A8A;           /* Dark Navy Text */
+  --text-secondary: #475569;
+  --primary-blue: #1E40AF;           /* Deep Blue Accent */
+
+  --sh-soft: 0 2px 8px rgba(15, 23, 42, 0.05);
+  --sh-floating: 0 16px 36px rgba(15, 23, 42, 0.08);
+  --sh-glass: 0 8px 32px 0 rgba(31, 38, 135, 0.07), inset 0 1px 0 0 rgba(255, 255, 255, 0.6);
+  --sh-hover: 0 12px 24px -2px rgba(15, 23, 42, 0.06), 0 4px 6px -1px rgba(15, 23, 42, 0.02);
+  --sh-elevation: 0 24px 48px rgba(15, 23, 42, 0.08);
 }
 
 @tailwind base;
@@ -28,47 +84,90 @@
 
 @layer base {
   body {
-    @apply bg-bg-primary text-text-primary font-sans antialiased;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    @apply antialiased transition-colors duration-300;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
 @layer components {
-  /* Reusable enterprise operational panel cards with elevation on hover */
-  .panel-operational {
-    @apply bg-bg-surface border border-border-hairline p-5 rounded-lg text-text-primary transition-colors duration-200;
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  /* Typography Classes */
+  .text-display {
+    font-size: var(--fs-display);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.05em;
   }
-  .panel-operational:hover {
-    border-color: rgba(59, 130, 246, 0.3);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  .text-h1 {
+    font-size: var(--fs-h1);
+    font-weight: var(--fw-bold);
+    letter-spacing: -0.03em;
   }
-  
-  .panel-chart {
-    @apply bg-bg-surface border border-border-hairline p-5 rounded-lg text-text-primary transition-all duration-200;
+  .text-h2 {
+    font-size: var(--fs-h2);
+    font-weight: var(--fw-semibold);
+    letter-spacing: -0.02em;
   }
-  
-  .panel-insight {
-    @apply bg-bg-surface border border-border-hairline p-5 rounded-lg text-text-primary transition-all duration-200;
+  .text-h3 {
+    font-size: var(--fs-h3);
+    font-weight: var(--fw-semibold);
+    letter-spacing: -0.01em;
   }
-  
-  .panel-control {
-    @apply flex items-center gap-1 bg-bg-primary border border-border-hairline p-0.5 rounded-md text-xs;
+  .text-body {
+    font-size: var(--fs-body);
+    font-weight: var(--fw-normal);
   }
-
-  .banner-status {
-    @apply bg-bg-surface border border-border-hairline p-4 rounded-lg flex items-center gap-3 text-text-primary shadow-sm;
+  .text-caption {
+    font-size: var(--fs-caption);
+    font-weight: var(--fw-normal);
+  }
+  .text-label {
+    font-size: var(--fs-label);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.05em;
   }
 
   /* Monospace figures */
   .font-mono-numbers {
-    font-family: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
 
-  /* Buttons with subtle electric pulse hover effect */
+  /* Workspace Premium Cards & Glassmorphism Panels */
+  .panel-operational {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--rad-xl);
+    box-shadow: var(--sh-soft);
+    @apply p-6 transition-all duration-300;
+  }
+  .panel-operational:hover {
+    border-color: rgba(59, 130, 246, 0.25);
+    box-shadow: var(--sh-hover);
+  }
+
+  .workspace-glass {
+    background: var(--bg-surface);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-hairline);
+    box-shadow: var(--sh-glass);
+  }
+
+  .workspace-glass-interactive {
+    @apply workspace-glass cursor-pointer transition-all duration-300 ease-out;
+  }
+  .workspace-glass-interactive:hover {
+    transform: translateY(-2px);
+    border-color: rgba(59, 130, 246, 0.3);
+    box-shadow: var(--sh-hover);
+  }
+
+  /* Buttons with subtle pulse hover effect */
   .btn-electric {
     @apply relative overflow-hidden transition-all duration-200 active:scale-[0.98];
+    border-radius: var(--rad-md);
   }
   .btn-electric::after {
     content: '';
@@ -100,7 +199,6 @@
   to { background-position: 0 0; }
 }
 
-/* ─── Premium Animation Keyframes ─────────────────────────────────────────── */
 @keyframes slide-up-fade {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -123,26 +221,14 @@
   20%, 40%, 60%, 80% { transform: translateX(2px); }
 }
 
-/* Utility classes for new animations */
-.animate-gradient-shift {
-  background-size: 300% 300%;
-  animation: gradient-shift 8s ease infinite;
+@keyframes sweep {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
 }
-.animate-slide-up { animation: slide-up-fade 0.5s ease-out forwards; opacity: 0; }
-.animate-shake { animation: shake 0.4s ease-in-out; }
-.animate-input-glow { animation: input-glow 2s ease-in-out infinite; }
 
-/* Stagger delay utilities */
-.delay-100 { animation-delay: 100ms; }
-.delay-200 { animation-delay: 200ms; }
-.delay-300 { animation-delay: 300ms; }
-.delay-400 { animation-delay: 400ms; }
-.delay-500 { animation-delay: 500ms; }
-.delay-600 { animation-delay: 600ms; }
-.delay-700 { animation-delay: 700ms; }
-.delay-800 { animation-delay: 800ms; }
-
-/* Custom premium scrollbars */
+/* Scrollbar customizations */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -151,9 +237,21 @@
   background: var(--bg-primary);
 }
 ::-webkit-scrollbar-thumb {
-  background: #27272A;
-  border-radius: 3px;
+  background: var(--border-hairline);
+  border-radius: var(--rad-md);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3F3F46;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.light-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* Leaflet map fix to match design system */
+.leaflet-container {
+  background: var(--bg-primary) !important;
+  border-radius: var(--rad-xl);
+  border: 1px solid var(--border-hairline);
+  box-shadow: var(--sh-soft);
 }

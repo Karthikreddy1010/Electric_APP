@@ -30,8 +30,8 @@ export default {
         'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
       },
       fontFamily: {
-        sans: ['Inter', '"IBM Plex Sans"', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'JetBrains Mono', 'monospace'],
+        sans: ['"Fira Sans"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        mono: ['"Fira Code"', 'monospace'],
       },
       borderRadius: {
         'none': '0px',

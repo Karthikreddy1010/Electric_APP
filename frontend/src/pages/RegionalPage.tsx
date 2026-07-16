@@ -1207,13 +1207,13 @@ const RegionalPage = () => {
               {insightsResult ? (
                 <div className="space-y-8">
                   {/* SECTION 1 — Executive Summary */}
-                  <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                    <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+                  <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-border-hairline flex-wrap gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                           Section 1
                         </span>
-                        <h3 className="text-base font-bold text-slate-900">Executive Summary</h3>
+                        <h3 className="text-base font-bold text-text-primary">Executive Summary</h3>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1239,39 +1239,39 @@ const RegionalPage = () => {
 
                   {/* SECTION 2 — Regional Market Analysis */}
                   {insightsResult.market_analysis && (
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-border-hairline">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                           Section 2
                         </span>
-                        <h3 className="text-base font-bold text-slate-900">Regional Market Analysis</h3>
+                        <h3 className="text-base font-bold text-text-primary">Regional Market Analysis</h3>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Prices & Trajectory</span>
-                          <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                        <div className="p-4 rounded-xl bg-bg-secondary border border-border-hairline space-y-1.5">
+                          <span className="text-[10px] uppercase font-bold text-text-secondary tracking-wider">Prices & Trajectory</span>
+                          <p className="text-xs font-semibold text-text-primary leading-relaxed">
                             {insightsResult.market_analysis.electricity_prices_summary}
                           </p>
-                          <p className="text-[11px] text-slate-500 font-medium">
+                          <p className="text-[11px] text-text-secondary font-medium">
                             {insightsResult.market_analysis.historical_trajectory}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Consumption & Seasonality</span>
-                          <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                        <div className="p-4 rounded-xl bg-bg-secondary border border-border-hairline space-y-1.5">
+                          <span className="text-[10px] uppercase font-bold text-text-secondary tracking-wider">Consumption & Seasonality</span>
+                          <p className="text-xs font-semibold text-text-primary leading-relaxed">
                             {insightsResult.market_analysis.consumption_trends}
                           </p>
-                          <p className="text-[11px] text-slate-500 font-medium">
+                          <p className="text-[11px] text-text-secondary font-medium">
                             {insightsResult.market_analysis.seasonality}
                           </p>
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1">
-                        <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Root Cause Attribution</span>
-                        <p className="text-xs text-blue-950 font-semibold leading-relaxed">
+                      <div className="p-4 rounded-xl bg-primary-blue/10 border border-primary-blue/20 space-y-1">
+                        <span className="text-[10px] font-bold text-primary-blue uppercase tracking-wider">Root Cause Attribution</span>
+                        <p className="text-xs text-text-primary font-semibold leading-relaxed">
                           {insightsResult.market_analysis.root_causes}
                         </p>
                       </div>
@@ -1280,71 +1280,71 @@ const RegionalPage = () => {
 
                   {/* SECTION 3 — Drivers Behind the Trend */}
                   {insightsResult.market_drivers && (
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-border-hairline">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                           Section 3
                         </span>
-                        <h3 className="text-base font-bold text-slate-900">Drivers Behind the Trend</h3>
+                        <h3 className="text-base font-bold text-text-primary">Drivers Behind the Trend</h3>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
-                          <div className="flex items-center gap-2 text-blue-600">
+                        <div className="p-4 rounded-xl border border-border-hairline bg-bg-secondary space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-primary-blue">
                             <Activity size={16} />
-                            <span className="text-xs font-bold text-slate-900">Weather & Degree Days</span>
+                            <span className="text-xs font-bold text-text-primary">Weather & Degree Days</span>
                           </div>
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          <p className="text-xs text-text-secondary font-medium leading-relaxed">
                             {insightsResult.market_drivers.weather_cdd_hdd}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
-                          <div className="flex items-center gap-2 text-amber-600">
+                        <div className="p-4 rounded-xl border border-border-hairline bg-bg-secondary space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-warning-amber">
                             <ZapOff size={16} />
-                            <span className="text-xs font-bold text-slate-900">Fuel & Marginal Costs</span>
+                            <span className="text-xs font-bold text-text-primary">Fuel & Marginal Costs</span>
                           </div>
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          <p className="text-xs text-text-secondary font-medium leading-relaxed">
                             {insightsResult.market_drivers.fuel_costs}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
-                          <div className="flex items-center gap-2 text-rose-600">
+                        <div className="p-4 rounded-xl border border-border-hairline bg-bg-secondary space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-alert-red">
                             <Layers size={16} />
-                            <span className="text-xs font-bold text-slate-900">Grid Congestion</span>
+                            <span className="text-xs font-bold text-text-primary">Grid Congestion</span>
                           </div>
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          <p className="text-xs text-text-secondary font-medium leading-relaxed">
                             {insightsResult.market_drivers.grid_congestion}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
-                          <div className="flex items-center gap-2 text-emerald-600">
+                        <div className="p-4 rounded-xl border border-border-hairline bg-bg-secondary space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-savings-green">
                             <Globe size={16} />
-                            <span className="text-xs font-bold text-slate-900">Renewable Contribution</span>
+                            <span className="text-xs font-bold text-text-primary">Renewable Contribution</span>
                           </div>
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          <p className="text-xs text-text-secondary font-medium leading-relaxed">
                             {insightsResult.market_drivers.renewable_penetration}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
-                          <div className="flex items-center gap-2 text-indigo-600">
+                        <div className="p-4 rounded-xl border border-border-hairline bg-bg-secondary space-y-1.5 shadow-xs">
+                          <div className="flex items-center gap-2 text-primary-blue">
                             <Building2 size={16} />
-                            <span className="text-xs font-bold text-slate-900">Commercial Activity</span>
+                            <span className="text-xs font-bold text-text-primary">Commercial Activity</span>
                           </div>
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          <p className="text-xs text-text-secondary font-medium leading-relaxed">
                             {insightsResult.market_drivers.industrial_commercial_activity}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl border border-slate-200/80 bg-white space-y-1.5 shadow-xs">
+                        <div className="p-4 rounded-xl border border-border-hairline bg-bg-secondary space-y-1.5 shadow-xs">
                           <div className="flex items-center gap-2 text-purple-600">
                             <FileText size={16} />
-                            <span className="text-xs font-bold text-slate-900">Tariff Adjustments</span>
+                            <span className="text-xs font-bold text-text-primary">Tariff Adjustments</span>
                           </div>
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                          <p className="text-xs text-text-secondary font-medium leading-relaxed">
                             {insightsResult.market_drivers.tariff_rate_adjustments}
                           </p>
                         </div>
@@ -1354,38 +1354,38 @@ const RegionalPage = () => {
 
                   {/* SECTION 4 — Regional Risk Assessment Matrix */}
                   {insightsResult.risk_assessment?.risks && (
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-border-hairline">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                             Section 4
                           </span>
-                          <h3 className="text-base font-bold text-slate-900">Regional Risk Assessment Matrix</h3>
+                          <h3 className="text-base font-bold text-text-primary">Regional Risk Assessment Matrix</h3>
                         </div>
-                        <span className="text-[11px] text-slate-400 font-semibold">6 Risk Dimensions Evaluated</span>
+                        <span className="text-[11px] text-text-secondary font-semibold">6 Risk Dimensions Evaluated</span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {insightsResult.risk_assessment.risks.map((r: any) => {
                           const badgeClass = r.severity === 'High'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
+                            ? 'bg-rose-50/10 text-rose-700 border-rose-200/20'
                             : r.severity === 'Medium'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                            ? 'bg-amber-50/10 text-amber-700 border-amber-200/20'
+                            : 'bg-emerald-50/10 text-emerald-700 border-emerald-200/20';
 
                           return (
-                            <div key={r.category} className="p-4 rounded-xl border border-slate-200/80 bg-white flex flex-col justify-between space-y-2">
+                            <div key={r.category} className="p-4 rounded-xl border border-border-hairline bg-bg-secondary flex flex-col justify-between space-y-2">
                               <div>
                                 <div className="flex items-center justify-between gap-2 mb-1.5">
-                                  <span className="text-xs font-bold text-slate-900">{r.category}</span>
+                                  <span className="text-xs font-bold text-text-primary">{r.category}</span>
                                   <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${badgeClass}`}>
                                     {r.severity} Risk
                                   </span>
                                 </div>
-                                <p className="text-xs text-slate-700 font-semibold leading-snug">{r.description}</p>
+                                <p className="text-xs text-text-secondary font-semibold leading-snug">{r.description}</p>
                               </div>
-                              <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 font-medium leading-relaxed">
-                                <strong className="text-slate-700">Justification:</strong> {r.justification}
+                              <div className="pt-2 border-t border-border-hairline text-[11px] text-text-secondary font-medium leading-relaxed">
+                                <strong className="text-text-primary">Justification:</strong> {r.justification}
                               </div>
                             </div>
                           );
@@ -1396,16 +1396,16 @@ const RegionalPage = () => {
 
                   {/* SECTION 5 — Forecast Outlook */}
                   {insightsResult.forecast_outlook?.horizons && (
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                      <div className="flex items-center justify-between pb-3 border-b border-border-hairline">
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                             Section 5
                           </span>
-                          <h3 className="text-base font-bold text-slate-900">Multi-Horizon Forecast Outlook</h3>
+                          <h3 className="text-base font-bold text-text-primary">Multi-Horizon Forecast Outlook</h3>
                         </div>
-                        <div className="text-[11px] text-slate-500 font-medium">
-                          Primary Driver: <strong className="text-slate-800">{insightsResult.forecast_outlook.primary_forecast_driver}</strong>
+                        <div className="text-[11px] text-text-secondary font-medium">
+                          Primary Driver: <strong className="text-text-primary">{insightsResult.forecast_outlook.primary_forecast_driver}</strong>
                         </div>
                       </div>
 
@@ -1436,35 +1436,35 @@ const RegionalPage = () => {
 
                   {/* SECTION 6 — Geographic Intelligence */}
                   {insightsResult.geographic_intelligence && (
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-border-hairline">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                           Section 6
                         </span>
-                        <h3 className="text-base font-bold text-slate-900">Geographic Intelligence & Spatial Clusters</h3>
+                        <h3 className="text-base font-bold text-text-primary">Geographic Intelligence & Spatial Clusters</h3>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Regional Positioning</span>
-                          <p className="text-xs font-semibold text-slate-800 leading-relaxed">
+                        <div className="p-4 rounded-xl bg-bg-secondary border border-border-hairline space-y-2">
+                          <span className="text-[10px] uppercase font-bold text-text-secondary tracking-wider">Regional Positioning</span>
+                          <p className="text-xs font-semibold text-text-primary leading-relaxed">
                             {insightsResult.geographic_intelligence.regional_comparison}
                           </p>
-                          <p className="text-[11px] text-slate-500 font-medium">
+                          <p className="text-[11px] text-text-secondary font-medium">
                             {insightsResult.geographic_intelligence.spatial_clusters}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-                          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">High-Cost Hotspots & Territory Variations</span>
+                        <div className="p-4 rounded-xl bg-bg-secondary border border-border-hairline space-y-2">
+                          <span className="text-[10px] uppercase font-bold text-text-secondary tracking-wider">High-Cost Hotspots & Territory Variations</span>
                           <div className="flex flex-wrap gap-1.5 my-1">
                             {insightsResult.geographic_intelligence.high_cost_hotspots?.map((hs: string) => (
-                              <span key={hs} className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                              <span key={hs} className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-rose-50/10 text-rose-700 border border-rose-200/20">
                                 {hs}
                               </span>
                             ))}
                           </div>
-                          <p className="text-[11px] text-slate-500 font-medium">
+                          <p className="text-[11px] text-text-secondary font-medium">
                             {insightsResult.geographic_intelligence.utility_territory_variations}
                           </p>
                         </div>
@@ -1474,47 +1474,47 @@ const RegionalPage = () => {
 
                   {/* SECTION 7 — Economic Impact */}
                   {insightsResult.economic_impact && (
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-border-hairline">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                           Section 7
                         </span>
-                        <h3 className="text-base font-bold text-slate-900">Economic Impact Analysis</h3>
+                        <h3 className="text-base font-bold text-text-primary">Economic Impact Analysis</h3>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
-                          <div className="flex items-center gap-1.5 text-blue-600 font-bold text-xs">
+                        <div className="p-3.5 rounded-xl border border-border-hairline bg-bg-secondary space-y-1">
+                          <div className="flex items-center gap-1.5 text-primary-blue font-bold text-xs">
                             <Users size={14} /> Residential
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          <p className="text-xs text-text-secondary leading-relaxed font-medium">
                             {insightsResult.economic_impact.residential}
                           </p>
                         </div>
 
-                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
-                          <div className="flex items-center gap-1.5 text-indigo-600 font-bold text-xs">
+                        <div className="p-3.5 rounded-xl border border-border-hairline bg-bg-secondary space-y-1">
+                          <div className="flex items-center gap-1.5 text-primary-blue font-bold text-xs">
                             <Building size={14} /> Commercial
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          <p className="text-xs text-text-secondary leading-relaxed font-medium">
                             {insightsResult.economic_impact.commercial}
                           </p>
                         </div>
 
-                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
+                        <div className="p-3.5 rounded-xl border border-border-hairline bg-bg-secondary space-y-1">
                           <div className="flex items-center gap-1.5 text-purple-600 font-bold text-xs">
                             <Building2 size={14} /> Industrial
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          <p className="text-xs text-text-secondary leading-relaxed font-medium">
                             {insightsResult.economic_impact.industrial}
                           </p>
                         </div>
 
-                        <div className="p-3.5 rounded-xl border border-slate-200/80 bg-white space-y-1">
-                          <div className="flex items-center gap-1.5 text-emerald-600 font-bold text-xs">
+                        <div className="p-3.5 rounded-xl border border-border-hairline bg-bg-secondary space-y-1">
+                          <div className="flex items-center gap-1.5 text-savings-green font-bold text-xs">
                             <Award size={14} /> Utilities & Grid
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          <p className="text-xs text-text-secondary leading-relaxed font-medium">
                             {insightsResult.economic_impact.utilities}
                           </p>
                         </div>
@@ -1524,32 +1524,32 @@ const RegionalPage = () => {
 
                   {/* SECTION 8 — Recommendations */}
                   {insightsResult.recommendations && (
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                      <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                    <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                      <div className="flex items-center gap-2 pb-3 border-b border-border-hairline">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                           Section 8
                         </span>
-                        <h3 className="text-base font-bold text-slate-900">Actionable Stakeholder Recommendations</h3>
+                        <h3 className="text-base font-bold text-text-primary">Actionable Stakeholder Recommendations</h3>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="p-4 rounded-xl bg-blue-50/60 border border-blue-100 space-y-1.5">
-                          <span className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider block">For Consumers</span>
-                          <p className="text-xs text-blue-950 font-semibold leading-relaxed">
+                        <div className="p-4 rounded-xl bg-primary-blue/10 border border-primary-blue/20 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-primary-blue uppercase tracking-wider block">For Consumers</span>
+                          <p className="text-xs text-text-primary font-semibold leading-relaxed">
                             {insightsResult.recommendations.consumers}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
-                          <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider block">For Businesses</span>
-                          <p className="text-xs text-emerald-950 font-semibold leading-relaxed">
+                        <div className="p-4 rounded-xl bg-savings-green/10 border border-savings-green/20 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-savings-green uppercase tracking-wider block">For Businesses</span>
+                          <p className="text-xs text-text-primary font-semibold leading-relaxed">
                             {insightsResult.recommendations.businesses}
                           </p>
                         </div>
 
-                        <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 space-y-1.5">
-                          <span className="text-[10px] font-extrabold text-purple-700 uppercase tracking-wider block">For Utilities & Grid Planners</span>
-                          <p className="text-xs text-purple-950 font-semibold leading-relaxed">
+                        <div className="p-4 rounded-xl bg-purple-50/10 border border-purple-200/20 space-y-1.5">
+                          <span className="text-[10px] font-extrabold text-purple-400 uppercase tracking-wider block">For Utilities & Grid Planners</span>
+                          <p className="text-xs text-text-primary font-semibold leading-relaxed">
                             {insightsResult.recommendations.utilities}
                           </p>
                         </div>
@@ -1561,30 +1561,30 @@ const RegionalPage = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Section 9: Confidence */}
                     {insightsResult.confidence_assessment && (
-                      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                      <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                        <div className="flex items-center gap-2 pb-3 border-b border-border-hairline">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                             Section 9
                           </span>
-                          <h3 className="text-base font-bold text-slate-900">Confidence Assessment</h3>
+                          <h3 className="text-base font-bold text-text-primary">Confidence Assessment</h3>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[9px] uppercase font-bold text-slate-400">Data Completeness</span>
-                            <div className="text-lg font-mono font-bold text-slate-900">
+                          <div className="p-3 bg-bg-secondary rounded-xl border border-border-hairline">
+                            <span className="text-[9px] uppercase font-bold text-text-secondary">Data Completeness</span>
+                            <div className="text-lg font-mono font-bold text-text-primary">
                               {insightsResult.confidence_assessment.data_completeness_pct}%
                             </div>
                           </div>
-                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                            <span className="text-[9px] uppercase font-bold text-slate-400">Model Confidence</span>
-                            <div className="text-lg font-mono font-bold text-slate-900">
+                          <div className="p-3 bg-bg-secondary rounded-xl border border-border-hairline">
+                            <span className="text-[9px] uppercase font-bold text-text-secondary">Model Confidence</span>
+                            <div className="text-lg font-mono font-bold text-text-primary">
                               {insightsResult.confidence_assessment.model_confidence_pct}%
                             </div>
                           </div>
                         </div>
 
-                        <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                        <p className="text-xs text-text-secondary font-medium leading-relaxed">
                           {insightsResult.confidence_assessment.rationale}
                         </p>
                       </div>
@@ -1592,18 +1592,18 @@ const RegionalPage = () => {
 
                     {/* Section 10: Data Limitations */}
                     {insightsResult.data_limitations && (
-                      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-                        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                      <div className="workspace-glass rounded-2xl p-6 space-y-4">
+                        <div className="flex items-center gap-2 pb-3 border-b border-border-hairline">
+                          <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline">
                             Section 10
                           </span>
-                          <h3 className="text-base font-bold text-slate-900">Data Limitations & Transparency</h3>
+                          <h3 className="text-base font-bold text-text-primary">Data Limitations & Transparency</h3>
                         </div>
 
-                        <div className="space-y-2 text-xs font-medium text-slate-600">
+                        <div className="space-y-2 text-xs font-medium text-text-secondary">
                           <div>
-                            <strong className="text-slate-800">Unobserved Variables:</strong>
-                            <ul className="list-disc pl-4 mt-0.5 text-slate-500">
+                            <strong className="text-text-primary">Unobserved Variables:</strong>
+                            <ul className="list-disc pl-4 mt-0.5 text-text-secondary">
                               {insightsResult.data_limitations.unobserved_variables?.map((u: string) => (
                                 <li key={u}>{u}</li>
                               ))}
@@ -1611,8 +1611,8 @@ const RegionalPage = () => {
                           </div>
 
                           <div>
-                            <strong className="text-slate-800">Modeling Assumptions:</strong>
-                            <ul className="list-disc pl-4 mt-0.5 text-slate-500">
+                            <strong className="text-text-primary">Modeling Assumptions:</strong>
+                            <ul className="list-disc pl-4 mt-0.5 text-text-secondary">
                               {insightsResult.data_limitations.forecast_assumptions?.map((fa: string) => (
                                 <li key={fa}>{fa}</li>
                               ))}
@@ -1624,15 +1624,15 @@ const RegionalPage = () => {
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-16 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                  <FileText className="mx-auto text-blue-500/60" size={32} />
-                  <h3 className="text-sm font-bold text-slate-900">10-Section Executive Intelligence Suite Ready</h3>
-                  <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                <div className="text-center py-16 workspace-glass rounded-2xl space-y-3">
+                  <FileText className="mx-auto text-primary-blue/60" size={32} />
+                  <h3 className="text-sm font-bold text-text-primary">10-Section Executive Intelligence Suite Ready</h3>
+                  <p className="text-xs text-text-secondary max-w-md mx-auto leading-relaxed">
                     Query the regional regression engine and EIA dataset telemetry to build a senior executive intelligence report for {selectedState} territory.
                   </p>
                   <button
                     onClick={() => insightsMutation.mutate()}
-                    className="mt-2 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-md active:scale-95"
+                    className="mt-2 inline-flex items-center gap-2 bg-primary-blue hover:opacity-90 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-md active:scale-95 cursor-pointer"
                   >
                     <Sparkles size={14} />
                     <span>Generate AI Regional Report</span>

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet, Link } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillContextProvider } from './context/BillContext.tsx';
 import { NavigationProvider } from './context/NavigationContext.tsx';
@@ -18,7 +18,7 @@ import BillPage from './pages/BillPage.tsx';
 import ImpactPage from './pages/ImpactPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 
-import Header from './components/Header.tsx';
+import WorkspaceShell from './components/layout/WorkspaceShell.tsx';
 
 
 // Lazy-loaded heavy pages (D3, Leaflet, Monte Carlo charts)
@@ -69,24 +69,7 @@ function ProtectedRoute() {
     return <Navigate to="/verify-pending" replace />;
   }
 
-  return (
-    <>
-      {/* WelcomeWizard removed as requested by user */}
-      <div className="min-h-screen flex flex-col bg-bg-primary text-text-primary light-theme">
-        {sessionStorage.getItem('is_demo_mode') === 'true' && (
-          <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-500 text-[10px] sm:text-xs px-4 py-2 flex items-center justify-center gap-2 font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
-            <span>Demo Workspace — Read Only Mode. Sign up to upload your own bills and save configurations.</span>
-            <Link to="/signup" className="underline ml-2 hover:text-amber-600">Sign Up Now</Link>
-          </div>
-        )}
-        <Header />
-        <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-8">
-          <Outlet />
-        </main>
-      </div>
-    </>
-  );
+  return <WorkspaceShell />;
 }
 
 // Route Guard for Public Auth Pages (Redirect to dashboard if already logged in)
