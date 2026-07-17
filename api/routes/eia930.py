@@ -357,3 +357,48 @@ async def get_interchange_neighbors(
         ))
 
     return results
+
+
+@router.get("/grid/lmp")
+@cached(ttl=300)
+async def get_day_ahead_lmp(
+    zone: str = Query("PSEG", description="Balancing Zone, e.g. PSEG, JCPL, AECO, RECO"),
+    days: int = Query(30, ge=1, le=90)
+):
+    """Retrieve daily aggregated day-ahead LMP node prices for a zone."""
+    engine = _get_engine()
+    
+    query = text("""
+        SELECT 
+            strftime('%Y-%m-%d', timestamp) as date,
+            AVG(price_per_mwh) as avg_lmp,
+            MAX(price_per_mwh) as max_lmp,
+            MIN(price_per_mwh) as min_lmp
+        FROM raw_energy_data
+        WHERE region_id = :zone
+        GROUP BY date
+        ORDER BY date DESC
+        LIMIT :days
+    """)
+    
+    try:
+        df = pd.read_sql(query, con=engine, params={"zone": zone.upper().strip(), "days": days})
+        if df.empty:
+            return {"zone": zone, "data": []}
+            
+        df = df.iloc[::-1].reset_index(drop=True)
+        
+        records = []
+        for _, row in df.iterrows():
+            records.append({
+                "date": row["date"],
+                "avg_lmp": float(row["avg_lmp"]) / 10.0 if row["avg_lmp"] is not None else 0.0,
+                "max_lmp": float(row["max_lmp"]) / 10.0 if row["max_lmp"] is not None else 0.0,
+                "min_lmp": float(row["min_lmp"]) / 10.0 if row["min_lmp"] is not None else 0.0,
+            })
+            
+        return {"zone": zone, "data": records}
+    except Exception as e:
+        logger.error(f"Error querying raw energy LMP data: {e}")
+        raise HTTPException(500, f"Database error: {e}")
+

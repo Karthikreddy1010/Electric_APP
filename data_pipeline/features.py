@@ -338,6 +338,102 @@ def merge_market_monthly(billing_df: pd.DataFrame,
     return merged.drop(columns=["year_month"])
 
 
+def add_unified_store_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Enrich feature matrix with CPI deflators, utility profile indicators, 
+    and operational metrics (Unified Feature Store).
+    """
+    df = df.copy()
+    
+    # 1. Parse dates if not already done
+    dt = pd.to_datetime(df["date"])
+    df["year"] = dt.dt.year
+    df["month"] = dt.dt.month
+    
+    # 2. Integrate CPI deflators (inflation deflator)
+    try:
+        from pathlib import Path
+        project_root = Path(__file__).resolve().parent.parent
+        cpi_path = project_root / "data" / "raw" / "cpi_monthly.csv"
+        if cpi_path.exists():
+            cpi_df = pd.read_csv(cpi_path)
+            # Find base CPI (the latest one)
+            latest_row = cpi_df.sort_values(["year", "month"]).iloc[-1]
+            base_cpi = float(latest_row["cpi"])
+            
+            cpi_df["cpi_factor"] = cpi_df["cpi"] / base_cpi
+            df = df.merge(cpi_df[["year", "month", "cpi_factor"]], on=["year", "month"], how="left")
+            df["cpi_factor"] = df["cpi_factor"].fillna(1.0)
+            
+            # Apply deflator to rates if they exist in df
+            for rate_col in ["bgs_rate", "distribution_rate", "transmission_rate", "sbc_rate"]:
+                if rate_col in df.columns:
+                    df[f"{rate_col}_real"] = df[rate_col] / df["cpi_factor"]
+    except Exception as e:
+        logger.warning(f"Failed to integrate CPI deflator: {e}")
+        df["cpi_factor"] = 1.0
+        
+    # 3. Query SQLite for Utility and Operational Metrics
+    try:
+        from database.connection import get_sync_engine
+        engine = get_sync_engine()
+        
+        # Load EIA-861 Master table
+        eia_df = pd.read_sql("SELECT * FROM eia861_master", con=engine)
+        if not eia_df.empty:
+            # Map utility names
+            # If utility is not specified in df, default to PSE&G
+            if "utility_name" not in df.columns:
+                df["utility_name"] = "Public Service Elec & Gas Co"
+                
+            # Clean and match utility_name/state
+            # Merge on year, utility_name
+            # Keep peak_demand, total_load, demand_response_flag, dynamic_pricing_flag, total_customers, total_sales_mwh
+            eia_subset = eia_df[[
+                "year", "utility_name", "state", "peak_demand", "total_load", 
+                "demand_response_flag", "dynamic_pricing_flag", "total_customers", 
+                "total_sales_mwh", "avg_price"
+            ]].copy()
+            
+            # Recompute energy losses proxy if operational data has generation vs load (dummy loss proxy)
+            # For simplicity: grid_loss_pct = 0.05 (standard fallback)
+            eia_subset["grid_loss_pct"] = 0.05
+            
+            df = df.merge(eia_subset, on=["year", "utility_name"], how="left")
+            
+            # Fill NaNs with defaults
+            df["peak_demand"] = df["peak_demand"].fillna(0.0)
+            df["total_load"] = df["total_load"].fillna(0.0)
+            df["demand_response_flag"] = df["demand_response_flag"].fillna(0).astype(int)
+            df["dynamic_pricing_flag"] = df["dynamic_pricing_flag"].fillna(0).astype(int)
+            df["grid_loss_pct"] = df["grid_loss_pct"].fillna(0.05)
+    except Exception as e:
+        logger.warning(f"Failed to integrate Utility & Operational metrics from SQLite: {e}")
+        
+    # 4. Integrate Community/Municipal baseline indicators
+    try:
+        from database.connection import get_sync_engine
+        engine = get_sync_engine()
+        comm_df = pd.read_sql("SELECT * FROM community_energy", con=engine)
+        if not comm_df.empty:
+            # Aggregate to county average as regional benchmark feature
+            county_df = comm_df.groupby(["year", "county"]).agg(
+                county_avg_elec_kwh=("total_electricity_kwh", "mean"),
+                county_avg_gas_therms=("total_natural_gas_therms", "mean")
+            ).reset_index()
+            
+            if "county" not in df.columns:
+                df["county"] = "Essex"  # default NJ Essex county (PSE&G)
+                
+            df = df.merge(county_df, on=["year", "county"], how="left")
+            df["county_avg_elec_kwh"] = df["county_avg_elec_kwh"].fillna(1000000.0)
+            df["county_avg_gas_therms"] = df["county_avg_gas_therms"].fillna(50000.0)
+    except Exception as e:
+        logger.warning(f"Failed to integrate Community Energy metrics: {e}")
+        
+    return df
+
+
 def build_feature_matrix(billing_df, weather_df, market_df,
                          target_col="total_bill"):
     """
@@ -367,6 +463,9 @@ def build_feature_matrix(billing_df, weather_df, market_df,
     # 7. Pct change
     df = add_pct_change_features(df, target_col, periods=[1, 12])
     
+    # 7b. Add Unified Feature Store Features
+    df = add_unified_store_features(df)
+    
     # 8. Rate component shares
     cost_cols = [c for c in df.columns if c.endswith("_cost") and c != "total_bill"]
     for c in cost_cols:
@@ -377,10 +476,11 @@ def build_feature_matrix(billing_df, weather_df, market_df,
     
     # 10. Select features
     exclude = ["date", "utility", "state", "customer_class", "season",
-               target_col, "year_month"]
+               target_col, "year_month", "utility_name", "county"]
     feature_cols = [c for c in df.columns 
                     if c not in exclude and df[c].dtype in [np.float64, np.int64, np.int32, np.float32]]
     
     logger.info(f"Feature matrix: {df.shape[0]} rows, {len(feature_cols)} features")
     
     return df, feature_cols, target_col
+

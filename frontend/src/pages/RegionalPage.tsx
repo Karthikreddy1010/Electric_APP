@@ -128,6 +128,7 @@ const SUB_TABS = [
   { id: 'map',        label: 'Map',        desc: 'Spatial drilldown network' },
   { id: 'comparison', label: 'Comparison', desc: 'Cheapest vs expensive states' },
   { id: 'utility',    label: 'Utility',    desc: 'Local utility listings' },
+  { id: 'community',  label: 'Municipality', desc: 'NJ municipal comparisons' },
   { id: 'grid',       label: 'Grid',       desc: 'Real-time grid dispatch' },
   { id: 'trends',     label: 'Trends',     desc: 'EIA timeline volatility' },
   { id: 'ai',         label: 'AI Summary',  desc: 'Spatial observations report' }
@@ -283,6 +284,39 @@ const RegionalPage = () => {
     enabled: !!selectedUtilityId
   });
 
+  const { data: utilityMetrics } = useQuery({
+    queryKey: ['utilityMetrics', selectedUtilityId, selectedState],
+    queryFn: async () => {
+      if (!selectedUtilityId) return null;
+      return (await axios.get(`/eia861/utility/${selectedUtilityId}/metrics?state=${selectedState}`)).data;
+    },
+    enabled: !!selectedUtilityId
+  });
+
+  const [selectedCounty, setSelectedCounty] = useState<string>('');
+  const [selectedMuni, setSelectedMuni] = useState<string>('Newark');
+
+  const { data: municipalRankings, isLoading: isMuniRankingsLoading } = useQuery({
+    queryKey: ['municipalRankings', selectedCounty],
+    queryFn: async () => {
+      const url = selectedCounty ? `/municipal/rankings?county=${selectedCounty}` : '/municipal/rankings';
+      return (await axios.get(url)).data;
+    }
+  });
+
+  const { data: municipalHistory, isLoading: isMuniHistoryLoading } = useQuery({
+    queryKey: ['municipalHistory', selectedMuni],
+    queryFn: async () => {
+      return (await axios.get(`/municipal/benchmark?name=${selectedMuni}`)).data;
+    }
+  });
+
+  const { data: utilityComparisons } = useQuery({
+    queryKey: ['utilityComparisons', selectedState],
+    queryFn: async () => (await axios.get(`/benchmark/utility-comparison?state=${selectedState}`)).data
+  });
+
+
   const filteredUtilities = useMemo(() => {
     if (!utilitiesData) return [];
     return utilitiesData.filter(u =>
@@ -303,8 +337,12 @@ const RegionalPage = () => {
 
   const latestUtilityData = useMemo(() => {
     if (!utilityDetail || !utilityDetail.history || utilityDetail.history.length === 0) return null;
-    return utilityDetail.history[utilityDetail.history.length - 1];
-  }, [utilityDetail]);
+    const latest = utilityDetail.history[utilityDetail.history.length - 1];
+    return {
+      ...latest,
+      ...utilityMetrics
+    };
+  }, [utilityDetail, utilityMetrics]);
 
   const utilityHistoryData = useMemo(() => {
     if (!utilityDetail || !utilityDetail.history) return [];
@@ -321,6 +359,7 @@ const RegionalPage = () => {
     },
     onSuccess: (data) => setInsightsResult(data)
   });
+
 
   useEffect(() => {
     let interval: any;
@@ -530,6 +569,69 @@ const RegionalPage = () => {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+
+                {/* Utility Benchmarking Dashboard */}
+                <div className="border-t border-border-hairline pt-6 mt-6 space-y-6">
+                  <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider font-sans">
+                    Utility Operations & Benchmark Comparison
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Horizontal Bar Chart for average annual consumption */}
+                    <div className="panel-chart h-[280px] flex flex-col justify-between">
+                      <h5 className="text-[10px] font-bold uppercase text-text-secondary border-b border-border-hairline pb-2 mb-4 font-sans">
+                        Average Annual Consumption per Customer (kWh)
+                      </h5>
+                      <div className="flex-1 min-h-[180px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={utilityComparisons?.slice(0, 5) || []}
+                            layout="vertical"
+                            margin={{ left: 5, right: 10, top: 0, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-hairline)" opacity={0.5} />
+                            <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
+                            <YAxis
+                              type="category"
+                              dataKey="utility_name"
+                              tick={{ fontSize: 8, fill: 'var(--text-secondary)' }}
+                              axisLine={false}
+                              tickLine={false}
+                              width={100}
+                            />
+                            <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} kWh`, 'Avg Consumption']} />
+                            <Bar dataKey="avg_annual_consumption_kwh" fill="var(--primary-blue)" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Grid Efficiency comparison */}
+                    <div className="panel-chart h-[280px] flex flex-col justify-between">
+                      <h5 className="text-[10px] font-bold uppercase text-text-secondary border-b border-border-hairline pb-2 mb-4 font-sans">
+                        Grid Transmission Losses (%)
+                      </h5>
+                      <div className="flex-1 min-h-[180px] overflow-y-auto space-y-3 custom-scrollbar">
+                        {(utilityComparisons?.slice(0, 5) || []).map((u: any) => (
+                          <div key={u.utility_name} className="space-y-1 text-xs">
+                            <div className="flex justify-between font-semibold">
+                              <span className="text-text-primary truncate max-w-[180px]">{u.utility_name}</span>
+                              <span className="text-text-secondary font-mono">{u.transmission_losses_pct}%</span>
+                            </div>
+                            <div className="w-full bg-bg-secondary h-2 rounded-full overflow-hidden border border-border-hairline">
+                              <div
+                                className={`h-full rounded-full ${
+                                  u.transmission_losses_pct > 6.0 ? 'bg-alert-red' : 'bg-savings-green'
+                                }`}
+                                style={{ width: `${Math.min(u.transmission_losses_pct * 8, 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -960,6 +1062,30 @@ const RegionalPage = () => {
                             </div>
                           </div>
 
+                          <div className="bg-bg-secondary border border-border-hairline rounded-md p-4 space-y-3">
+                            <h5 className="text-[10px] font-bold uppercase tracking-wider text-text-secondary border-b border-border-hairline pb-1.5 font-sans">
+                              Infrastructure & Utility Profile Metadata
+                            </h5>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-semibold">
+                              <div>
+                                <span className="text-[9px] text-text-secondary block mb-0.5 font-sans uppercase">Ownership Type</span>
+                                <span className="text-text-primary font-mono">{latestUtilityData.ownership_type || 'Investor Owned'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-text-secondary block mb-0.5 font-sans uppercase">NERC Region</span>
+                                <span className="text-text-primary font-mono">{latestUtilityData.nerc_region || 'RFC'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-text-secondary block mb-0.5 font-sans uppercase">RTO / ISO Market</span>
+                                <span className="text-text-primary font-mono">{latestUtilityData.rto_iso || 'PJM Interconnection'}</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] text-text-secondary block mb-0.5 font-sans uppercase">Service Territory</span>
+                                <span className="text-text-primary font-mono">{latestUtilityData.service_territory || 'NJ Service Area'}</span>
+                              </div>
+                            </div>
+                          </div>
+
                           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="panel-chart h-[280px] flex flex-col justify-between">
                               <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2 font-sans">
@@ -997,6 +1123,180 @@ const RegionalPage = () => {
                           </div>
                         </div>
                       )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </SectionWrapper>
+        )}
+
+        {/* MUNICIPALITY SUB-TAB */}
+        {subTab === 'community' && (
+          <SectionWrapper title="New Jersey Municipality Dashboard" description="Compare energy intensity, natural gas-to-electricity ratios, and historical community energy baselines.">
+            <div className="space-y-6">
+              {/* Controls Bar */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-bg-secondary rounded-md p-4 border border-border-hairline">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-text-secondary tracking-widest mb-1.5 font-sans">Filter by County</label>
+                  <select
+                    value={selectedCounty}
+                    onChange={(e) => setSelectedCounty(e.target.value)}
+                    className="w-full bg-bg-surface border border-border-hairline rounded-md px-3 py-2 text-xs font-bold text-text-primary outline-none focus:border-primary-blue"
+                    aria-label="Filter county"
+                  >
+                    <option value="">All NJ Counties</option>
+                    <option value="Essex">Essex County</option>
+                    <option value="Bergen">Bergen County</option>
+                    <option value="Middlesex">Middlesex County</option>
+                    <option value="Monmouth">Monmouth County</option>
+                    <option value="Hudson">Hudson County</option>
+                    <option value="Union">Union County</option>
+                    <option value="Morris">Morris County</option>
+                    <option value="Ocean">Ocean County</option>
+                    <option value="Passaic">Passaic County</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-text-secondary tracking-widest mb-1.5 font-sans">Selected Municipality</label>
+                  <div className="w-full bg-bg-surface border border-border-hairline rounded-md px-3 py-2 text-xs font-bold text-text-primary">
+                    {selectedMuni}
+                  </div>
+                </div>
+                <div className="flex items-end">
+                  <span className="text-[10px] text-text-secondary font-sans font-semibold mb-2">
+                    Click any municipality in the ranking table to view detail charts.
+                  </span>
+                </div>
+              </div>
+
+              {/* KPI Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono-numbers text-text-primary text-xs">
+                <div className="bg-bg-secondary border border-border-hairline p-3 rounded-md">
+                  <p className="text-[9px] text-text-secondary font-bold font-sans mb-1 uppercase tracking-wider">County Total Usage</p>
+                  <h4 className="text-lg font-bold">
+                    {municipalRankings?.county_summary?.[0]?.total_elec_kwh
+                      ? `${(municipalRankings.county_summary.reduce((a: number, b: any) => a + (b.total_elec_kwh || 0), 0) / 1000000).toFixed(1)} GWh`
+                      : 'N/A'}
+                  </h4>
+                </div>
+                <div className="bg-bg-secondary border border-border-hairline p-3 rounded-md">
+                  <p className="text-[9px] text-text-secondary font-bold font-sans mb-1 uppercase tracking-wider">Municipalities Surveyed</p>
+                  <h4 className="text-lg font-bold">
+                    {municipalRankings?.rankings?.length || 0}
+                  </h4>
+                </div>
+                <div className="bg-bg-secondary border border-border-hairline p-3 rounded-md bg-primary-blue/5 border-primary-blue/20">
+                  <p className="text-[9px] text-primary-blue font-bold font-sans mb-1 uppercase tracking-wider">Active Focus Rank</p>
+                  <h4 className="text-lg font-bold text-primary-blue">
+                    #{municipalRankings?.rankings?.find((r: any) => r.municipality === selectedMuni)?.rank || 'N/A'}
+                  </h4>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Ranking Table */}
+                <div className="lg:col-span-7 bg-bg-secondary rounded-md border border-border-hairline p-4 flex flex-col max-h-[500px]">
+                  <h4 className="text-[10px] font-bold uppercase text-text-secondary px-1 mb-3 font-sans">Municipality Rankings</h4>
+                  <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar text-xs font-semibold">
+                    {isMuniRankingsLoading ? (
+                      <div className="text-text-secondary p-4 animate-pulse">Loading rankings...</div>
+                    ) : !municipalRankings?.rankings ? (
+                      <div className="text-text-secondary p-4 italic">No rankings loaded.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-border-hairline text-text-secondary text-[10px] uppercase font-sans">
+                              <th className="py-2 px-1 text-center w-10">Rank</th>
+                              <th className="py-2 px-2">Municipality</th>
+                              <th className="py-2 px-2">County</th>
+                              <th className="py-2 px-2 text-right">Electricity (MWh)</th>
+                              <th className="py-2 px-2 text-right">Gas-to-Elec Ratio</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {municipalRankings.rankings.map((r: any) => (
+                              <tr
+                                key={r.municipality}
+                                onClick={() => setSelectedMuni(r.municipality)}
+                                className={`border-b border-border-hairline cursor-pointer hover:bg-bg-surface transition-all ${
+                                  selectedMuni === r.municipality ? 'bg-primary-blue/5 text-primary-blue font-bold' : ''
+                                }`}
+                              >
+                                <td className="py-2 px-1 text-center font-mono">{r.rank}</td>
+                                <td className="py-2 px-2 font-sans truncate max-w-[120px]">{r.municipality}</td>
+                                <td className="py-2 px-2 font-sans truncate max-w-[100px]">{r.county}</td>
+                                <td className="py-2 px-2 text-right font-mono">{(r.total_electricity_kwh / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                                <td className="py-2 px-2 text-right font-mono">{r.gas_to_electric_ratio}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Detail Charts */}
+                <div className="lg:col-span-5 space-y-6">
+                  {isMuniHistoryLoading || !municipalHistory ? (
+                    <div className="bg-bg-secondary rounded-md border border-border-hairline p-12 text-center text-text-secondary flex flex-col items-center justify-center h-full">
+                      <RefreshCw size={24} className="animate-spin text-primary-blue mb-4" />
+                      <span>Loading municipality energy history...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Fuel Mix Chart */}
+                      <div className="panel-chart h-[230px] flex flex-col justify-between">
+                        <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2 border-b border-border-hairline pb-2 font-sans">
+                          {selectedMuni} Fuel split Share
+                        </h4>
+                        <div className="flex-1 min-h-[160px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={[
+                                {
+                                  name: 'Electricity',
+                                  kwh: municipalHistory.history[municipalHistory.history.length - 1]?.total_electricity_kwh || 0
+                                },
+                                {
+                                  name: 'Natural Gas',
+                                  kwh: (municipalHistory.history[municipalHistory.history.length - 1]?.total_natural_gas_therms || 0) * 29.3
+                                }
+                              ]}
+                              margin={{ left: -10, right: 10 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(Number(v) / 1000000).toFixed(1)}M`} />
+                              <Tooltip formatter={(v) => [`${(Number(v) / 29.3).toLocaleString(undefined, { maximumFractionDigits: 0 })} Units (kWh Equiv)`, 'Usage']} />
+                              <Bar dataKey="kwh" fill="var(--primary-blue)" radius={[4, 4, 0, 0]}>
+                                <Cell fill="var(--primary-blue)" />
+                                <Cell fill="var(--energy-teal)" />
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Historical Consumption Line Chart */}
+                      <div className="panel-chart h-[230px] flex flex-col justify-between">
+                        <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2 flex items-center gap-2 border-b border-border-hairline pb-2 font-sans">
+                          Historical consumption Trend
+                        </h4>
+                        <div className="flex-1 min-h-[160px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={municipalHistory.history} margin={{ left: -15, right: 10 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.5} />
+                              <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
+                              <YAxis tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(v) => [`${Number(v).toLocaleString()} kWh`, 'Electricity']} />
+                              <Line type="monotone" dataKey="total_electricity_kwh" stroke="var(--primary-blue)" strokeWidth={2} dot={{ r: 3 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

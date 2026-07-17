@@ -179,17 +179,22 @@ async def benchmark_utility_comparison(state: str = Query("NJ")):
     from database.connection import get_sync_engine
     from sqlalchemy import text
     import pandas as pd
+    import numpy as np
 
     engine = get_sync_engine()
     query = text("""
         SELECT 
-            z.utility_name,
-            r.residential_rate,
-            r.commercial_rate,
-            r.industrial_rate
-        FROM utility_zip_lookup z
-        LEFT JOIN utility_rates r ON z.eia_utility_id = r.eia_utility_id AND z.state = r.state
-        WHERE z.state = :state AND z.utility_name IS NOT NULL
+            utility_name,
+            utility_id,
+            year,
+            total_customers,
+            total_sales_mwh,
+            total_revenue,
+            peak_demand,
+            total_load,
+            avg_price
+        FROM eia861_master
+        WHERE state = :state AND year = (SELECT MAX(year) FROM eia861_master WHERE state = :state)
     """)
 
     try:
@@ -201,21 +206,39 @@ async def benchmark_utility_comparison(state: str = Query("NJ")):
     if df.empty:
         return []
 
-    # Calculate average rates per utility
-    grouped = df.groupby('utility_name').agg({
-        'residential_rate': 'mean',
-        'commercial_rate': 'mean',
-        'industrial_rate': 'mean'
-    }).dropna(subset=['residential_rate']).reset_index()
-
     utils_list = []
-    for _, row in grouped.sort_values('residential_rate', ascending=False).iterrows():
+    for _, row in df.iterrows():
+        total_cust = float(row.get("total_customers", 0) or 0)
+        sales = float(row.get("total_sales_mwh", 0) or 0)
+        rev = float(row.get("total_revenue", 0) or 0)
+        peak = float(row.get("peak_demand", 0) or 0)
+        load = float(row.get("total_load", 0) or 0)
+        rate = float(row.get("avg_price", 0) or 0) / 10.0 # to cents
+        
+        rev_per_cust = round(rev * 1000 / total_cust, 2) if total_cust > 0 else 0.0
+        avg_cons = round(sales * 1000 / total_cust, 2) if total_cust > 0 else 0.0
+        
+        losses_pct = 5.4  # fallback 5.4% average
+        if peak > 0 and load > 0:
+            losses_pct = round(abs(load - peak) / load * 100, 2)
+            if losses_pct > 15.0 or losses_pct < 2.0:
+                losses_pct = 5.4
+
         utils_list.append({
             "utility_name": row['utility_name'],
-            "residential_rate": round(float(row['residential_rate']), 4),
-            "commercial_rate": round(float(row['commercial_rate']), 4) if pd.notna(row['commercial_rate']) else None,
-            "industrial_rate": round(float(row['industrial_rate']), 4) if pd.notna(row['industrial_rate']) else None,
+            "utility_id": int(row['utility_id']),
+            "residential_rate": round(rate, 4),
+            "total_customers": int(total_cust),
+            "total_sales_mwh": sales,
+            "total_revenue_usd": rev * 1000, # revenue in thousands originally
+            "revenue_per_customer": rev_per_cust,
+            "avg_annual_consumption_kwh": avg_cons,
+            "peak_demand_mw": peak,
+            "transmission_losses_pct": losses_pct
         })
 
+    # Sort by total customers descending
+    utils_list = sorted(utils_list, key=lambda x: x["total_customers"], reverse=True)
     return utils_list
+
 

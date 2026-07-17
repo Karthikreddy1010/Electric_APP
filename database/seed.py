@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from database.connection import get_sync_engine, get_sync_session
 from database.models import (
     Base,
+    RawEnergyData,
     BillingData,
     RawWeather,
     StateBenchmark,
@@ -284,6 +285,7 @@ def run_seed(force: bool = False) -> dict:
         with get_sync_session() as session:
             try:
                 session.query(BillingData).delete()
+                session.query(RawEnergyData).delete()
                 session.query(RawWeather).delete()
                 session.query(WeatherIndex).delete()
                 session.query(StateBenchmark).delete()
@@ -326,6 +328,7 @@ def run_seed(force: bool = False) -> dict:
     results["eia861"] = seed_eia861_master(force)
     results["weather_openmeteo"] = seed_weather_openmeteo(force)
     results["daily_subba_demand"] = seed_daily_subba_demand(force)
+    results["raw_energy_data"] = seed_raw_energy_data(force)
 
     # New dataset seeds
     results["eia861m_monthly"] = seed_eia861m_monthly(force)
@@ -369,6 +372,62 @@ def seed_weather_openmeteo(force: bool = False) -> int:
         session.commit()
     logger.info(f"Seeded {len(records)} weather_openmeteo records")
     return len(records)
+
+
+def seed_raw_energy_data(force: bool = False) -> int:
+    """Load da_hrl_lmps(1).csv into raw_energy_data table."""
+    csv_path = RAW_DIR / "da_hrl_lmps(1).csv"
+    if not csv_path.exists():
+        logger.warning("No da_hrl_lmps(1).csv found — skipping raw energy data seed")
+        return 0
+
+    with get_sync_session() as session:
+        if not force:
+            count = session.query(func.count(RawEnergyData.id)).scalar()
+            if count > 0:
+                logger.info(f"raw_energy_data already has {count} rows — skipping")
+                return count
+
+        logger.info("Reading raw energy data from da_hrl_lmps(1).csv...")
+        # Since CSV is 43MB, we read it into a pandas DataFrame
+        df = pd.read_csv(csv_path)
+        
+        # Filter for major New Jersey zones
+        nj_zones = {"PSEG", "JCPL", "AECO", "RECO"}
+        df_filtered = df[df["zone"].isin(nj_zones)].copy()
+        
+        logger.info(f"Filtered to {len(df_filtered)} NJ zone rows. Seeding in bulk...")
+        
+        # Convert timestamp to datetime
+        df_filtered["timestamp"] = pd.to_datetime(df_filtered["datetime_beginning_utc"])
+        
+        # Group by timestamp and zone, averaging the prices
+        df_grouped = df_filtered.groupby(["timestamp", "zone"], as_index=False).agg(
+            total_lmp_da=("total_lmp_da", "mean"),
+            congestion_price_da=("congestion_price_da", "mean"),
+            marginal_loss_price_da=("marginal_loss_price_da", "mean")
+        )
+        
+        # Prepare list of mappings
+        mappings = []
+        for _, row in df_grouped.iterrows():
+            mappings.append({
+                "timestamp": row["timestamp"],
+                "region_id": str(row["zone"]),
+                "source": "pjm",
+                "price_per_mwh": float(row["total_lmp_da"]) if pd.notna(row["total_lmp_da"]) else None,
+                "congestion_per_mwh": float(row["congestion_price_da"]) if pd.notna(row["congestion_price_da"]) else None,
+                "loss_per_mwh": float(row["marginal_loss_price_da"]) if pd.notna(row["marginal_loss_price_da"]) else None
+            })
+            
+        # Bulk insert
+        chunk_size = 10000
+        for i in range(0, len(mappings), chunk_size):
+            session.bulk_insert_mappings(RawEnergyData, mappings[i : i + chunk_size])
+            session.commit()
+            
+    logger.info(f"Seeded {len(mappings)} raw_energy_data records")
+    return len(mappings)
 
 
 def seed_daily_subba_demand(force: bool = False) -> int:

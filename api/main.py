@@ -93,29 +93,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Data loading failed: {e}")
 
-    # ── Step 2b: Build real benchmark from EIA data ──────────────────────────
+    # ── Step 2b: Load state benchmark dataset ────────────────────────────────
     try:
         processed_path = PROJECT_ROOT / "data" / "processed" / "state_benchmark.parquet"
-        price_path = data_dir / "Avg_price_Electricity.xlsx"
-        sales_path = data_dir / "salesofelectricity.xlsx"
+        fallback_path = data_dir / "state_benchmark.parquet"
 
-        if price_path.exists() and sales_path.exists():
-            from data_pipeline.benchmark_builder import build_state_benchmark
-            app_state["benchmark_df"] = build_state_benchmark(price_path, sales_path)
-            logger.info(f"EIA benchmark built: {len(app_state['benchmark_df'])} rows, "
-                        f"{app_state['benchmark_df']['state'].nunique()} states")
-        elif processed_path.exists():
+        if processed_path.exists():
             app_state["benchmark_df"] = pd.read_parquet(processed_path)
             logger.info(f"Loaded cached benchmark: {len(app_state['benchmark_df'])} rows")
         else:
-            app_state["benchmark_df"] = pd.read_parquet(data_dir / "state_benchmark.parquet")
+            app_state["benchmark_df"] = pd.read_parquet(fallback_path)
             logger.info(f"Loaded legacy benchmark: {len(app_state['benchmark_df'])} rows")
     except Exception as e:
-        logger.warning(f"Benchmark build failed, falling back: {e}")
-        try:
-            app_state["benchmark_df"] = pd.read_parquet(data_dir / "state_benchmark.parquet")
-        except Exception:
-            logger.error("No benchmark data available")
+        logger.error(f"Benchmark loading failed: {e}")
+
 
     # Ensure 'region' and 'state_name' columns exist in loaded benchmark dataframe
     if app_state.get("benchmark_df") is not None:
