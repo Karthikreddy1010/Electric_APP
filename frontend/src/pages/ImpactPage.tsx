@@ -181,6 +181,39 @@ const ImpactPage = () => {
   const [scenario, setScenario] = useState<string | null>(null);
   const [prevUploadedBillId, setPrevUploadedBillId] = useState<string | null>(null);
 
+  // ─── Tariff Optimization Engine States ──────────────────────────────────────
+  const [optimizationResults, setOptimizationResults] = useState<any>(null);
+  const [optimizing, setOptimizing] = useState(false);
+  const [appliedTariffId, setAppliedTariffId] = useState<number | null>(null);
+  const [applyMessage, setApplyMessage] = useState<string | null>(null);
+
+  const runTariffOptimization = async () => {
+    try {
+      setOptimizing(true);
+      const res = await axios.get('/impact/tariff-optimization?customer_id=USR_001');
+      setOptimizationResults(res.data);
+    } catch (err) {
+      console.error("Tariff optimization failed:", err);
+    } finally {
+      setOptimizing(false);
+    }
+  };
+
+  const handleApplyTariff = async (tariffId: number) => {
+    try {
+      const res = await axios.post(`/impact/tariff-optimization/apply?customer_id=USR_001&tariff_id=${tariffId}`);
+      setAppliedTariffId(tariffId);
+      setApplyMessage(res.data.message);
+      setTimeout(() => setApplyMessage(null), 4000);
+    } catch (err) {
+      console.error("Failed to apply tariff:", err);
+    }
+  };
+
+  useEffect(() => {
+    runTariffOptimization();
+  }, []);
+
   if (uploadedBill?.customer_id !== prevUploadedBillId) {
     setPrevUploadedBillId(uploadedBill?.customer_id ?? null);
     if (uploadedBill?.usage_kwh) {
@@ -1117,6 +1150,146 @@ const ImpactPage = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Part III.5: Enterprise Tariff Optimization Engine */}
+      <div className="space-y-6 font-sans">
+        <div className="border-l-4 border-emerald-500 pl-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
+          <div>
+            <h3 className="text-base font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+              <Leaf size={18} className="text-emerald-500" /> Part III.5: Rate & Tariff Optimization Engine
+            </h3>
+            <p className="text-xs text-text-secondary">Simulate and compare all local schedules. Identify off-peak generation and demand reduction opportunities.</p>
+          </div>
+          <button
+            onClick={runTariffOptimization}
+            disabled={optimizing}
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw size={12} className={optimizing ? "animate-spin" : ""} />
+            {optimizing ? "Optimizing..." : "Analyze Rate Plans"}
+          </button>
+        </div>
+
+        {applyMessage && (
+          <div className="bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 p-3.5 rounded-md text-xs font-bold animate-pulse flex items-center gap-2">
+            <CheckCircle2 size={16} />
+            <span>{applyMessage}</span>
+          </div>
+        )}
+
+        {optimizationResults && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+            {/* Recommendation summary card */}
+            <div className="panel-operational border-emerald-500/20 bg-emerald-500/5 space-y-4">
+              <div className="flex justify-between items-center border-b border-emerald-500/10 pb-2">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-emerald-600">Engine Recommendation</span>
+                <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500 text-white">Top Match</span>
+              </div>
+              
+              <div className="space-y-1">
+                <span className="text-[9px] text-text-secondary uppercase font-semibold">Recommended Rate Schedule</span>
+                <h4 className="text-xs font-bold text-text-primary">{optimizationResults.recommendation.best_tariff_name}</h4>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[9px] text-text-secondary uppercase font-semibold block">Annual Savings</span>
+                  <span className="text-base font-bold text-emerald-600 font-mono-numbers">
+                    ${optimizationResults.recommendation.annual_savings_usd.toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-text-secondary uppercase font-semibold block">Payback Period</span>
+                  <span className="text-base font-bold text-text-primary font-mono-numbers">
+                    {optimizationResults.recommendation.payback_period_months} mo
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[9px] text-text-secondary uppercase font-semibold block">Risk Profile</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded border block w-fit ${
+                    optimizationResults.recommendation.risk_level === 'Low'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {optimizationResults.recommendation.risk_level} Risk
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[9px] text-text-secondary uppercase font-semibold block">Confidence Level</span>
+                  <span className="text-[10px] text-text-primary flex items-center gap-1 font-bold">
+                    <ShieldCheck size={14} className="text-emerald-500" />
+                    {optimizationResults.recommendation.confidence_level}
+                  </span>
+                </div>
+              </div>
+
+              <div className="border-t border-emerald-500/10 pt-3">
+                <span className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider block mb-1">Financial Reasoning</span>
+                <p className="text-xs text-text-primary leading-relaxed">{optimizationResults.recommendation.reasoning}</p>
+              </div>
+            </div>
+
+            {/* Compared Rate Schedules Grid */}
+            <div className="lg:col-span-2 panel-operational space-y-4">
+              <h4 className="text-xs font-bold text-text-secondary uppercase tracking-widest">Rate Comparison Matrix</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left">
+                  <thead>
+                    <tr className="border-b border-border-hairline text-text-secondary uppercase tracking-widest text-[9px]">
+                      <th className="py-2.5">Rate Schedule Name</th>
+                      <th className="py-2.5 text-right">Fixed Monthly</th>
+                      <th className="py-2.5 text-right">Energy Rate</th>
+                      <th className="py-2.5 text-right">Proj. Annual Cost</th>
+                      <th className="py-2.5 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-hairline/50 font-mono-numbers">
+                    {optimizationResults.comparison.map((t: any) => {
+                      const isBest = t.id === optimizationResults.recommendation.best_tariff_id;
+                      const isApplied = appliedTariffId === t.id;
+                      return (
+                        <tr key={t.id} className={`hover:bg-bg-secondary/40 transition-colors ${isBest ? "bg-emerald-500/5 font-semibold" : ""}`}>
+                          <td className="py-3 font-sans text-text-primary">
+                            <div className="flex items-center gap-1.5">
+                              {t.name}
+                              {isBest && (
+                                <span className="bg-emerald-100 text-emerald-800 text-[8px] font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                                  Optimal
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 text-right">${t.fixed_monthly.toFixed(2)}/mo</td>
+                          <td className="py-3 text-right">${t.energy_rate.toFixed(4)}/kWh</td>
+                          <td className={`py-3 text-right font-bold ${isBest ? "text-emerald-600" : "text-text-primary"}`}>
+                            ${t.simulated_annual_cost.toLocaleString()}
+                          </td>
+                          <td className="py-3 text-right font-sans">
+                            <button
+                              onClick={() => handleApplyTariff(t.id)}
+                              disabled={isApplied}
+                              className={`px-3 py-1.5 rounded text-[10px] font-bold shadow-xs cursor-pointer transition-all ${
+                                isApplied
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-bg-surface hover:bg-bg-secondary border border-border-hairline text-text-primary hover:border-text-secondary/45"
+                              }`}
+                            >
+                              {isApplied ? "Applied Rate" : "Switch Tariff"}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* DYNAMIC COMPONENT CONTRIBUTION TABLE */}

@@ -402,3 +402,115 @@ async def get_day_ahead_lmp(
         logger.error(f"Error querying raw energy LMP data: {e}")
         raise HTTPException(500, f"Database error: {e}")
 
+
+# ── Wholesale PJM LMP Nodal Extensions ────────────────────────────────────────
+
+from data_pipeline.pjm_lmp_fetcher import sync_pjm_lmps
+
+
+def _ensure_pjm_lmp_seeded():
+    """Ensure PJM nodal LMP tables are populated; otherwise run seed on-demand."""
+    engine = _get_engine()
+    try:
+        count = pd.read_sql("SELECT COUNT(*) as cnt FROM pjm_lmp_nodes", con=engine).iloc[0]["cnt"]
+        if count == 0:
+            logger.info("PJM LMP nodes table is empty. Running seeding on-demand...")
+            sync_pjm_lmps(limit_nodes=25, limit_days=14)
+    except Exception as e:
+        logger.error(f"Failed to check/seed PJM LMP nodes: {e}")
+
+
+@router.get("/grid/nodes")
+@cached(ttl=60)
+async def get_grid_nodes():
+    """
+    Get all grid pricing nodes in PJM with coordinates and latest LMP prices.
+    Used to render the interactive regional nodal congestion map.
+    """
+    _ensure_pjm_lmp_seeded()
+    engine = _get_engine()
+
+    query = text("""
+        SELECT 
+            n.node_id, 
+            n.name, 
+            n.zone, 
+            n.latitude, 
+            n.longitude,
+            h.timestamp,
+            h.total_lmp,
+            h.energy_comp,
+            h.congestion_comp,
+            h.loss_comp
+        FROM pjm_lmp_nodes n
+        LEFT JOIN pjm_lmp_hourly h ON n.node_id = h.node_id AND h.timestamp = (
+            SELECT MAX(timestamp) FROM pjm_lmp_hourly WHERE node_id = n.node_id
+        )
+    """)
+
+    try:
+        df = pd.read_sql(query, con=engine)
+        if df.empty:
+            return []
+
+        # Convert datetimes to ISO string
+        records = []
+        for _, row in df.iterrows():
+            ts = row.get("timestamp")
+            ts_str = ts.isoformat() if (ts is not None and hasattr(ts, "isoformat")) else None
+            
+            records.append({
+                "node_id": str(row["node_id"]),
+                "name": str(row["name"]),
+                "zone": str(row["zone"]),
+                "latitude": float(row["latitude"]),
+                "longitude": float(row["longitude"]),
+                "latest_update": ts_str,
+                "total_lmp": float(row["total_lmp"]) if pd.notna(row.get("total_lmp")) else 45.5,
+                "energy_comp": float(row["energy_comp"]) if pd.notna(row.get("energy_comp")) else 42.0,
+                "congestion_comp": float(row["congestion_comp"]) if pd.notna(row.get("congestion_comp")) else 2.5,
+                "loss_comp": float(row["loss_comp"]) if pd.notna(row.get("loss_comp")) else 1.0,
+            })
+        return records
+    except Exception as e:
+        logger.error(f"Error querying grid nodes: {e}")
+        raise HTTPException(500, f"Database query error: {e}")
+
+
+@router.get("/grid/nodes/{node_id}/history")
+@cached(ttl=60)
+async def get_node_lmp_history(node_id: str):
+    """
+    Get hourly historical LMP price components for a node.
+    Used for local time-series visualizations.
+    """
+    engine = _get_engine()
+    query = text("""
+        SELECT timestamp, total_lmp, energy_comp, congestion_comp, loss_comp
+        FROM pjm_lmp_hourly
+        WHERE node_id = :node_id
+        ORDER BY timestamp ASC
+        LIMIT 336 -- last 14 days of hourly data
+    """)
+
+    try:
+        df = pd.read_sql(query, con=engine, params={"node_id": node_id})
+        if df.empty:
+            raise HTTPException(404, f"No history found for node {node_id}")
+
+        records = []
+        for _, row in df.iterrows():
+            ts = row["timestamp"]
+            ts_str = ts.isoformat() if hasattr(ts, "isoformat") else str(ts)
+            records.append({
+                "timestamp": ts_str,
+                "total_lmp": float(row["total_lmp"]),
+                "energy_comp": float(row["energy_comp"]),
+                "congestion_comp": float(row["congestion_comp"]),
+                "loss_comp": float(row["loss_comp"]),
+            })
+        return records
+    except Exception as e:
+        logger.error(f"Error querying node history: {e}")
+        raise HTTPException(500, f"Database query error: {e}")
+

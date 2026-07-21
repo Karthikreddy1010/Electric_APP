@@ -5,7 +5,8 @@
  * Architecture rule: Overview summarizes.
  * Preserves all underlying data hooks, calculations, routing, and interactions.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useBill } from '../../context/BillContext.tsx';
 import { useNavigation } from '../../context/NavigationContext.tsx';
 import { useUserDashboard, useInvalidateDashboard } from '../../hooks/useUserDashboard.ts';
@@ -27,6 +28,7 @@ import {
   Activity,
   CheckCircle2,
   AlertTriangle,
+  RefreshCw,
   ChevronRight,
   Sliders,
   Award,
@@ -357,10 +359,16 @@ const ExecutiveHeader = ({
   utilityName,
   billingCycle,
   tariff,
+  dashboardMode,
+  setDashboardMode,
+  loadingMeter,
 }: {
   utilityName: string;
   billingCycle: string;
   tariff: string;
+  dashboardMode: 'billing' | 'metering';
+  setDashboardMode: (mode: 'billing' | 'metering') => void;
+  loadingMeter?: boolean;
 }) => {
   return (
     <div className="workspace-glass rounded-xl p-4 md:p-5 mb-6">
@@ -379,9 +387,35 @@ const ExecutiveHeader = ({
             Operational telemetry and high-precision financial analysis for enterprise facilities
           </p>
         </div>
+ 
+        {/* Active Context Indicators & Mode Selector */}
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <div className="flex items-center gap-1 bg-bg-secondary p-0.5 rounded-lg border border-border-hairline">
+            <button
+              onClick={() => setDashboardMode('billing')}
+              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer font-semibold ${
+                dashboardMode === 'billing'
+                  ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs font-bold'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Billing
+            </button>
+            <button
+              onClick={() => setDashboardMode('metering')}
+              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer font-semibold flex items-center gap-1.5 ${
+                dashboardMode === 'metering'
+                  ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs font-bold'
+                  : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Smart Meter
+              {loadingMeter && (
+                <RefreshCw size={10} className="animate-spin text-primary-blue" />
+              )}
+            </button>
+          </div>
 
-        {/* Active Context Indicators */}
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs">
           <div className="px-3 py-1.5 rounded-lg bg-bg-secondary border border-border-hairline flex flex-col">
             <span className="text-[9px] uppercase font-bold text-text-secondary tracking-wider">Utility Provider</span>
             <span className="font-semibold text-text-primary truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
@@ -408,8 +442,6 @@ const ExecutiveHeader = ({
     </div>
   );
 };
-
-// ─── 2. KPI Cards ─────────────────────────────────────────────────────────────
 interface KpiCardProps {
   id: string;
   label: string;
@@ -1014,6 +1046,7 @@ const QuickActions = () => {
 };
 
 // ─── Main Mission Control Dashboard Component ──────────────────────────────────
+// ─── Main Mission Control Dashboard Component ──────────────────────────────────
 const MissionControlDashboard = () => {
   const { uploadedBill } = useBill();
   const navigate = useNavigation();
@@ -1031,13 +1064,41 @@ const MissionControlDashboard = () => {
   const stateRank = kpisFromDb?.state_rank ?? (currentBill > 2000 ? 4 : 8);
   const savingsOpportunity = ((kpisFromDb as unknown as Record<string, number>)?.savings_opportunity) ?? (uploadedBill?.total_bill ? Math.max(0, Math.round((currentBill - 118.0) * 100) / 100) : 4350.00);
 
-  const utilityName = uploadedBill?.utility ?? 'Pacific Power & Light';
+  const utilityName = uploadedBill?.utility ?? 'Public Service Electric & Gas Co';
   const billingCycle = uploadedBill?.billing_period ?? 'Oct 1 - Oct 31, 2024';
   const tariff = uploadedBill?.rate_schedule ?? 'TOU-8-R Commercial High Demand';
 
+  // ─── Smart Meter State & Fetching ───────────────────────────────────────────
+  const [dashboardMode, setDashboardMode] = useState<'billing' | 'metering'>('billing');
+  const [smartMeterData, setSmartMeterData] = useState<any>(null);
+  const [smartMeterHourly, setSmartMeterHourly] = useState<any>(null);
+  const [smartMeterDemand, setSmartMeterDemand] = useState<any>(null);
+  const [loadingMeter, setLoadingMeter] = useState(false);
 
+  useEffect(() => {
+    async function loadSmartMeter() {
+      if (dashboardMode !== 'metering') return;
+      try {
+        setLoadingMeter(true);
+        const liveRes = await apiClient.get('/smart-meter/live-status?customer_id=USR_001');
+        setSmartMeterData(liveRes.data);
+        
+        const hourlyRes = await apiClient.get('/smart-meter/hourly?customer_id=USR_001');
+        setSmartMeterHourly(hourlyRes.data);
+        
+        const demandRes = await apiClient.get('/smart-meter/demand-history?customer_id=USR_001');
+        setSmartMeterDemand(demandRes.data);
+      } catch (err) {
+        console.warn("Failed to load smart meter data:", err);
+      } finally {
+        setLoadingMeter(false);
+      }
+    }
+    loadSmartMeter();
+  }, [dashboardMode]);
 
-  const alerts = [
+  // Billing view alerts
+  const billingAlerts = [
     {
       severity: 'high' as const,
       title: 'Peak Demand Spike Alert',
@@ -1133,6 +1194,59 @@ const MissionControlDashboard = () => {
     },
   ];
 
+  // Helper values for Smart Meter dashboard representation
+  const meterKpis = smartMeterData || {
+    current_demand_kw: 2.45,
+    current_power_factor: 0.96,
+    voltage: 121.2,
+    today_consumption_kwh: 38.60,
+    peak_demand_kw: 4.80,
+    peak_hour: "18:00",
+    base_load_kw: 0.65,
+    status: "online",
+    alerts: [
+      {
+        severity: 'medium' as const,
+        title: 'Overnight HVAC Running',
+        description: 'Nighttime demand baseline remains elevated at 0.65 kW (should drop to 0.40 kW).',
+        actionText: 'View load profile'
+      }
+    ]
+  };
+
+  const dummyHourly = [
+    { hour: "00:00", usage_kwh: 0.65 },
+    { hour: "02:00", usage_kwh: 0.58 },
+    { hour: "04:00", usage_kwh: 0.60 },
+    { hour: "06:00", usage_kwh: 1.10 },
+    { hour: "08:00", usage_kwh: 1.95 },
+    { hour: "10:00", usage_kwh: 2.30 },
+    { hour: "12:00", usage_kwh: 2.10 },
+    { hour: "14:00", usage_kwh: 2.65 },
+    { hour: "16:00", usage_kwh: 3.40 },
+    { hour: "18:00", usage_kwh: 4.80 },
+    { hour: "20:00", usage_kwh: 2.20 },
+    { hour: "22:00", usage_kwh: 0.95 }
+  ];
+  
+  const hourlyChartData = smartMeterHourly?.hourly_data || dummyHourly;
+
+  const dummyHeatmap = [];
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  for (let d of days) {
+    for (let h = 0; h < 24; h++) {
+      let base = [0.6, 0.5, 0.5, 0.6, 0.9, 1.4, 1.8, 2.0, 1.8, 1.6, 1.5, 1.6, 1.7, 2.2, 2.8, 3.4, 4.2, 4.8, 3.6, 2.8, 2.0, 1.4, 0.9, 0.7][h];
+      let factor = d === "Sat" || d === "Sun" ? 0.75 : 1.0;
+      dummyHeatmap.push({
+        day: d,
+        hour: h,
+        value: base * factor * (0.9 + Math.random() * 0.2)
+      });
+    }
+  }
+  
+  const heatmapData = smartMeterDemand?.heatmap || dummyHeatmap;
+
   return (
     <div className="space-y-6 pb-16 font-sans bg-slate-50/50 min-h-screen p-4 md:p-6 lg:p-8 rounded-2xl border border-slate-200/60">
       {/* 1. Executive Dashboard Header */}
@@ -1140,91 +1254,285 @@ const MissionControlDashboard = () => {
         utilityName={utilityName}
         billingCycle={billingCycle}
         tariff={tariff}
+        dashboardMode={dashboardMode}
+        setDashboardMode={setDashboardMode}
+        loadingMeter={loadingMeter}
       />
 
-      {/* 2. KPI Summary Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-        {KPI_CARDS.map((kpi) => (
-          kpi.id === 'kpi-forecast' ? (
-            <ForecastKpiCard 
-              key={kpi.id} 
-              forecastResults={dashboardData?.forecast_results} 
-              navigate={navigate} 
-            />
-          ) : (
-            <ExecutiveKpiCard key={kpi.id} {...kpi} />
-          )
-        ))}
-      </div>
-
-      {/* 3. Executive AI Summary Focal Point */}
-      <ExecutiveAiSummary
-        currentBill={currentBill}
-        billChangePct={billChangePct}
-        savingsOpportunity={savingsOpportunity}
-        forecastBill={forecastBill}
-        aiStatus={dashboardData?.ai_status}
-        aiExplanation={dashboardData?.ai_explanation || dashboardData?.explanation || undefined}
-        activeBillId={dashboardData?.active_bill_id || undefined}
-      />
-
-      {/* 4. Main Analytics Grid (2-column layout with expanded Smart Alerts) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
-        {/* Left Column: Recent Billing History */}
-        <div className="lg:col-span-5 workspace-glass rounded-xl p-5 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-hairline">
-              <div>
-                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-                  <FileText size={16} className="text-primary-blue" /> Recent Billing History
-                </h3>
-                <p className="text-xs text-text-secondary mt-0.5">Historical audited monthly invoices</p>
-              </div>
-              <button
-                onClick={() => navigate('Bill Analysis')}
-                className="text-xs font-bold text-primary-blue hover:opacity-85 transition-all cursor-pointer"
-              >
-                Full History →
-              </button>
-            </div>
-            <RecentBillsCard limit={4} compact />
-          </div>
-        </div>
-
-        {/* Right Column: Expanded Smart Alerts */}
-        <div className="lg:col-span-7 workspace-glass rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-border-hairline">
-            <div>
-              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-                <ShieldAlert size={16} className="text-warning-amber" /> Smart Alerts & Facility Exceptions
-              </h3>
-              <p className="text-xs text-text-secondary mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
-            </div>
-            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-warning-amber/10 text-warning-amber border border-warning-amber/20">
-              3 Active Exceptions
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {alerts.map((al, i) => (
-              <SmartAlertCard
-                key={i}
-                severity={al.severity}
-                title={al.title}
-                description={al.description}
-                actionText={al.actionText}
-                onAction={() => navigate('Impact & Simulation')}
-              />
+      {dashboardMode === 'billing' ? (
+        <>
+          {/* 2. KPI Summary Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+            {KPI_CARDS.map((kpi) => (
+              kpi.id === 'kpi-forecast' ? (
+                <ForecastKpiCard 
+                  key={kpi.id} 
+                  forecastResults={dashboardData?.forecast_results} 
+                  navigate={navigate} 
+                  />
+              ) : (
+                <ExecutiveKpiCard key={kpi.id} {...kpi} />
+              )
             ))}
           </div>
-        </div>
-      </div>
 
-      {/* 5. Charts Section */}
-      <ChartsSection />
+          {/* 3. Executive AI Summary Focal Point */}
+          <ExecutiveAiSummary
+            currentBill={currentBill}
+            billChangePct={billChangePct}
+            savingsOpportunity={savingsOpportunity}
+            forecastBill={forecastBill}
+            aiStatus={dashboardData?.ai_status}
+            aiExplanation={dashboardData?.ai_explanation || dashboardData?.explanation || undefined}
+            activeBillId={dashboardData?.active_bill_id || undefined}
+          />
 
-      {/* 6. Executive Quick Actions */}
-      <QuickActions />
+          {/* 4. Main Analytics Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+            {/* Left Column: Recent Billing History */}
+            <div className="lg:col-span-5 workspace-glass rounded-xl p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-hairline">
+                  <div>
+                    <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                      <FileText size={16} className="text-primary-blue" /> Recent Billing History
+                    </h3>
+                    <p className="text-xs text-text-secondary mt-0.5">Historical audited monthly invoices</p>
+                  </div>
+                  <button
+                    onClick={() => navigate('Bill Analysis')}
+                    className="text-xs font-bold text-primary-blue hover:opacity-85 transition-all cursor-pointer"
+                  >
+                    Full History →
+                  </button>
+                </div>
+                <RecentBillsCard limit={4} compact />
+              </div>
+            </div>
+
+            {/* Right Column: Expanded Smart Alerts */}
+            <div className="lg:col-span-7 workspace-glass rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border-hairline">
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                    <ShieldAlert size={16} className="text-warning-amber" /> Smart Alerts & Facility Exceptions
+                  </h3>
+                  <p className="text-xs text-text-secondary mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
+                </div>
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-warning-amber/10 text-warning-amber border border-warning-amber/20">
+                  3 Active Exceptions
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {billingAlerts.map((al, i) => (
+                  <SmartAlertCard
+                    key={i}
+                    severity={al.severity}
+                    title={al.title}
+                    description={al.description}
+                    actionText={al.actionText}
+                    onAction={() => navigate('Impact & Simulation')}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 5. Charts Section */}
+          <ChartsSection />
+
+          {/* 6. Executive Quick Actions */}
+          <QuickActions />
+        </>
+      ) : (
+        <>
+          {/* Smart Metering Sub-Dashboard */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+            <ExecutiveKpiCard
+              id="sm-demand"
+              label="Current Demand"
+              value={`${meterKpis.current_demand_kw} kW`}
+              accentColor="#2563eb"
+              utilityIcon={<Zap size={16} />}
+              sparklineData={[1.8, 2.0, 2.4, 2.2, 2.5, meterKpis.current_demand_kw]}
+              statusBadge={{ text: "Live Telemetry", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
+            />
+            <ExecutiveKpiCard
+              id="sm-pf"
+              label="Power Factor"
+              value={`${meterKpis.current_power_factor}`}
+              accentColor="#6366f1"
+              utilityIcon={<Activity size={16} />}
+              sparklineData={[0.95, 0.94, 0.95, 0.96, 0.95, meterKpis.current_power_factor]}
+              statusBadge={{ text: "Optimal (>0.95)", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
+            />
+            <ExecutiveKpiCard
+              id="sm-voltage"
+              label="Line Voltage"
+              value={`${meterKpis.voltage} V`}
+              accentColor="#8b5cf6"
+              utilityIcon={<Activity size={16} />}
+              sparklineData={[120.8, 121.0, 121.2, 120.9, 121.1, meterKpis.voltage]}
+              statusBadge={{ text: "Steady Status", color: "bg-slate-100 text-slate-700 border-slate-200" }}
+            />
+            <ExecutiveKpiCard
+              id="sm-cons"
+              label="Today's Total"
+              value={`${meterKpis.today_consumption_kwh.toFixed(1)} kWh`}
+              accentColor="#0ea5e9"
+              utilityIcon={<Zap size={16} />}
+              sparklineData={[15, 20, 28, 32, 35, meterKpis.today_consumption_kwh]}
+              statusBadge={{ text: "On Track", color: "bg-blue-50 text-blue-700 border-blue-200" }}
+            />
+            <ExecutiveKpiCard
+              id="sm-peak"
+              label="Peak Demand"
+              value={`${meterKpis.peak_demand_kw} kW`}
+              accentColor="#f59e0b"
+              utilityIcon={<BarChart3 size={16} />}
+              sparklineData={[3.5, 4.0, 4.2, 4.5, 4.4, meterKpis.peak_demand_kw]}
+              statusBadge={{ text: `Peak Hour ${meterKpis.peak_hour}`, color: "bg-amber-50 text-amber-700 border-amber-200" }}
+            />
+            <ExecutiveKpiCard
+              id="sm-base"
+              label="Base Load"
+              value={`${meterKpis.base_load_kw} kW`}
+              accentColor="#10b981"
+              utilityIcon={<Award size={16} />}
+              sparklineData={[0.7, 0.68, 0.66, 0.65, 0.65, meterKpis.base_load_kw]}
+              statusBadge={{ text: "Base fraction 26%", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+            {/* 24-Hour Load Curve */}
+            <div className="lg:col-span-8 workspace-glass rounded-xl p-5 flex flex-col justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
+                  <Activity size={16} className="text-primary-blue" /> 24-Hour Load Curve Telemetry
+                </h3>
+                <p className="text-xs text-text-secondary mb-4">Hourly usage profiles from smart meter telemetry</p>
+                
+                <div className="h-64 w-full pt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={hourlyChartData}>
+                      <defs>
+                        <linearGradient id="meterGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9"/>
+                      <XAxis dataKey="hour" stroke="#94a3b8" fontSize={10}/>
+                      <YAxis unit=" kW" stroke="#94a3b8" fontSize={10}/>
+                      <Tooltip formatter={(value) => [`${value} kW`, 'Demand']}/>
+                      <Area type="monotone" dataKey="usage_kwh" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#meterGrad)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Smart Meter Live Alerts */}
+            <div className="lg:col-span-4 workspace-glass rounded-xl p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
+                  <ShieldAlert size={16} className="text-warning-amber" /> Live Telemetry Anomalies
+                </h3>
+                <p className="text-xs text-text-secondary">Instantaneous load curves threshold exceptions</p>
+              </div>
+
+              <div className="space-y-3">
+                {meterKpis.alerts && meterKpis.alerts.length > 0 ? (
+                  meterKpis.alerts.map((al: any, i: number) => (
+                    <SmartAlertCard
+                      key={i}
+                      severity={al.severity || 'medium'}
+                      title={al.title}
+                      description={al.description}
+                      actionText={al.actionText || 'Investigate'}
+                      onAction={() => {}}
+                    />
+                  ))
+                ) : (
+                  <div className="text-center py-10 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                    <CheckCircle2 className="mx-auto text-emerald-500 mb-2" size={24} />
+                    <span className="text-xs font-bold text-slate-800">Telemetry Status Stable</span>
+                    <p className="text-[10px] text-slate-400 font-medium max-w-[200px] mx-auto mt-1">
+                      Zero power spikes, voltage drops, or base load drifts detected in the last 24h.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 7-Day Demand Heatmap */}
+          <div className="workspace-glass rounded-xl p-5">
+            <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
+              <BarChart3 size={16} className="text-primary-blue" /> Hourly Load Intensity Heatmap (kW)
+            </h3>
+            <p className="text-xs text-text-secondary mb-5">Visualizing average power draw per hour (x-axis) across weekdays (y-axis)</p>
+
+            <div className="overflow-x-auto">
+              <div className="min-w-[800px] space-y-2">
+                <div className="flex text-[10px] font-bold text-slate-400 pb-1">
+                  <div className="w-16 shrink-0" />
+                  {Array.from({ length: 24 }).map((_, h) => (
+                    <div key={h} className="flex-1 text-center font-mono">{String(h).padStart(2, '0')}</div>
+                  ))}
+                </div>
+                {days.map((day) => {
+                  const dayReadings = heatmapData.filter((x: any) => x.day === day);
+                  return (
+                    <div key={day} className="flex items-center">
+                      <div className="w-16 text-xs font-bold text-slate-500 shrink-0">{day}</div>
+                      <div className="flex-1 flex gap-0.5">
+                        {Array.from({ length: 24 }).map((_, h) => {
+                          const val = dayReadings.find((x: any) => x.hour === h)?.value || 0.5;
+                          // color intensity mapping: 0.5kW to 5kW
+                          const intensity = Math.min(1, Math.max(0.1, val / 5.0));
+                          const color = intensity > 0.85
+                            ? 'bg-blue-800'
+                            : intensity > 0.65
+                            ? 'bg-blue-600'
+                            : intensity > 0.45
+                            ? 'bg-blue-400'
+                            : intensity > 0.25
+                            ? 'bg-blue-300'
+                            : 'bg-blue-100';
+                          return (
+                            <div
+                              key={h}
+                              className={`flex-1 h-7 rounded ${color} transition-all hover:scale-110 cursor-pointer`}
+                              title={`${day} @ ${h}:00 - Average Load: ${val.toFixed(2)} kW`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="flex justify-end gap-4 text-[10px] text-slate-400 font-semibold mt-3">
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-blue-100" />
+                <span>Base Load (&lt;1 kW)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-blue-400" />
+                <span>Standard (1 - 3 kW)</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-blue-800" />
+                <span>Peak Load (&gt;3 kW)</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

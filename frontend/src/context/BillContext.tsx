@@ -51,6 +51,7 @@ export interface DriversData {
 }
 
 export interface BillData {
+  id?: string;
   customer_id: string;
   utility: string;
   zip_code: string;

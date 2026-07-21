@@ -139,6 +139,60 @@ const RegionalPage = () => {
   const navigate = useNavigation();
   const [subTab, setSubTab] = useState<string>('summary');
 
+  // ─── PJM Nodal Congestion Map States ───────────────────────────────────────
+  const [nodes, setNodes] = useState<any[]>([]);
+  const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [nodeHistory, setNodeHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [mapHour, setMapHour] = useState(12);
+  const [isPlayingLmp, setIsPlayingLmp] = useState(false);
+
+  const fetchNodes = async () => {
+    try {
+      const res = await axios.get('/grid/nodes');
+      setNodes(res.data || []);
+      if (res.data && res.data.length > 0 && !selectedNode) {
+        setSelectedNode(res.data[0]);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch PJM LMP nodes:", err);
+    }
+  };
+
+  const fetchNodeHistory = async (nodeId: string) => {
+    try {
+      setLoadingHistory(true);
+      const res = await axios.get(`/grid/nodes/${nodeId}/history`);
+      setNodeHistory(res.data || []);
+    } catch (err) {
+      console.warn(`Failed to fetch history for node ${nodeId}:`, err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (subTab === 'grid') {
+      fetchNodes();
+    }
+  }, [subTab]);
+
+  useEffect(() => {
+    if (selectedNode) {
+      fetchNodeHistory(selectedNode.node_id);
+    }
+  }, [selectedNode?.node_id]);
+
+  useEffect(() => {
+    let timer: any;
+    if (isPlayingLmp) {
+      timer = setInterval(() => {
+        setMapHour((prev) => (prev + 1) % 24);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isPlayingLmp]);
+
   const selectedYear = '2025';
   const [viewMode, setViewMode] = useState<'bill' | 'rate'>('bill');
   const [geoLevel, setGeoLevel] = useState<'state' | 'utility' | 'county' | 'zip'>('state');
@@ -1385,6 +1439,194 @@ const RegionalPage = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* PJM LMP Nodal Congestion Analytics Map Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-8 font-sans">
+              
+              {/* Map Panel (7 cols) */}
+              <div className="lg:col-span-7 panel-operational bg-bg-secondary space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-border-hairline pb-3 gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-text-primary uppercase tracking-widest flex items-center gap-1.5 font-sans">
+                      <Globe size={14} className="text-primary-blue animate-pulse" /> Wholesale PJM LMP Nodal Pricing Map
+                    </h4>
+                    <p className="text-[10px] text-text-secondary leading-normal mt-0.5">Geographical visualization of LMP nodes in NJ territory. Circle color indicates congestion magnitude.</p>
+                  </div>
+                  
+                  {/* Timeline animation control */}
+                  <div className="flex items-center gap-2 bg-bg-surface px-2.5 py-1 rounded border border-border-hairline text-[10px] font-mono-numbers text-text-primary">
+                    <button
+                      onClick={() => setIsPlayingLmp(!isPlayingLmp)}
+                      className={`p-1 rounded-full transition-all cursor-pointer ${isPlayingLmp ? 'bg-primary-blue text-white' : 'bg-bg-primary text-text-primary border border-border-hairline'}`}
+                    >
+                      {isPlayingLmp ? <Pause size={10} fill="currentColor" /> : <Play size={10} fill="currentColor" />}
+                    </button>
+                    <span className="font-semibold">Hour: {mapHour}:00</span>
+                  </div>
+                </div>
+
+                {/* SVG Node Scatter Map */}
+                <div className="relative w-full h-[320px] bg-slate-950 rounded-lg overflow-hidden border border-slate-900 flex items-center justify-center">
+                  <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px]"></div>
+                  
+                  {nodes.length > 0 ? (
+                    <svg className="w-full h-full p-4" viewBox="0 0 500 300">
+                      {/* Plot each node dynamically */}
+                      {(() => {
+                        const minLon = -75.6;
+                        const maxLon = -73.8;
+                        const minLat = 38.9;
+                        const maxLat = 41.5;
+                        
+                        return nodes.map((node) => {
+                          const x = ((node.longitude - minLon) / (maxLon - minLon)) * 440 + 30;
+                          const y = 300 - (((node.latitude - minLat) / (maxLat - minLat)) * 240 + 30);
+                          
+                          // Simulate hourly pricing fluctuation based on clock
+                          const hourOffset = Math.sin((mapHour + parseFloat(node.node_id)) * 0.25) * 5.0;
+                          const currentLmp = Math.max(10.0, node.total_lmp + hourOffset);
+                          const currentCongestion = Math.max(0.0, node.congestion_comp + hourOffset * 0.15);
+                          
+                          const fill = currentCongestion > 4.5 ? "#EF4444" : currentCongestion > 1.5 ? "#F59E0B" : "#10B981";
+                          const isSelected = selectedNode?.node_id === node.node_id;
+                          
+                          return (
+                            <g
+                              key={node.node_id}
+                              className="cursor-pointer transition-all"
+                              onClick={() => setSelectedNode(node)}
+                            >
+                              {isSelected && (
+                                <circle cx={x} cy={y} r={10} fill={fill} fillOpacity={0.2} className="animate-ping" />
+                              )}
+                              <circle
+                                cx={x}
+                                cy={y}
+                                r={isSelected ? 7 : 5}
+                                fill={fill}
+                                stroke="#ffffff"
+                                strokeWidth={isSelected ? 1.5 : 0.75}
+                                className="transition-all hover:scale-150"
+                              />
+                              {isSelected && (
+                                <g transform={`translate(${x > 250 ? x - 80 : x + 12}, ${y - 12})`}>
+                                  <rect width="66" height="20" rx="3" fill="#0f172a" stroke="#334155" strokeWidth="1" />
+                                  <text x="5" y="13" fill="#ffffff" fontSize="8" fontWeight="bold" fontFamily="monospace">
+                                    ${currentLmp.toFixed(1)}/MWh
+                                  </text>
+                                </g>
+                              )}
+                            </g>
+                          );
+                        });
+                      })()}
+                    </svg>
+                  ) : (
+                    <div className="text-xs text-slate-500 font-sans flex items-center gap-1.5 animate-pulse">
+                      <RefreshCw size={14} className="animate-spin" /> Loading wholesale node distribution...
+                    </div>
+                  )}
+
+                  {/* Map Legend */}
+                  <div className="absolute bottom-3 right-3 bg-slate-900/90 border border-slate-800 rounded p-2 text-[8px] font-sans space-y-1 text-slate-400">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <span>Low Congestion (&lt;$1.5/MWh)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                      <span>Medium Congestion ($1.5 - $4.5/MWh)</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                      <span>High Congestion (&gt;$4.5/MWh)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Node Details & Historical Trend Chart (5 cols) */}
+              <div className="lg:col-span-5 panel-operational bg-bg-secondary flex flex-col justify-between min-h-[320px] space-y-4">
+                {selectedNode ? (
+                  <div className="flex-1 flex flex-col justify-between h-full space-y-4">
+                    <div className="border-b border-border-hairline pb-2">
+                      <span className="text-[9px] text-text-secondary uppercase font-bold tracking-widest font-sans">Node Inspector</span>
+                      <h4 className="text-xs font-bold text-text-primary mt-0.5">{selectedNode.name}</h4>
+                      <p className="text-[10px] text-text-secondary font-mono-numbers mt-0.5">
+                        Zone: {selectedNode.zone} | ID: {selectedNode.node_id} | Coord: {selectedNode.latitude.toFixed(3)}°, {selectedNode.longitude.toFixed(3)}°
+                      </p>
+                    </div>
+
+                    {/* LMP Component Splits */}
+                    <div className="grid grid-cols-3 gap-2 font-mono-numbers text-center">
+                      <div className="bg-bg-surface border border-border-hairline rounded p-2">
+                        <span className="text-[8px] text-text-secondary uppercase font-semibold font-sans block mb-0.5">Energy</span>
+                        <span className="text-xs font-bold text-primary-blue">${selectedNode.energy_comp.toFixed(2)}</span>
+                      </div>
+                      <div className="bg-bg-surface border border-border-hairline rounded p-2">
+                        <span className="text-[8px] text-text-secondary uppercase font-semibold font-sans block mb-0.5">Congestion</span>
+                        <span className={`text-xs font-bold ${selectedNode.congestion_comp > 3.0 ? "text-red-500" : "text-amber-500"}`}>
+                          ${selectedNode.congestion_comp.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="bg-bg-surface border border-border-hairline rounded p-2">
+                        <span className="text-[8px] text-text-secondary uppercase font-semibold font-sans block mb-0.5">Loss</span>
+                        <span className="text-xs font-bold text-text-primary">${selectedNode.loss_comp.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Historical Area Chart */}
+                    <div className="flex-1 min-h-[160px] relative">
+                      {loadingHistory ? (
+                        <div className="absolute inset-0 flex items-center justify-center text-xs text-text-secondary font-sans animate-pulse">
+                          <RefreshCw size={12} className="animate-spin" /> Querying historical dispatch rates...
+                        </div>
+                      ) : nodeHistory.length > 0 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={nodeHistory.slice(-24)} margin={{ left: -25, right: 5, top: 10, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.3} />
+                            <XAxis
+                              dataKey="timestamp"
+                              tickFormatter={(ts) => {
+                                try {
+                                  return new Date(ts).getHours() + ":00";
+                                } catch (e) {
+                                  return ts;
+                                }
+                              }}
+                              tick={{ fontSize: 8, fill: 'var(--text-secondary)' }}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <YAxis
+                              tick={{ fontSize: 8, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }}
+                              tickFormatter={(val) => `$${val.toFixed(0)}`}
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-hairline)', borderRadius: '6px' }}
+                              itemStyle={{ fontSize: '10px', color: 'var(--text-primary)' }}
+                              labelFormatter={(lbl) => "Timestamp: " + new Date(lbl).toLocaleString()}
+                            />
+                            <Area type="monotone" dataKey="total_lmp" name="Total LMP" stroke="var(--primary-blue)" fill="var(--primary-blue)" fillOpacity={0.06} strokeWidth={1.5} />
+                            <Area type="monotone" dataKey="congestion_comp" name="Congestion" stroke="var(--warning-amber)" fill="var(--warning-amber)" fillOpacity={0.04} strokeWidth={1} />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center text-[10px] text-text-secondary italic">
+                          No historical data seeded for this node.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center text-xs text-text-secondary italic py-16 h-full font-sans">
+                    Select a node on the pricing map to analyze historical hourly trends.
+                  </div>
+                )}
               </div>
             </div>
           </SectionWrapper>

@@ -341,7 +341,15 @@ def merge_market_monthly(billing_df: pd.DataFrame,
 def add_unified_store_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Enrich feature matrix with CPI deflators, utility profile indicators, 
-    and operational metrics (Unified Feature Store).
+    and advanced operational/environmental metrics (Unified Feature Store).
+    
+    Includes:
+      - Scope 2 Emissions & Carbon Intensity
+      - Demand Response Readiness
+      - Peak & Base Load Analytics
+      - Energy Intensity (per sqft)
+      - Portfolio Benchmarking vs regional averages
+      - Weather Normalization
     """
     df = df.copy()
     
@@ -382,26 +390,19 @@ def add_unified_store_features(df: pd.DataFrame) -> pd.DataFrame:
         eia_df = pd.read_sql("SELECT * FROM eia861_master", con=engine)
         if not eia_df.empty:
             # Map utility names
-            # If utility is not specified in df, default to PSE&G
             if "utility_name" not in df.columns:
                 df["utility_name"] = "Public Service Elec & Gas Co"
                 
-            # Clean and match utility_name/state
-            # Merge on year, utility_name
-            # Keep peak_demand, total_load, demand_response_flag, dynamic_pricing_flag, total_customers, total_sales_mwh
             eia_subset = eia_df[[
                 "year", "utility_name", "state", "peak_demand", "total_load", 
                 "demand_response_flag", "dynamic_pricing_flag", "total_customers", 
                 "total_sales_mwh", "avg_price"
             ]].copy()
             
-            # Recompute energy losses proxy if operational data has generation vs load (dummy loss proxy)
-            # For simplicity: grid_loss_pct = 0.05 (standard fallback)
             eia_subset["grid_loss_pct"] = 0.05
             
             df = df.merge(eia_subset, on=["year", "utility_name"], how="left")
             
-            # Fill NaNs with defaults
             df["peak_demand"] = df["peak_demand"].fillna(0.0)
             df["total_load"] = df["total_load"].fillna(0.0)
             df["demand_response_flag"] = df["demand_response_flag"].fillna(0).astype(int)
@@ -423,14 +424,70 @@ def add_unified_store_features(df: pd.DataFrame) -> pd.DataFrame:
             ).reset_index()
             
             if "county" not in df.columns:
-                df["county"] = "Essex"  # default NJ Essex county (PSE&G)
+                df["county"] = "Essex"
                 
             df = df.merge(county_df, on=["year", "county"], how="left")
             df["county_avg_elec_kwh"] = df["county_avg_elec_kwh"].fillna(1000000.0)
             df["county_avg_gas_therms"] = df["county_avg_gas_therms"].fillna(50000.0)
     except Exception as e:
         logger.warning(f"Failed to integrate Community Energy metrics: {e}")
-        
+
+    # 5. Advanced Unified Feature Store Calculations (Carbon, DR, Normalization)
+    usage = df["usage_kwh"] if "usage_kwh" in df.columns else pd.Series(750, index=df.index)
+    
+    # 5a. Carbon Intensity & Scope 2 Emissions
+    # Seasonality in PJM marginal fuel mix: higher in Summer (6,7,8) & Winter (12,1,2)
+    # Average PJM carbon intensity: 380 lbs CO2 / MWh = 172.3 g CO2 / kWh
+    df["carbon_intensity_g_kwh"] = 172.3
+    df.loc[df["month"].isin([6, 7, 8]), "carbon_intensity_g_kwh"] = 210.5
+    df.loc[df["month"].isin([12, 1, 2]), "carbon_intensity_g_kwh"] = 190.2
+    
+    # Scope 2 = usage (kWh) * carbon intensity (g/kWh) / 1,000,000 to get Metric Tons
+    df["scope_2_emissions_mt"] = (usage * df["carbon_intensity_g_kwh"]) / 1_000_000.0
+    
+    # 5b. Peak & Base Load Analytics
+    # If peak_demand is missing, estimate as usage * 0.005
+    peak_est = df["peak_demand"].replace(0.0, np.nan).fillna(usage * 0.005)
+    # Estimate base load as usage * 0.001
+    base_est = usage * 0.001
+    
+    df["peak_to_base_ratio"] = (peak_est / base_est.clip(lower=0.1)).round(3)
+    df["base_load_fraction"] = (base_est / usage.clip(lower=1)).round(3)
+    
+    # 5c. Demand Response Readiness (Score 0 to 1)
+    # DR Readiness increases with peak-to-base ratio (shiftable loads) and dynamic pricing capability
+    has_smart_meter = 1.0 # assume True for SaaS profiles
+    has_dynamic = df.get("dynamic_pricing_flag", pd.Series(0, index=df.index)).fillna(0).astype(float)
+    df["dr_readiness_score"] = np.clip(0.3 * has_smart_meter + 0.3 * has_dynamic + 0.4 * (df["peak_to_base_ratio"] / 10.0), 0.0, 1.0).round(2)
+    
+    # 5d. Energy Intensity (kWh / sqft)
+    # Default property area of 2000 sqft if not provided in user profile
+    property_sqft = 2000.0
+    df["energy_intensity_kwh_sqft"] = (usage / property_sqft).round(4)
+    
+    # 5e. Portfolio Benchmarking (customer usage vs county/state average)
+    benchmark_usage = df.get("county_avg_elec_kwh", pd.Series(800.0, index=df.index)).fillna(800.0)
+    # scale benchmark down to household scale if county totals are huge
+    if benchmark_usage.mean() > 50000.0:
+        benchmark_usage = benchmark_usage / 1200.0 # household scale factor proxy
+    df["usage_vs_benchmark_ratio"] = (usage / benchmark_usage.clip(lower=1)).round(3)
+    
+    # 5f. Weather Normalization
+    # usage_norm = usage / (1 + beta_hdd * (HDD - HDD_avg) + beta_cdd * (CDD - CDD_avg))
+    hdd = df["monthly_HDD"] if "monthly_HDD" in df.columns else pd.Series(200, index=df.index)
+    cdd = df["monthly_CDD"] if "monthly_CDD" in df.columns else pd.Series(50, index=df.index)
+    
+    # Base seasonal normal HDD/CDD for NJ
+    normal_hdd = 350.0
+    normal_cdd = 100.0
+    
+    # Elasticity proxy coefficients
+    beta_hdd = 0.0012
+    beta_cdd = 0.0025
+    
+    weather_adjustment = 1.0 + beta_hdd * (hdd - normal_hdd) + beta_cdd * (cdd - normal_cdd)
+    df["weather_normalized_usage_kwh"] = (usage / weather_adjustment.clip(lower=0.5)).round(2)
+    
     return df
 
 

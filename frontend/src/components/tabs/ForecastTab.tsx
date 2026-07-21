@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../lib/apiClient.ts';
 import { 
@@ -7,7 +7,7 @@ import {
 import { 
   Calendar, Info, ShieldCheck, Activity, TrendingUp, TrendingDown, Clock, ArrowUpRight, 
   ArrowDownRight, Sparkles, Cpu, Download, RefreshCw, Maximize2, Minimize2, ZoomIn, 
-  AlertCircle, FileSpreadsheet, ShieldAlert
+  AlertCircle, FileSpreadsheet, ShieldAlert, CheckCircle2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -870,6 +870,15 @@ const ForecastTab = () => {
   const [model, setModel] = useState("ensemble");
   const [range, setRange] = useState(30);
 
+  // ─── Anomaly Imputation Studio States ──────────────────────────────────────
+  const [detectionMethod, setDetectionMethod] = useState("mad");
+  const [imputationMethod, setImputationMethod] = useState("linear");
+  const [anomalies, setAnomalies] = useState<any[]>([]);
+  const [resolutions, setResolutions] = useState<Record<string, string>>({});
+  const [compareMetrics, setCompareMetrics] = useState<any>(null);
+  const [resolving, setResolving] = useState(false);
+  const [resolveMsg, setResolveMsg] = useState<string | null>(null);
+
   // Fetch forecast data
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ['forecast', model, range],
@@ -878,6 +887,53 @@ const ForecastTab = () => {
       return res.data;
     }
   });
+
+  const fetchAnomalies = async () => {
+    try {
+      const res = await apiClient.get(`/forecast/anomalies?method=${detectionMethod}`);
+      setAnomalies(res.data.anomalies || []);
+      const initial: Record<string, string> = {};
+      (res.data.anomalies || []).forEach((a: any) => {
+        initial[a.date] = "replace";
+      });
+      setResolutions(initial);
+    } catch (err) {
+      console.warn("Failed to fetch anomalies:", err);
+    }
+  };
+
+  const fetchCompareMetrics = async () => {
+    try {
+      const res = await apiClient.get(`/forecast/compare-cleaned?imputation_method=${imputationMethod}`);
+      setCompareMetrics(res.data);
+    } catch (err) {
+      console.warn("Failed to fetch compare metrics:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnomalies();
+  }, [detectionMethod]);
+
+  useEffect(() => {
+    fetchCompareMetrics();
+  }, [imputationMethod]);
+
+  const handleApplyResolutions = async () => {
+    try {
+      setResolving(true);
+      const res = await apiClient.post('/forecast/anomalies/resolve', { resolutions });
+      setResolveMsg(res.data.message);
+      setTimeout(() => setResolveMsg(null), 4000);
+      refetch();
+      fetchAnomalies();
+      fetchCompareMetrics();
+    } catch (err) {
+      console.error("Failed to resolve anomalies:", err);
+    } finally {
+      setResolving(false);
+    }
+  };
 
   // Handle CSV Report exports
   const handleExport = () => {
@@ -1034,6 +1090,168 @@ const ForecastTab = () => {
             mape={isNaNMetrics ? 0 : data.metrics.MAPE}
             isNaN={isNaNMetrics}
           />
+        </div>
+      </div>
+
+      {/* Part IV: Anomaly Filtering & Imputation Studio */}
+      <div className="space-y-6 font-sans">
+        <div className="border-l-4 border-amber-500 pl-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
+          <div>
+            <h3 className="text-base font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+              <ShieldAlert size={18} className="text-amber-500 animate-pulse" /> Part IV: Anomaly Filtering & Imputation Studio
+            </h3>
+            <p className="text-xs text-text-secondary">Clean time-series gaps, shutdowns, and spikes. Compare forecast accuracy of models trained on raw vs. cleaned data.</p>
+          </div>
+          <button
+            onClick={handleApplyResolutions}
+            disabled={resolving || Object.keys(resolutions).length === 0}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+          >
+            <RefreshCw size={12} className={resolving ? "animate-spin" : ""} />
+            {resolving ? "Re-training..." : "Apply Resolutions & Re-Train"}
+          </button>
+        </div>
+
+        {resolveMsg && (
+          <div className="bg-amber-500/10 text-amber-500 border border-amber-500/20 p-3.5 rounded-md text-xs font-bold animate-pulse flex items-center gap-2">
+            <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+            <span>{resolveMsg}</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* Anomalies Table Card (7 cols) */}
+          <div className="lg:col-span-7 panel-operational space-y-4">
+            <div className="flex justify-between items-center border-b border-border-hairline pb-3">
+              <div className="flex items-center gap-2">
+                <select
+                  value={detectionMethod}
+                  onChange={(e) => setDetectionMethod(e.target.value)}
+                  className="bg-bg-secondary border border-border-hairline px-2.5 py-1.5 rounded-[6px] text-xs font-semibold text-text-primary outline-none cursor-pointer"
+                >
+                  <option value="mad">Rolling Median Abs Dev (MAD)</option>
+                  <option value="iforest">Isolation Forest (ML Outliers)</option>
+                  <option value="zscore">Statistical Z-Score</option>
+                </select>
+              </div>
+              <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded font-bold">
+                {anomalies.length} Detected Outliers
+              </span>
+            </div>
+
+            <div className="overflow-x-auto max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="border-b border-border-hairline text-text-secondary uppercase tracking-widest text-[9px]">
+                    <th className="py-2.5">Date</th>
+                    <th className="py-2.5 text-right">Extracted Usage</th>
+                    <th className="py-2.5 text-right">Anomaly Score</th>
+                    <th className="py-2.5 text-right">Resolution Strategy</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-hairline font-mono-numbers">
+                  {anomalies.map((a: any) => {
+                    const scoreColor = a.anomaly_score > 3.5 ? "text-red-500 font-bold" : "text-amber-500";
+                    return (
+                      <tr key={a.date} className="hover:bg-bg-secondary/40 transition-colors">
+                        <td className="py-3 font-sans text-text-primary font-bold">{a.date}</td>
+                        <td className="py-3 text-right text-text-secondary">{a.usage_kwh.toLocaleString()} kWh</td>
+                        <td className={`py-3 text-right ${scoreColor}`}>{a.anomaly_score.toFixed(2)}</td>
+                        <td className="py-3 text-right font-sans">
+                          <select
+                            value={resolutions[a.date] || "replace"}
+                            onChange={(e) => setResolutions({ ...resolutions, [a.date]: e.target.value })}
+                            className="bg-bg-surface border border-border-hairline px-2 py-1 rounded text-xs text-text-primary outline-none cursor-pointer"
+                          >
+                            <option value="replace">Impute (Replace)</option>
+                            <option value="keep">Keep Raw Value</option>
+                            <option value="ignore">Ignore (Exclude)</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {anomalies.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-10 text-center text-text-secondary italic">
+                        No outliers found with current detection parameters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Model Accuracy Comparison Card (5 cols) */}
+          <div className="lg:col-span-5 panel-operational space-y-4">
+            <div className="flex justify-between items-center border-b border-border-hairline pb-3">
+              <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block font-sans">
+                Accuracy Benchmarks
+              </span>
+              <select
+                value={imputationMethod}
+                onChange={(e) => setImputationMethod(e.target.value)}
+                className="bg-bg-secondary border border-border-hairline px-2 py-1 rounded text-xs text-text-primary outline-none cursor-pointer"
+              >
+                <option value="linear">Linear Imputation</option>
+                <option value="ffill">Forward Fill Imputation</option>
+                <option value="seasonal">Seasonal Mean Imputation</option>
+              </select>
+            </div>
+
+            {compareMetrics ? (
+              <div className="space-y-4">
+                <div className="bg-emerald-500/5 border border-emerald-500/10 p-3.5 rounded-lg text-xs leading-relaxed text-text-primary flex items-center justify-between shadow-sm">
+                  <div>
+                    <span className="text-[9px] uppercase font-bold text-emerald-600 block mb-0.5">Model Optimization Gain</span>
+                    <p className="text-xs text-text-primary">Cleaning anomalies improves model generalization capacity.</p>
+                  </div>
+                  <div className="text-right font-mono-numbers">
+                    <span className="text-xl font-extrabold text-emerald-600">
+                      +{((compareMetrics.metrics.raw.MAPE - compareMetrics.metrics.cleaned.MAPE) / compareMetrics.metrics.raw.MAPE * 100).toFixed(1)}%
+                    </span>
+                    <span className="text-[8px] text-emerald-500 font-bold block uppercase tracking-wider mt-0.5">Error Reduction</span>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead>
+                      <tr className="border-b border-border-hairline text-text-secondary uppercase tracking-widest text-[9px]">
+                        <th className="py-2.5">Validation Metric</th>
+                        <th className="py-2.5 text-right">Raw Model</th>
+                        <th className="py-2.5 text-right">Cleaned Model</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-hairline/50 font-mono-numbers">
+                      <tr>
+                        <td className="py-2.5 font-medium text-text-primary font-sans">MAPE (Percentage Error)</td>
+                        <td className="py-2.5 text-right text-text-secondary">{compareMetrics.metrics.raw.MAPE.toFixed(2)}%</td>
+                        <td className="py-2.5 text-right font-bold text-emerald-600">{compareMetrics.metrics.cleaned.MAPE.toFixed(2)}%</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2.5 font-medium text-text-primary font-sans">MAE (Mean Abs. Error)</td>
+                        <td className="py-2.5 text-right text-text-secondary">{compareMetrics.metrics.raw.MAE.toLocaleString()} MW</td>
+                        <td className="py-2.5 text-right font-bold text-emerald-600">{compareMetrics.metrics.cleaned.MAE.toLocaleString()} MW</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2.5 font-medium text-text-primary font-sans">RMSE (Variance Error)</td>
+                        <td className="py-2.5 text-right text-text-secondary">{compareMetrics.metrics.raw.RMSE.toLocaleString()} MW</td>
+                        <td className="py-2.5 text-right font-bold text-emerald-600">{compareMetrics.metrics.cleaned.RMSE.toLocaleString()} MW</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="py-10 text-center text-text-secondary italic text-xs">
+                Analyzing raw vs. cleaned dataset models...
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
     </div>

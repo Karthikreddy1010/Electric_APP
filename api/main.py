@@ -381,6 +381,8 @@ from api.routes.service_territory import router as service_territory_router
 from api.routes.customers import router as customers_router
 from api.routes.bill import router as bill_router
 from api.routes.llm import router as llm_router
+from api.routes.smart_meter import router as smart_meter_router
+from api.routes.tariff_optimization import router as tariff_optimization_router
 
 app.include_router(health_router)
 app.include_router(auth_router)
@@ -411,6 +413,8 @@ app.include_router(tariffs_router)
 app.include_router(service_territory_router)
 app.include_router(customers_router)
 app.include_router(bill_router)
+app.include_router(smart_meter_router)
+app.include_router(tariff_optimization_router)
 
 
 

@@ -206,6 +206,19 @@ async def benchmark_utility_comparison(state: str = Query("NJ")):
     if df.empty:
         return []
 
+    # Replace any NaN or Null values with compliant JSON fallbacks
+    df = df.fillna({
+        "utility_name": "",
+        "utility_id": 0,
+        "year": 0,
+        "total_customers": 0,
+        "total_sales_mwh": 0.0,
+        "total_revenue": 0.0,
+        "peak_demand": 0.0,
+        "total_load": 0.0,
+        "avg_price": 0.0
+    })
+
     utils_list = []
     for _, row in df.iterrows():
         total_cust = float(row.get("total_customers", 0) or 0)

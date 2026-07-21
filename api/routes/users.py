@@ -437,6 +437,71 @@ async def regenerate_user_bill_ai(
     }
 
 
+class CorrectionRequest(BaseModel):
+    field_name: str
+    original_value: str
+    corrected_value: str
+
+
+@router.post("/me/bills/{bill_id}/corrections")
+async def save_bill_correction(
+    bill_id: str,
+    body: CorrectionRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Saves a manual correction for an extracted OCR field.
+    Updates corresponding attributes on the bill record and logs audit trail.
+    """
+    res = await db.execute(
+        select(UserBill).where(UserBill.id == bill_id, UserBill.user_id == current_user.id)
+    )
+    bill = res.scalars().first()
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    if not bill.bill_data:
+        bill.bill_data = {}
+    bill.bill_data[body.field_name] = body.corrected_value
+
+    if body.field_name == "usage_kwh":
+        try:
+            bill.usage_kwh = float(body.corrected_value)
+        except ValueError:
+            pass
+    elif body.field_name == "total_bill":
+        try:
+            bill.total_bill = float(body.corrected_value)
+        except ValueError:
+            pass
+    elif body.field_name == "utility":
+        bill.utility = body.corrected_value
+    elif body.field_name == "billing_period":
+        bill.billing_period = body.corrected_value
+
+    db.add(bill)
+
+    audit = AuditLog(
+        user_id=current_user.id,
+        event_type="bill_correction_saved",
+        ip_address="127.0.0.1",
+        details={
+            "bill_id": bill_id,
+            "field_name": body.field_name,
+            "original_value": body.original_value,
+            "corrected_value": body.corrected_value
+        }
+    )
+    db.add(audit)
+    await db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Successfully corrected {body.field_name}."
+    }
+
+
 @router.delete("/me/bills/{id}")
 async def delete_user_bill(
     id: str,

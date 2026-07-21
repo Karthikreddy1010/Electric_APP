@@ -938,6 +938,84 @@ class CustomerBillOCR(Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  ENTERPRISE GAP EXTENSION MODELS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SmartMeterInterval(Base):
+    """
+    Real-time Smart Meter analytics interval data.
+    Stores hourly/sub-hourly usage, demand, voltage, and power factor.
+    """
+    __tablename__ = "smart_meter_intervals"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    customer_id = Column(String(30), ForeignKey("customer_profiles.customer_id", ondelete="CASCADE"), nullable=False, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    usage_kwh = Column(Float, nullable=False)
+    demand_kw = Column(Float)
+    voltage = Column(Float)
+    power_factor = Column(Float)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("customer_id", "timestamp", name="uq_smart_meter_ts"),
+        Index("ix_smart_meter_cust_ts", "customer_id", "timestamp"),
+    )
+
+
+class PjmLmpNode(Base):
+    """
+    PJM pricing nodes with geographical coordinate locations.
+    """
+    __tablename__ = "pjm_lmp_nodes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(50), nullable=False, unique=True, index=True)
+    name = Column(String(100), nullable=False)
+    zone = Column(String(20), nullable=False, index=True)  # PSEG, JCPL, AECO, RECO
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+
+
+class PjmLmpHourly(Base):
+    """
+    Hourly Locational Marginal Pricing (LMP) components from PJM.
+    """
+    __tablename__ = "pjm_lmp_hourly"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    node_id = Column(String(50), ForeignKey("pjm_lmp_nodes.node_id", ondelete="CASCADE"), nullable=False, index=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    total_lmp = Column(Float, nullable=False)
+    energy_comp = Column(Float, nullable=False)
+    congestion_comp = Column(Float, nullable=False)
+    loss_comp = Column(Float, nullable=False)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("node_id", "timestamp", name="uq_pjm_node_ts"),
+    )
+
+
+class UserBillCorrection(Base):
+    """
+    Persisted manual corrections of OCR-extracted fields by SaaS users.
+    """
+    __tablename__ = "user_bill_corrections"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    bill_id = Column(String(36), ForeignKey("user_bills.id", ondelete="CASCADE"), nullable=False, index=True)
+    field_name = Column(String(50), nullable=False)
+    original_value = Column(Text)
+    corrected_value = Column(Text)
+    corrected_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("bill_id", "field_name", name="uq_bill_field_correction"),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  AUTH MODELS — imported here so Base.metadata.create_all includes them
 # ─────────────────────────────────────────────────────────────────────────────
 # This import must remain at the bottom to avoid a circular import

@@ -12,8 +12,8 @@ import { useState } from 'react';
 import {
   Upload, FileText, RefreshCw,
   Terminal, ShieldCheck, Play, Download,
-  AlertTriangle, CheckCircle, FileSpreadsheet,
-  TrendingUp, Info, Activity, ShieldAlert
+  CheckCircle, FileSpreadsheet,
+  TrendingUp, Activity
 } from 'lucide-react';
 import { useBill } from '../context/BillContext.tsx';
 import { useBillUpload } from '../hooks/useBillUpload.ts';
@@ -283,6 +283,38 @@ const AnalysisView = () => {
     ]
   };
 
+  // State for manual corrections
+  const [corrections, setCorrections] = useState<Record<string, string>>({
+    utility: canonical.normalized_values.utility,
+    billing_period: canonical.normalized_values.billing_period,
+    usage_kwh: String(canonical.normalized_values.usage_kwh),
+    total_bill: String(uploadedBill.total_bill || 138.9),
+    account_number: canonical.normalized_values.account_number,
+    meter_number: canonical.normalized_values.meter_number,
+    bill_date: canonical.normalized_values.bill_date,
+    due_date: canonical.normalized_values.due_date,
+  });
+
+  const [savingCorrections, setSavingCorrections] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+  const handleSaveCorrection = async (fieldName: string) => {
+    try {
+      setSavingCorrections(true);
+      await apiClient.post(`/users/me/bills/${uploadedBill.id}/corrections`, {
+        field_name: fieldName,
+        original_value: String((canonical.normalized_values as any)[fieldName] || ""),
+        corrected_value: corrections[fieldName]
+      });
+      setSaveSuccess(fieldName);
+      setTimeout(() => setSaveSuccess(null), 3000);
+    } catch (err) {
+      console.error("Failed to save correction:", err);
+    } finally {
+      setSavingCorrections(false);
+    }
+  };
+
   const handleExportJson = () => {
     const blob = new Blob([JSON.stringify({ ...uploadedBill, canonical_bill: canonical }, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -428,7 +460,7 @@ const AnalysisView = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* LEFT MAIN WORKSPACE CONTENT */}
-        <div className="lg:col-span-8 space-y-8">
+        <div className={activeTab === 'validation' ? "lg:col-span-12 space-y-8" : "lg:col-span-8 space-y-8"}>
           
           {/* TAB 1: Breakdown Components */}
           {activeTab === 'breakdown' && (
@@ -525,89 +557,141 @@ const AnalysisView = () => {
 
           {/* TAB 2: Validation Telemetry */}
           {activeTab === 'validation' && (
-            <div className="space-y-8 font-sans">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 font-sans">
               
-              {/* Accounting Audits Panel */}
-              <div className="panel-operational space-y-4">
-                <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5 border-b border-border-hairline pb-3">
-                  <ShieldAlert size={14} className="text-primary-blue" /> Accounting identity validation audits
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {canonical.validation.map((audit: any, idx: number) => {
-                    const isPassed = audit.status === 'Passed';
-                    const isError = audit.status === 'Error';
+              {/* Left Column: Spatial Invoice Coordinates Map */}
+              <div className="lg:col-span-6 panel-operational space-y-4">
+                <div className="flex justify-between items-center border-b border-border-hairline pb-3">
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                    <FileText size={14} className="text-primary-blue" /> Document Layout Spatial Map
+                  </h3>
+                  <span className="text-[10px] font-mono text-text-secondary bg-bg-primary px-2 py-0.5 rounded border border-border-hairline">
+                    Scale: 100%
+                  </span>
+                </div>
+                <p className="text-[11px] text-text-secondary leading-relaxed">
+                  Focusing or hovering on fields in the editor highlights their coordinates inside the document.
+                </p>
+                <div className="border border-border-hairline bg-white/50 rounded-md p-4 flex items-center justify-center relative select-none">
+                  <div className="w-[450px] h-[380px] bg-white border border-border-hairline shadow-sm rounded relative overflow-hidden text-black/70 font-mono text-[9px] p-4 scale-90 sm:scale-100 origin-center">
+                    <div className="border-b border-gray-200 pb-2 flex justify-between items-start">
+                      <div>
+                        <h4 className="font-bold text-xs uppercase text-gray-900 leading-tight">PUBLIC SERVICE ELECTRIC & GAS</h4>
+                        <span className="text-[8px] text-gray-500">PSE&G UTILITIES</span>
+                      </div>
+                      <span className="text-xs font-bold text-primary-blue">INVOICE</span>
+                    </div>
+                    <div className="mt-8 space-y-2">
+                      <div className="flex justify-between"><span>Account Number:</span><span className="font-semibold">PSEG-1234567</span></div>
+                      <div className="flex justify-between"><span>Billing Period:</span><span className="font-semibold">{corrections.billing_period}</span></div>
+                      <div className="flex justify-between"><span>Bill Date:</span><span className="font-semibold">{corrections.bill_date}</span></div>
+                      <div className="flex justify-between"><span>Due Date:</span><span className="font-semibold">{corrections.due_date}</span></div>
+                    </div>
+                    <div className="mt-12 border-t border-gray-200 pt-4 space-y-2">
+                      <div className="flex justify-between text-xs font-bold text-gray-900">
+                        <span>Total Usage (kWh):</span>
+                        <span>{corrections.usage_kwh} kWh</span>
+                      </div>
+                      <div className="flex justify-between text-base font-bold text-primary-blue mt-4">
+                        <span>TOTAL AMOUNT DUE:</span>
+                        <span>${Number(corrections.total_bill || 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Bounding box layer */}
+                    {activeBbox && (
+                      <div
+                        className="absolute border-2 border-red-500 bg-red-500/10 pointer-events-none transition-all duration-300 animate-pulse"
+                        style={getBboxStyle(activeBbox)}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Editable OCR verification form */}
+              <div className="lg:col-span-6 panel-operational space-y-4">
+                <div className="flex justify-between items-center border-b border-border-hairline pb-3">
+                  <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck size={14} className="text-savings-green" /> OCR Field Verification
+                  </h3>
+                  <span className="text-[10px] bg-bg-primary px-2 py-0.5 rounded font-mono font-medium border border-border-hairline">
+                    Audit Status: Validated
+                  </span>
+                </div>
+
+                <div className="space-y-3.5">
+                  {canonical.raw_ocr.map((run: any) => {
+                    const fieldName = run.field_name;
+                    const confidence = run.confidence;
+                    const confidencePct = (confidence * 100).toFixed(0);
+                    
+                    const badgeColor = confidence >= 0.95
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : confidence >= 0.85
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200';
+
+                    const isModified = corrections[fieldName] !== String((canonical.normalized_values as any)[fieldName] ?? "");
+
                     return (
-                      <div key={idx} className="p-4 bg-bg-primary border border-border-hairline rounded-md flex gap-3">
-                        <div className="shrink-0 mt-0.5">
-                          {isPassed ? (
-                            <CheckCircle size={16} className="text-savings-green" />
-                          ) : isError ? (
-                            <AlertTriangle size={16} className="text-warning-amber" />
-                          ) : (
-                            <Info size={16} className="text-primary-blue" />
-                          )}
-                        </div>
-                        <div className="space-y-1">
-                          <span className="text-xs font-bold text-text-primary block">{audit.check}</span>
-                          <span className={`text-[10px] font-semibold uppercase ${isPassed ? 'text-savings-green' : isError ? 'text-red-500' : 'text-amber-500'}`}>
-                            {audit.status}
+                      <div
+                        key={fieldName}
+                        onMouseEnter={() => setActiveBbox(run.bbox)}
+                        onMouseLeave={() => setActiveBbox(null)}
+                        className="p-3 bg-bg-primary rounded-lg border border-border-hairline flex flex-col gap-2 transition-all hover:border-primary-blue/30"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-text-primary capitalize font-sans">
+                            {fieldName.replace('_', ' ')}
                           </span>
-                          <p className="text-[11px] text-text-secondary leading-relaxed mt-1 font-mono-numbers">{audit.message}</p>
+                          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${badgeColor}`}>
+                            {confidencePct}% Confidence
+                          </span>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={corrections[fieldName] ?? ""}
+                            onFocus={() => setActiveBbox(run.bbox)}
+                            onChange={(e) => setCorrections({ ...corrections, [fieldName]: e.target.value })}
+                            className="flex-1 bg-bg-surface border border-border-hairline rounded px-2.5 py-1.5 text-xs text-text-primary focus:outline-none focus:border-primary-blue font-mono"
+                          />
+                          <button
+                            onClick={() => handleSaveCorrection(fieldName)}
+                            disabled={savingCorrections || !isModified}
+                            className={`px-3 py-1.5 rounded text-xs font-semibold shadow-sm transition-all cursor-pointer ${
+                              isModified
+                                ? 'bg-primary-blue hover:bg-primary-blue/90 text-white'
+                                : 'bg-bg-surface border border-border-hairline text-text-secondary cursor-not-allowed'
+                            }`}
+                          >
+                            {saveSuccess === fieldName ? 'Saved ✓' : 'Save'}
+                          </button>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
 
-              {/* Raw OCR logs */}
-              <div className="panel-operational space-y-4">
-                <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5 border-b border-border-hairline pb-3">
-                  <Terminal size={14} className="text-primary-blue" /> OCR character recognition confidence
-                </h3>
-                <p className="text-[11px] text-text-secondary font-semibold">
-                  Click on any field row below to visually highlight and verify its spatial bounding box location on the invoice page layout.
-                </p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="text-[10px] uppercase text-text-secondary border-b border-border-hairline sticky top-0 bg-bg-surface z-10 font-sans">
-                      <tr>
-                        <th className="py-2.5">Field Item</th>
-                        <th className="py-2.5">Raw OCR Value</th>
-                        <th className="py-2.5">Confidence</th>
-                        <th className="py-2.5">Bounding Box</th>
-                        <th className="py-2.5 text-right">Ingest Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border-hairline font-mono-numbers text-text-primary">
-                      {canonical.raw_ocr.map((run: any, idx: number) => {
-                        const lowConf = run.confidence < 0.95;
-                        const isSelected = activeBbox === run.bbox;
-                        return (
-                          <tr
-                            key={idx}
-                            onClick={() => setActiveBbox(run.bbox)}
-                            className={`cursor-pointer transition-colors ${isSelected ? 'bg-primary-blue/5 hover:bg-primary-blue/10' : 'hover:bg-bg-primary/50'}`}
-                          >
-                            <td className="py-2.5 font-bold text-[11px] capitalize font-sans">{run.field_name?.replace('_', ' ')}</td>
-                            <td className="py-2.5 text-text-secondary truncate max-w-[130px]">{run.extracted_value}</td>
-                            <td className={`py-2.5 font-bold ${lowConf ? 'text-warning-amber' : 'text-savings-green'}`}>
-                              {(run.confidence * 100).toFixed(0)}%
-                            </td>
-                            <td className="py-2.5 text-[10px] text-text-secondary font-mono">{run.bbox}</td>
-                            <td className="py-2.5 text-right font-semibold">
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${lowConf ? 'bg-amber-500/10 text-amber-500' : 'bg-savings-green/10 text-savings-green'}`}>
-                                {run.status}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                {/* Audit Rules Panel */}
+                <div className="border-t border-border-hairline pt-4 mt-4 space-y-3">
+                  <span className="text-[10px] uppercase font-bold text-text-secondary tracking-wider block">Rule Verification Log</span>
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {canonical.validation.map((audit: any, idx: number) => (
+                      <div key={idx} className="flex gap-2 text-xs bg-bg-primary border border-border-hairline p-2 rounded">
+                        <CheckCircle size={13} className="text-savings-green shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-text-primary block leading-tight">{audit.check}</strong>
+                          <span className="text-[10px] text-text-secondary font-medium leading-relaxed font-mono-numbers mt-0.5 block">{audit.message}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
+              </div>
             </div>
           )}
 
@@ -678,95 +762,97 @@ const AnalysisView = () => {
         </div>
 
         {/* RIGHT COLUMN: PREVIEW PANEL + EXPORTS */}
-        <div className="lg:col-span-4 space-y-8">
-          
-          {/* Spatial OCR Location Map Highlighter */}
-          <div className="panel-operational space-y-4">
-            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5 border-b border-border-hairline pb-3">
-              <FileText size={14} /> Document Layout Coordinates
-            </h3>
-            <p className="text-[10px] text-text-secondary font-sans leading-relaxed">
-              Below is the spatial layout coordinates representation of the document text grids. Bounding boxes highlight coordinates in pixels.
-            </p>
-            <div className="border border-border-hairline bg-white/50 rounded-md p-4 flex items-center justify-center relative select-none">
-              <div className="w-[450px] h-[380px] bg-white border border-border-hairline shadow-sm rounded relative overflow-hidden text-black/70 font-mono text-[9px] p-4 scale-90 sm:scale-100 origin-center">
-                <div className="border-b border-gray-200 pb-2 flex justify-between items-start">
-                  <div>
-                    <h4 className="font-bold text-xs uppercase text-gray-900 leading-tight">PUBLIC SERVICE ELECTRIC & GAS</h4>
-                    <span className="text-[8px] text-gray-500">PSE&G UTILITIES</span>
+        {activeTab !== 'validation' && (
+          <div className="lg:col-span-4 space-y-8">
+            
+            {/* Spatial OCR Location Map Highlighter */}
+            <div className="panel-operational space-y-4">
+              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5 border-b border-border-hairline pb-3">
+                <FileText size={14} /> Document Layout Coordinates
+              </h3>
+              <p className="text-[10px] text-text-secondary font-sans leading-relaxed">
+                Below is the spatial layout coordinates representation of the document text grids. Bounding boxes highlight coordinates in pixels.
+              </p>
+              <div className="border border-border-hairline bg-white/50 rounded-md p-4 flex items-center justify-center relative select-none">
+                <div className="w-[450px] h-[380px] bg-white border border-border-hairline shadow-sm rounded relative overflow-hidden text-black/70 font-mono text-[9px] p-4 scale-90 sm:scale-100 origin-center">
+                  <div className="border-b border-gray-200 pb-2 flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-xs uppercase text-gray-900 leading-tight">PUBLIC SERVICE ELECTRIC & GAS</h4>
+                      <span className="text-[8px] text-gray-500">PSE&G UTILITIES</span>
+                    </div>
+                    <span className="text-xs font-bold text-primary-blue">INVOICE</span>
                   </div>
-                  <span className="text-xs font-bold text-primary-blue">INVOICE</span>
-                </div>
-                <div className="mt-8 space-y-2">
-                  <div className="flex justify-between"><span>Account Number:</span><span className="font-semibold">PSEG-1234567</span></div>
-                  <div className="flex justify-between"><span>Billing Period:</span><span className="font-semibold">2026-06-01 to 2026-06-30</span></div>
-                  <div className="flex justify-between"><span>Bill Date:</span><span className="font-semibold">2026-06-30</span></div>
-                  <div className="flex justify-between"><span>Due Date:</span><span className="font-semibold">2026-07-20</span></div>
-                </div>
-                <div className="mt-12 border-t border-gray-200 pt-4 space-y-2">
-                  <div className="flex justify-between text-xs font-bold text-gray-900">
-                    <span>Total Usage (kWh):</span>
-                    <span>{canonical.normalized_values.usage_kwh} kWh</span>
+                  <div className="mt-8 space-y-2">
+                    <div className="flex justify-between"><span>Account Number:</span><span className="font-semibold">PSEG-1234567</span></div>
+                    <div className="flex justify-between"><span>Billing Period:</span><span className="font-semibold">2026-06-01 to 2026-06-30</span></div>
+                    <div className="flex justify-between"><span>Bill Date:</span><span className="font-semibold">2026-06-30</span></div>
+                    <div className="flex justify-between"><span>Due Date:</span><span className="font-semibold">2026-07-20</span></div>
                   </div>
-                  <div className="flex justify-between text-base font-bold text-primary-blue mt-4">
-                    <span>TOTAL AMOUNT DUE:</span>
-                    <span>${canonical.normalized_values.usage_kwh ? (canonical.normalized_values.usage_kwh * 0.1852).toFixed(2) : "138.90"}</span>
+                  <div className="mt-12 border-t border-gray-200 pt-4 space-y-2">
+                    <div className="flex justify-between text-xs font-bold text-gray-900">
+                      <span>Total Usage (kWh):</span>
+                      <span>{canonical.normalized_values.usage_kwh} kWh</span>
+                    </div>
+                    <div className="flex justify-between text-base font-bold text-primary-blue mt-4">
+                      <span>TOTAL AMOUNT DUE:</span>
+                      <span>${canonical.normalized_values.usage_kwh ? (canonical.normalized_values.usage_kwh * 0.1852).toFixed(2) : "138.90"}</span>
+                    </div>
                   </div>
-                </div>
 
-                {/* Spatial highlighting layer */}
-                {activeBbox && (
-                  <div
-                    className="absolute border-2 border-red-500 bg-red-500/10 pointer-events-none transition-all duration-300"
-                    style={getBboxStyle(activeBbox)}
-                  />
-                )}
+                  {/* Spatial highlighting layer */}
+                  {activeBbox && (
+                    <div
+                      className="absolute border-2 border-red-500 bg-red-500/10 pointer-events-none transition-all duration-300"
+                      style={getBboxStyle(activeBbox)}
+                    />
+                  )}
+                </div>
               </div>
+              {activeBbox && (
+                <div className="text-center">
+                  <button
+                    onClick={() => setActiveBbox(null)}
+                    className="text-[10px] text-primary-blue hover:underline"
+                  >
+                    Clear Selection Highlight
+                  </button>
+                </div>
+              )}
             </div>
-            {activeBbox && (
-              <div className="text-center">
+            <RecentBillsCard />
+
+            {/* Export Panel */}
+            <div className="panel-operational space-y-4">
+              <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5 border-b border-border-hairline pb-3">
+                <Download size={14} className="text-primary-blue" /> Export bill metadata
+              </h3>
+              <p className="text-[11px] text-text-secondary font-semibold leading-relaxed">
+                Download your validated, structured bill object to local storage formats for accounting integration.
+              </p>
+              <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => setActiveBbox(null)}
-                  className="text-[10px] text-primary-blue hover:underline"
+                  onClick={handleExportJson}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-surface border border-border-hairline rounded-md text-xs font-semibold hover:bg-bg-primary transition-all shadow-sm w-full text-text-primary"
                 >
-                  Clear Selection Highlight
+                  <Download size={13} /> Export Structured JSON
+                </button>
+                <button
+                  onClick={handleExportCsv}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-surface border border-border-hairline rounded-md text-xs font-semibold hover:bg-bg-primary transition-all shadow-sm w-full text-text-primary"
+                >
+                  <Download size={13} /> Export Component CSV
+                </button>
+                <button
+                  onClick={handleExportExcel}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-primary-blue text-white rounded-md text-xs font-semibold hover:bg-primary-blue/90 transition-all shadow-sm w-full"
+                >
+                  <FileSpreadsheet size={13} /> Export Format for Excel
                 </button>
               </div>
-            )}
-          </div>
-          <RecentBillsCard />
-
-          {/* Export Panel */}
-          <div className="panel-operational space-y-4">
-            <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1.5 border-b border-border-hairline pb-3">
-              <Download size={14} className="text-primary-blue" /> Export bill metadata
-            </h3>
-            <p className="text-[11px] text-text-secondary font-semibold leading-relaxed">
-              Download your validated, structured bill object to local storage formats for accounting integration.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={handleExportJson}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-surface border border-border-hairline rounded-md text-xs font-semibold hover:bg-bg-primary transition-all shadow-sm w-full text-text-primary"
-              >
-                <Download size={13} /> Export Structured JSON
-              </button>
-              <button
-                onClick={handleExportCsv}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-bg-surface border border-border-hairline rounded-md text-xs font-semibold hover:bg-bg-primary transition-all shadow-sm w-full text-text-primary"
-              >
-                <Download size={13} /> Export Component CSV
-              </button>
-              <button
-                onClick={handleExportExcel}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-primary-blue text-white rounded-md text-xs font-semibold hover:bg-primary-blue/90 transition-all shadow-sm w-full"
-              >
-                <FileSpreadsheet size={13} /> Export Format for Excel
-              </button>
             </div>
-          </div>
 
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

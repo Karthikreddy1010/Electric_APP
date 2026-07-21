@@ -1,8 +1,45 @@
-from fastapi import APIRouter
+"""
+Plan Simulation Engine Endpoints.
+Provides Monte Carlo comparisons of fixed and variable rate energy tariffs under volatility.
+"""
+from __future__ import annotations
+
+import logging
+import numpy as np
+import pandas as pd
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+
 from api.schemas import SimulateRequest, SimulateResult
 from api.services.bill_impact_engine import bill_impact_engine, COMPONENT_TYPES
+from models.simulation_model import PlanSimulator
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["dashboard"])
+
+
+class PlanSimulationRequest(BaseModel):
+    monthly_usage_kwh: float = Field(750.0, ge=50, le=10000)
+    n_simulations: int = Field(1000, ge=100, le=10000)
+    horizon_months: int = Field(12, ge=1, le=24)
+
+
+class PlanComparisonRecord(BaseModel):
+    provider: str
+    plan_type: str
+    base_rate: float
+    volatility: float
+    expected_annual_cost: float
+    std_annual_cost: float
+    p5_cost: float
+    p95_cost: float
+    risk_score: float
+
+
+class PlanSimulationResponse(BaseModel):
+    comparison: List[PlanComparisonRecord]
+    recommended: PlanComparisonRecord
 
 
 @router.post("/simulate", response_model=SimulateResult)
@@ -31,3 +68,42 @@ async def simulate_impact(req: SimulateRequest):
         formula=formula,
         explanation=f"If {', '.join(comp_labels)} change, your bill increases/decreases by approximately {sim['total_impact']} based on historical elasticity."
     )
+
+
+@router.post("/plan-simulation", response_model=PlanSimulationResponse)
+async def run_plan_simulation(req: PlanSimulationRequest):
+    """
+    Runs a Monte Carlo simulation over fixed, variable, and green tariff plans
+    to compare risk and expected costs over a horizon.
+    """
+    try:
+        # Create dummy historical usage based on input average
+        hist_usage = np.full(12, req.monthly_usage_kwh)
+        
+        # Define candidate plans
+        plans = [
+            {"provider": "PSEG Standard Fixed", "type": "fixed", "rate": 0.125, "volatility": 0.0},
+            {"provider": "CleanGreen Variable", "type": "variable", "rate": 0.115, "volatility": 0.08},
+            {"provider": "Direct Energy Fixed", "type": "fixed", "rate": 0.132, "volatility": 0.0},
+            {"provider": "Voltaic Dynamic TOU", "type": "variable", "rate": 0.119, "volatility": 0.05}
+        ]
+        
+        simulator = PlanSimulator(
+            n_simulations=req.n_simulations,
+            horizon_months=req.horizon_months,
+            random_state=42
+        )
+        
+        df_comparison = simulator.compare_plans(plans, hist_usage)
+        records = df_comparison.to_dict(orient="records")
+        
+        # Select best plan based on expected annual cost
+        best_record = min(records, key=lambda x: x["expected_annual_cost"])
+        
+        return PlanSimulationResponse(
+            comparison=records,
+            recommended=best_record
+        )
+    except Exception as e:
+        logger.exception("Error executing plan simulation")
+        raise HTTPException(500, f"Monte Carlo simulation failure: {str(e)}")

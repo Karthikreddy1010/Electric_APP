@@ -50,7 +50,8 @@ def _get_database_url(async_mode: bool = False) -> str:
     Priority:
         1. DATABASE_URL environment variable
         2. DB_POSTGRES_* environment variables (assembled)
-        3. SQLite fallback for local development
+        3. Local PostgreSQL default (localhost)
+        4. SQLite fallback
     """
     # Direct URL override
     url = os.environ.get("DATABASE_URL")
@@ -61,22 +62,17 @@ def _get_database_url(async_mode: bool = False) -> str:
             url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
         return url
 
-    # Assemble from parts
-    host = os.environ.get("DB_POSTGRES_HOST")
-    if host:
-        port = os.environ.get("DB_POSTGRES_PORT", "5432")
-        user = os.environ.get("DB_POSTGRES_USER", "electric")
-        password = os.environ.get("DB_POSTGRES_PASSWORD", "electric")
-        dbname = os.environ.get("DB_POSTGRES_DB", "electricity_dw")
+    # Assemble from parts or default to localhost
+    host = os.environ.get("DB_POSTGRES_HOST", "localhost")
+    port = os.environ.get("DB_POSTGRES_PORT", "5432")
+    user = os.environ.get("DB_POSTGRES_USER", "electric")
+    password = os.environ.get("DB_POSTGRES_PASSWORD", "electric")
+    dbname = os.environ.get("DB_POSTGRES_DB", "electricity_dw")
 
-        if async_mode:
-            return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{dbname}"
-        else:
-            return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
-
-    # Fallback to SQLite
-    logger.info("No PostgreSQL config found — using SQLite fallback")
-    return DEFAULT_ASYNC_SQLITE if async_mode else DEFAULT_SQLITE
+    if async_mode:
+        return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{dbname}"
+    else:
+        return f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -87,15 +83,9 @@ _async_engine: Optional[AsyncEngine] = None
 _async_session_factory: Optional[async_sessionmaker[AsyncSession]] = None
 
 
-async def init_db() -> None:
-    """
-    Initialize the async database engine and create all tables.
-    Called during FastAPI lifespan startup.
-    """
+async def _init_db_with_url(url: str) -> None:
+    """Helper to initialize database and run meta-updates with a given URL."""
     global _async_engine, _async_session_factory
-
-    url = _get_database_url(async_mode=True)
-    logger.info(f"Initializing database: {url.split('@')[-1] if '@' in url else url}")
 
     engine_kwargs = {
         "echo": os.environ.get("DB_ECHO", "false").lower() == "true",
@@ -110,15 +100,20 @@ async def init_db() -> None:
         })
 
     _async_engine = create_async_engine(url, **engine_kwargs)
+    
+    # Test connection before proceeding
+    async with _async_engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+
     _async_session_factory = async_sessionmaker(
         _async_engine, class_=AsyncSession, expire_on_commit=False
     )
 
-    # Create tables (in production, use Alembic migrations instead)
+    # Create tables
     async with _async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    # Handle SQLite/existing DB migrations: add active_bill_id if missing in a separate transaction
+    # Handle migrations: add active_bill_id if missing
     try:
         async with _async_engine.begin() as conn:
             await conn.execute(text("ALTER TABLE auth_users ADD COLUMN active_bill_id VARCHAR(36)"))
@@ -143,7 +138,32 @@ async def init_db() -> None:
         except Exception:
             pass
 
-    logger.info("Database initialized — all tables created/verified")
+
+async def init_db() -> None:
+    """
+    Initialize the async database engine and create all tables.
+    Called during FastAPI lifespan startup.
+    """
+    url = _get_database_url(async_mode=True)
+    logger.info(f"Trying to initialize database: {url.split('@')[-1] if '@' in url else url}")
+
+    try:
+        await _init_db_with_url(url)
+        logger.info("Database initialized successfully with primary connection URL.")
+    except Exception as e:
+        if "postgresql" in url:
+            logger.warning(
+                f"Failed to initialize primary PostgreSQL database ({e}). "
+                f"Falling back to SQLite for local development."
+            )
+            try:
+                await _init_db_with_url(DEFAULT_ASYNC_SQLITE)
+                logger.info("Database initialized successfully with SQLite fallback.")
+            except Exception as e_sqlite:
+                logger.error(f"SQLite fallback also failed: {e_sqlite}")
+                raise e_sqlite
+        else:
+            raise e
 
 
 async def close_db() -> None:
@@ -190,26 +210,50 @@ _sync_engine = None
 _sync_session_factory = None
 
 
+def _init_sync_engine_with_url(url: str) -> None:
+    global _sync_engine, _sync_session_factory
+    engine_kwargs = {
+        "echo": os.environ.get("DB_ECHO", "false").lower() == "true",
+    }
+    if "postgresql" in url:
+        engine_kwargs.update({
+            "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
+            "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "10")),
+            "pool_pre_ping": True,
+            "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE", "1800")),
+        })
+    _sync_engine = create_engine(url, **engine_kwargs)
+    
+    # Test connection
+    with _sync_engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+        
+    _sync_session_factory = sessionmaker(bind=_sync_engine)
+    Base.metadata.create_all(_sync_engine)
+
+
 def _get_sync_engine():
     """Lazy-initialize the sync engine."""
     global _sync_engine, _sync_session_factory
     if _sync_engine is None:
         url = _get_database_url(async_mode=False)
-        engine_kwargs = {
-            "echo": os.environ.get("DB_ECHO", "false").lower() == "true",
-        }
-        if "postgresql" in url:
-            engine_kwargs.update({
-                "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
-                "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "10")),
-                "pool_pre_ping": True,
-                "pool_recycle": int(os.environ.get("DB_POOL_RECYCLE", "1800")),
-            })
-        _sync_engine = create_engine(url, **engine_kwargs)
-        _sync_session_factory = sessionmaker(bind=_sync_engine)
-
-        # Create tables
-        Base.metadata.create_all(_sync_engine)
+        try:
+            _init_sync_engine_with_url(url)
+            logger.info("Sync engine initialized successfully with primary connection URL.")
+        except Exception as e:
+            if "postgresql" in url:
+                logger.warning(
+                    f"Failed to initialize primary sync PostgreSQL engine ({e}). "
+                    f"Falling back to SQLite for local development."
+                )
+                try:
+                    _init_sync_engine_with_url(DEFAULT_SQLITE)
+                    logger.info("Sync engine initialized successfully with SQLite fallback.")
+                except Exception as e_sqlite:
+                    logger.error(f"SQLite sync fallback also failed: {e_sqlite}")
+                    raise e_sqlite
+            else:
+                raise e
     return _sync_engine
 
 
