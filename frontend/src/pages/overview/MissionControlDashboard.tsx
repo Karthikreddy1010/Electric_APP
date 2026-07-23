@@ -13,342 +13,185 @@ import { useUserDashboard, useInvalidateDashboard } from '../../hooks/useUserDas
 import apiClient from '../../lib/apiClient.ts';
 import RecentBillsCard from '../../components/shared/RecentBillsCard.tsx';
 import {
-  TrendingUp,
-  TrendingDown,
-  ArrowUpRight,
   ShieldAlert,
-  Lightbulb,
   Zap,
   DollarSign,
   FileText,
   Sparkles,
   BarChart3,
-  PieChart,
-  Upload,
   Activity,
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
   ChevronRight,
-  Sliders,
-  Award,
   Info
 } from 'lucide-react';
 
-// ─── Sparkline SVG Helper ─────────────────────────────────────────────────────
-const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const width = 76;
-  const height = 22;
-  const points = data
-    .map((val, idx) => {
-      const x = (idx / (data.length - 1)) * width;
-      const y = height - ((val - min) / range) * (height - 4) - 2;
-      return `${x},${y}`;
-    })
-    .join(' ');
-
-  return (
-    <svg width={width} height={height} className="overflow-visible shrink-0">
-      <polyline
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        points={points}
-      />
-    </svg>
-  );
-};
-
-// ─── Forecast SVG Chart Helper ────────────────────────────────────────────────
-interface ForecastChartProps {
-  historical: { date: string; total_bill: number }[];
-  forecastValue: number;
-  lower: number;
-  upper: number;
+// ─── Reusable Enterprise SaaS KPI Card Component ─────────────────────────────
+interface SaaSExecutiveKpiCardProps {
+  id: string;
+  label: string;
+  value: string;
+  unit?: string;
+  description: string;
+  statusBadge?: { text: string; color: string };
+  icon: React.ReactNode;
+  iconBgColor?: string;
+  targetTab?: string;
+  onClick?: () => void;
 }
 
-const ForecastChart = ({ historical, forecastValue, lower, upper }: ForecastChartProps) => {
-  const histValues = historical.map(h => h.total_bill);
-  const allValues = [...histValues, forecastValue, lower, upper];
-  const minVal = Math.min(...allValues) * 0.95;
-  const maxVal = Math.max(...allValues) * 1.05;
-  const range = maxVal - minVal || 1;
-  const width = 110;
-  const height = 30;
-  const n = histValues.length + 1; // historical + forecast point
-  
-  // Calculate coordinates
-  const points = historical.map((h, i) => {
-    const x = (i / (n - 1)) * width;
-    const y = height - ((h.total_bill - minVal) / range) * (height - 6) - 3;
-    return { x, y, val: h.total_bill };
-  });
-  
-  const fx = width;
-  const fy = height - ((forecastValue - minVal) / range) * (height - 6) - 3;
-  const fyLower = height - ((lower - minVal) / range) * (height - 6) - 3;
-  const fyUpper = height - ((upper - minVal) / range) * (height - 6) - 3;
-  
-  // Last historical point for connecting lines
-  const lastPt = points[points.length - 1];
-  
-  return (
-    <svg width={width} height={height} className="overflow-visible shrink-0">
-      <defs>
-        {/* Shaded confidence interval band */}
-        <linearGradient id="bandGradient" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.0" />
-          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.25" />
-        </linearGradient>
-      </defs>
-      
-      {/* 1. Shaded Confidence Band (Funnel from last historical point to forecast upper/lower bounds) */}
-      {lastPt && (
-        <polygon
-          points={`${lastPt.x},${lastPt.y} ${fx},${fyUpper} ${fx},${fyLower}`}
-          fill="url(#bandGradient)"
-          className="transition-all"
-        />
-      )}
-      
-      {/* 2. Historical Trend Line */}
-      <path
-        d={points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
-        fill="none"
-        stroke="#2563eb"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      
-      {/* 3. Trend Line to Forecast Point */}
-      {lastPt && (
-        <line
-          x1={lastPt.x}
-          y1={lastPt.y}
-          x2={fx}
-          y2={fy}
-          stroke="#f59e0b"
-          strokeWidth="1.5"
-          strokeDasharray="3,3"
-          strokeLinecap="round"
-        />
-      )}
-      
-      {/* 4. Historical Points (solid blue dots) */}
-      {points.map((p, i) => (
-        <circle
-          key={i}
-          cx={p.x}
-          cy={p.y}
-          r="3"
-          fill="#2563eb"
-          className="transition-all"
-        />
-      ))}
-      
-      {/* 5. Forecast Point (amber dot) */}
-      <circle
-        cx={fx}
-        cy={fy}
-        r="4.5"
-        fill="#f59e0b"
-        stroke="#ffffff"
-        strokeWidth="1.5"
-        className="transition-all"
-      />
-    </svg>
-  );
-};
+const SaaSExecutiveKpiCard = ({
+  id,
+  label,
+  value,
+  unit,
+  description,
+  statusBadge,
+  icon,
+  iconBgColor = 'bg-blue-50 text-blue-600 border-blue-100',
+  targetTab,
+  onClick,
+}: SaaSExecutiveKpiCardProps) => {
+  const navigate = useNavigation();
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else if (targetTab) {
+      navigate(targetTab);
+    }
+  };
 
-// ─── Tooltip Helper ───────────────────────────────────────────────────────────
-const InfoTooltip = ({ modelUsed }: { modelUsed?: string }) => {
-  const [show, setShow] = useState(false);
   return (
-    <div className="relative inline-block ml-1 align-middle leading-none">
-      <button 
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        onClick={() => setShow(!show)}
-        className="text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded-full hover:bg-slate-100"
-        aria-label="Forecast Information"
-      >
-        <Info size={12} />
-      </button>
-      {show && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-slate-900 text-white rounded-lg p-3 text-[11px] shadow-lg border border-slate-700 z-50 space-y-2 leading-relaxed">
-          <div>
-            <strong className="text-amber-400 block mb-0.5">How Prediction was Generated</strong>
-            <span>Blended {modelUsed || "Prophet + SARIMA Ensemble"} scaling based on seasonal weather patterns and historical load curves.</span>
-          </div>
-          <div>
-            <strong className="text-amber-400 block mb-0.5">Data Used</strong>
-            <span>3–6 months of user billing history merged with daily Balancing Area demand and NOAA local weather history.</span>
-          </div>
-          <div>
-            <strong className="text-amber-400 block mb-0.5">Forecast Limitations</strong>
-            <span>Assumes consistent facility operations; sensitive to major grid pricing spikes or extreme weather deviations.</span>
-          </div>
-          <div>
-            <strong className="text-amber-400 block mb-0.5">Confidence Meaning</strong>
-            <span>Derived from user billing history length, weather correlation, and grid model prediction MAPE.</span>
-          </div>
-          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
+    <div
+      id={id}
+      onClick={handleClick}
+      className={`h-full bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between group ${
+        targetTab || onClick ? 'cursor-pointer' : 'cursor-default'
+      }`}
+      aria-label={`${label}: ${value}${unit ? ' ' + unit : ''}`}
+    >
+      {/* Top Row: Icon & Status Badge */}
+      <div className="flex items-center justify-between mb-3">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${iconBgColor}`}>
+          {icon}
         </div>
-      )}
+        {statusBadge && (
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border shrink-0 ${statusBadge.color}`}>
+            {statusBadge.text}
+          </span>
+        )}
+      </div>
+
+      {/* KPI Title Row (Full-width for maximum clarity) */}
+      <div className="mb-2">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+          {label}
+        </span>
+      </div>
+
+      {/* Middle Section: Large Metric Value & Unit */}
+      <div className="flex items-baseline gap-1.5 mb-4">
+        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans">
+          {value}
+        </span>
+        {unit && (
+          <span className="text-sm font-medium text-slate-500">{unit}</span>
+        )}
+      </div>
+
+      {/* Bottom Section: Short Description */}
+      <div className="mt-auto pt-2">
+        <p className="text-xs text-slate-500 font-normal leading-relaxed">
+          {description}
+        </p>
+      </div>
     </div>
   );
 };
 
-// ─── Forecast KPI Card ────────────────────────────────────────────────────────
+// ─── Simplified Forecast KPI Card ─────────────────────────────────────────────
 const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; navigate: any }) => {
   const isUnavailable = !forecastResults || forecastResults.status === "unavailable";
   
   if (isUnavailable) {
-    const billsAvailable = forecastResults?.bills_available ?? 0;
-    const progressPct = forecastResults?.readiness_pct ?? Math.round((billsAvailable / 3) * 100);
-    
     return (
       <div
         id="kpi-forecast"
-        className="workspace-glass rounded-xl p-4 transition-all duration-200 flex flex-col justify-between select-none"
-        style={{ borderTop: "3px solid var(--text-secondary)", minHeight: "170px" }}
+        onClick={() => navigate('Forecast')}
+        className="h-full bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer group"
       >
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-bg-secondary text-text-secondary border border-border-hairline shrink-0">
-              <BarChart3 size={16} />
-            </div>
-            <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">Next Month Forecast</span>
+        {/* Top Row: Icon & Status Badge */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-50 text-amber-600 border border-amber-100 shrink-0">
+            <BarChart3 className="w-5 h-5" />
           </div>
-          <div className="text-sm font-extrabold text-slate-400 mt-2">
-            Forecast Unavailable
-          </div>
-          <div className="text-[10px] text-slate-500 font-medium leading-normal mt-1">
-            {forecastResults?.reason || "Upload at least 3–6 consecutive monthly bills to generate a reliable forecast."}
-          </div>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+            Unavailable
+          </span>
         </div>
-        
-        <div className="space-y-1 mt-4">
-          <div className="flex justify-between text-[9px] font-semibold text-text-secondary">
-            <span>Bills Available: {billsAvailable} / 6</span>
-            <span>{progressPct}% Ready</span>
-          </div>
-          <div className="w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden border border-border-hairline">
-            <div 
-              className="h-full bg-text-secondary rounded-full transition-all" 
-              style={{ width: `${Math.min(100, (billsAvailable / 6) * 100)}%` }} 
-            />
-          </div>
-          <div className="text-[9px] text-slate-400 font-medium italic mt-1">
-            Upload additional bills to enable AI forecasting.
-          </div>
+
+        {/* KPI Title Row */}
+        <div className="mb-2">
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+            Next Month Forecast
+          </span>
+        </div>
+
+        {/* Middle Section */}
+        <div className="flex items-baseline gap-1.5 mb-4">
+          <span className="text-2xl sm:text-3xl font-extrabold text-slate-400 tracking-tight font-sans">
+            Unavailable
+          </span>
+        </div>
+
+        {/* Bottom Section */}
+        <div className="mt-auto pt-2">
+          <p className="text-xs text-slate-500 font-normal leading-relaxed">
+            Upload consecutive monthly bills to enable AI forecasting.
+          </p>
         </div>
       </div>
     );
   }
 
-  const {
-    predicted_bill,
-    expected_change_pct,
-    confidence_score,
-    confidence_level,
-    forecast_date,
-    model_used,
-    model_version,
-    key_drivers,
-    confidence_interval,
-    historical_bills
-  } = forecastResults;
-
-  const isPositive = expected_change_pct >= 0;
-  const badgeColor = confidence_level === "Very High" 
-    ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
-    : confidence_level === "High"
-    ? "bg-blue-50 text-blue-700 border-blue-200"
-    : confidence_level === "Medium"
-    ? "bg-amber-50 text-amber-700 border-amber-200"
-    : "bg-rose-50 text-rose-700 border-rose-200";
+  const { predicted_bill, confidence_level, confidence_score } = forecastResults;
 
   return (
     <div
       id="kpi-forecast"
       onClick={() => navigate('Forecast')}
-      className="workspace-glass rounded-xl p-4 transition-all duration-200 flex flex-col group cursor-pointer hover:border-primary-blue/30 hover:-translate-y-0.5"
-      style={{ borderTop: "3px solid var(--warning-amber)", minHeight: "170px" }}
+      className="h-full bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer group"
     >
-      {/* Top row */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center justify-between w-full min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-warning-amber/10 text-warning-amber border border-warning-amber/20 shrink-0">
-              <BarChart3 size={16} />
-            </div>
-            <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider truncate">Next Month Forecast</span>
-            <InfoTooltip modelUsed={model_used} />
-          </div>
-          <ArrowUpRight
-            size={14}
-            className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-          />
+      {/* Top Row: Icon & Status Badge */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-50 text-amber-600 border border-amber-100 shrink-0">
+          <BarChart3 className="w-5 h-5" />
         </div>
-        
-        {/* Status & Confidence Badge */}
-        <div className="flex justify-between items-center w-full mt-1 min-w-0">
-          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${badgeColor}`}>
-            {confidence_level === "Low" ? "Low Confidence Prediction" : `${confidence_score.toFixed(0)}% ${confidence_level}`}
-          </span>
-          <span className="text-[9px] font-semibold text-slate-400">
-            {model_version}
-          </span>
-        </div>
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+          {confidence_level ? `${confidence_score.toFixed(0)}% ${confidence_level}` : 'High Confidence'}
+        </span>
       </div>
 
-      {/* Main value */}
-      <div className="flex items-baseline gap-1 mt-2">
-        <span className="text-xl lg:text-2xl font-extrabold text-text-primary tracking-tight font-mono truncate">
+      {/* KPI Title Row */}
+      <div className="mb-2">
+        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+          Next Month Forecast
+        </span>
+      </div>
+
+      {/* Middle Section */}
+      <div className="flex items-baseline gap-1.5 mb-4">
+        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans">
           ${predicted_bill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
 
-      {/* Key Drivers Badges */}
-      <div className="flex flex-wrap gap-1 mt-2.5">
-        {key_drivers.slice(0, 2).map((d: string) => (
-          <span key={d} className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-bg-secondary text-text-secondary border border-border-hairline truncate max-w-[90px]" title={d}>
-            {d}
-          </span>
-        ))}
-      </div>
-
-      <div className="flex-1" />
-
-      {/* Bottom section: Expected Change, Date, Chart */}
-      <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 min-w-0">
-        <div className="flex-1 min-w-0 space-y-0.5">
-          <div className={`inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
-            isPositive ? "text-rose-700 bg-rose-50 border-rose-200" : "text-emerald-700 bg-emerald-50 border-emerald-200"
-          }`}>
-            {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-            <span>{Math.abs(expected_change_pct).toFixed(1)}%</span>
-          </div>
-          <div className="text-[8px] text-slate-400 font-medium leading-tight truncate" title={`Forecast Date: ${forecast_date}`}>
-            As of {forecast_date}
-          </div>
-        </div>
-
-        {/* Visual Forecast Chart */}
-        {historical_bills && (
-          <ForecastChart
-            historical={historical_bills.slice(-3)}
-            forecastValue={predicted_bill}
-            lower={confidence_interval[0]}
-            upper={confidence_interval[1]}
-          />
-        )}
+      {/* Bottom Section */}
+      <div className="mt-auto pt-2">
+        <p className="text-xs text-slate-500 font-normal leading-relaxed">
+          Predicted next billing cycle expenditure based on historical degree days & load curves.
+        </p>
       </div>
     </div>
   );
@@ -371,192 +214,79 @@ const ExecutiveHeader = ({
   loadingMeter?: boolean;
 }) => {
   return (
-    <div className="workspace-glass rounded-xl p-4 md:p-5 mb-6">
+    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 md:p-6 mb-6 shadow-xs">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
         {/* Title & Organization */}
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-xl md:text-2xl font-bold text-text-primary tracking-tight">
+            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               Executive Energy Intelligence
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary-blue/10 text-primary-blue border border-primary-blue/20">
-              <Sparkles size={12} className="text-primary-blue" /> ElectricAI Enterprise
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+              <Sparkles size={12} className="text-blue-600" /> ElectricAI Enterprise
             </span>
           </div>
-          <p className="text-xs md:text-sm text-text-secondary font-medium leading-relaxed">
+          <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed">
             Operational telemetry and high-precision financial analysis for enterprise facilities
           </p>
         </div>
  
         {/* Active Context Indicators & Mode Selector */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          <div className="flex items-center gap-1 bg-bg-secondary p-0.5 rounded-lg border border-border-hairline">
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
             <button
               onClick={() => setDashboardMode('billing')}
-              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer font-semibold ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold ${
                 dashboardMode === 'billing'
-                  ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs font-bold'
-                  : 'text-text-secondary hover:text-text-primary'
+                  ? 'bg-white text-slate-900 border border-slate-200 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Billing
             </button>
             <button
               onClick={() => setDashboardMode('metering')}
-              className={`px-3 py-1.5 rounded-md transition-all cursor-pointer font-semibold flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold flex items-center gap-1.5 ${
                 dashboardMode === 'metering'
-                  ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs font-bold'
-                  : 'text-text-secondary hover:text-text-primary'
+                  ? 'bg-white text-slate-900 border border-slate-200 shadow-xs font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Smart Meter
               {loadingMeter && (
-                <RefreshCw size={10} className="animate-spin text-primary-blue" />
+                <RefreshCw size={10} className="animate-spin text-blue-600" />
               )}
             </button>
           </div>
 
-          <div className="px-3 py-1.5 rounded-lg bg-bg-secondary border border-border-hairline flex flex-col">
-            <span className="text-[9px] uppercase font-bold text-text-secondary tracking-wider">Utility Provider</span>
-            <span className="font-semibold text-text-primary truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Utility Provider</span>
+            <span className="font-semibold text-slate-800 truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
           </div>
-          <div className="px-3 py-1.5 rounded-lg bg-bg-secondary border border-border-hairline flex flex-col">
-            <span className="text-[9px] uppercase font-bold text-text-secondary tracking-wider">Rate Schedule</span>
-            <span className="font-semibold text-text-primary truncate max-w-[200px]" title={tariff}>{tariff}</span>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Rate Schedule</span>
+            <span className="font-semibold text-slate-800 truncate max-w-[200px]" title={tariff}>{tariff}</span>
           </div>
         </div>
       </div>
 
       {/* Sync Status Sub-bar */}
-      <div className="mt-3.5 pt-3 border-t border-border-hairline flex items-center justify-between text-xs text-text-secondary">
+      <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
           <span>Last synchronized: <strong>5 mins ago</strong></span>
-          <span className="text-border-hairline">•</span>
+          <span className="text-slate-300">•</span>
           <span>Data confidence: 99.4%</span>
         </div>
-        <div className="text-text-secondary text-[11px] hidden sm:block font-medium">
-          Grid Model API v2.4 • Period: <strong className="text-text-primary font-semibold">{billingCycle}</strong>
+        <div className="text-slate-400 text-[11px] hidden sm:block font-medium">
+          Grid Model API v2.4 • Period: <strong className="text-slate-700 font-semibold">{billingCycle}</strong>
         </div>
       </div>
     </div>
   );
 };
-interface KpiCardProps {
-  id: string;
-  label: string;
-  value: string;
-  unit?: string;
-  changePct?: number;
-  changeLabel?: string;
-  subtext?: string;
-  accentColor: string;
-  utilityIcon: React.ReactNode;
-  sparklineData: number[];
-  statusBadge?: { text: string; color: string };
-  targetTab?: string;
-}
 
-const ExecutiveKpiCard = ({
-  id,
-  label,
-  value,
-  unit,
-  changePct,
-  changeLabel,
-  subtext,
-  accentColor,
-  utilityIcon,
-  sparklineData,
-  statusBadge,
-  targetTab,
-}: KpiCardProps) => {
-  const navigate = useNavigation();
-  const isPositive = changePct !== undefined && changePct >= 0;
-  const isCostIncrease = label.toLowerCase().includes('bill') || label.toLowerCase().includes('rate');
-  const badgeTextColor = changePct === undefined
-    ? 'text-slate-600'
-    : (isPositive && !isCostIncrease) || (!isPositive && isCostIncrease)
-      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-      : 'text-rose-700 bg-rose-50 border-rose-200';
-
-  return (
-    <div
-      id={id}
-      onClick={() => targetTab && navigate(targetTab)}
-      className={`workspace-glass rounded-xl p-4 transition-all duration-200 flex flex-col group ${
-        targetTab ? 'cursor-pointer hover:border-primary-blue/30 hover:-translate-y-0.5' : 'cursor-default'
-      }`}
-      style={{ borderTop: `3px solid ${accentColor}`, minHeight: '170px' }}
-      aria-label={`${label}: ${value}${unit || ''}`}
-    >
-      {/* Top section: icon, label, badge */}
-      <div className="flex flex-col gap-1.5 mb-2">
-        <div className="flex items-center justify-between w-full min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-700 shrink-0"
-              style={{ backgroundColor: `${accentColor}15` }}
-            >
-              {utilityIcon}
-            </div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider truncate" title={label}>{label}</span>
-          </div>
-          {targetTab && !statusBadge && (
-            <ArrowUpRight
-              size={14}
-              className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-            />
-          )}
-        </div>
-        {statusBadge && (
-          <div className="flex justify-between items-center w-full mt-0.5 min-w-0">
-            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0 ${statusBadge.color}`} title={statusBadge.text}>
-              {statusBadge.text}
-            </span>
-            {targetTab && (
-              <ArrowUpRight
-                size={14}
-                className="text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-              />
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Value */}
-      <div className="flex items-baseline gap-1 mt-1.5">
-        <span className="text-xl lg:text-2xl font-extrabold text-text-primary tracking-tight font-mono truncate">
-          {value}
-        </span>
-        {unit && <span className="text-xs font-semibold text-text-secondary">{unit}</span>}
-      </div>
-
-      {/* Spacer to push bottom section down uniformly */}
-      <div className="flex-1" />
-
-      {/* Bottom section: change badge, subtext, sparkline — always aligned to bottom */}
-      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-3 min-w-0">
-        <div className="flex-1 min-w-0 space-y-1">
-          {changePct !== undefined && (
-            <div className={`inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-md border max-w-full ${badgeTextColor}`}>
-              {isPositive ? <TrendingUp size={11} className="shrink-0" /> : <TrendingDown size={11} className="shrink-0" />}
-              <span className="truncate">{Math.abs(changePct).toFixed(1)}% {changeLabel ? changeLabel : ''}</span>
-            </div>
-          )}
-          {subtext && (
-            <div className="text-[10px] text-slate-500 font-medium leading-tight truncate" title={subtext}>
-              {subtext}
-            </div>
-          )}
-        </div>
-        <Sparkline data={sparklineData} color={accentColor} />
-      </div>
-    </div>
-  );
-};
-
-// ─── 3. Executive AI Summary (Visual Focal Point) ──────────────────────────────
+// ─── 3. Executive AI Summary ─────────────────────────────────────────────────
 const ExecutiveAiSummary = ({
   currentBill,
   billChangePct,
@@ -627,7 +357,7 @@ const ExecutiveAiSummary = ({
 
   return (
     <div className="relative overflow-hidden bg-slate-900 rounded-2xl p-6 text-white shadow-xl border border-slate-800 mb-8">
-      {/* Subtle Ambient Glow */}
+      {/* Ambient Glow */}
       <div className="absolute -right-16 -top-16 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10">
@@ -738,7 +468,7 @@ const ExecutiveAiSummary = ({
   );
 };
 
-// ─── 4. Main Analytics Grid (3 Columns) ───────────────────────────────────────
+// ─── 4. Main Analytics Grid (Smart Alerts) ────────────────────────────────────
 const SmartAlertCard = ({
   severity,
   title,
@@ -749,254 +479,140 @@ const SmartAlertCard = ({
   severity: 'high' | 'medium' | 'low';
   title: string;
   description: string;
-  actionText?: string;
-  onAction?: () => void;
+  actionText: string;
+  onAction: () => void;
 }) => {
-  const styles = {
-    high: {
-      border: 'border-rose-200 bg-rose-50/50',
-      badge: 'bg-rose-100 text-rose-800 border-rose-200',
-      icon: <AlertTriangle size={15} className="text-rose-600 shrink-0 mt-0.5" />,
-    },
-    medium: {
-      border: 'border-amber-200 bg-amber-50/50',
-      badge: 'bg-amber-100 text-amber-800 border-amber-200',
-      icon: <ShieldAlert size={15} className="text-amber-600 shrink-0 mt-0.5" />,
-    },
-    low: {
-      border: 'border-blue-200 bg-blue-50/50',
-      badge: 'bg-blue-100 text-blue-800 border-blue-200',
-      icon: <Lightbulb size={15} className="text-blue-600 shrink-0 mt-0.5" />,
-    },
-  }[severity];
+  const isHigh = severity === 'high';
+  const isMedium = severity === 'medium';
+
+  const severityColor = isHigh
+    ? 'border-l-rose-500 bg-rose-50/50 text-rose-900'
+    : isMedium
+    ? 'border-l-amber-500 bg-amber-50/50 text-amber-900'
+    : 'border-l-blue-500 bg-blue-50/50 text-blue-900';
+
+  const badgeColor = isHigh
+    ? 'bg-rose-100 text-rose-700'
+    : isMedium
+    ? 'bg-amber-100 text-amber-700'
+    : 'bg-blue-100 text-blue-700';
 
   return (
-    <div className={`p-3.5 rounded-xl border ${styles.border} transition-all space-y-2`}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {styles.icon}
-          <h4 className="text-xs font-bold text-slate-900">{title}</h4>
+    <div className={`p-4 rounded-xl border border-slate-200 border-l-4 ${severityColor} transition-all`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${badgeColor}`}>
+              {severity} Priority
+            </span>
+            <h4 className="text-xs font-bold text-slate-900">{title}</h4>
+          </div>
+          <p className="text-xs text-slate-600 font-normal leading-relaxed">{description}</p>
         </div>
-        <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${styles.badge}`}>
-          {severity}
-        </span>
+        <button
+          onClick={onAction}
+          className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+        >
+          <span>{actionText}</span>
+          <ChevronRight size={12} />
+        </button>
       </div>
-      <p className="text-xs text-slate-600 leading-relaxed font-medium pl-6">{description}</p>
-      {actionText && (
-        <div className="pl-6 pt-1">
-          <button
-            onClick={onAction}
-            className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1"
-          >
-            {actionText} <ChevronRight size={12} />
-          </button>
-        </div>
-      )}
     </div>
   );
 };
 
-// ─── 5. Charts Section ─────────────────────────────────────────────────────────
+// ─── 5. Charts Section ────────────────────────────────────────────────────────
 const ChartsSection = () => {
-  const [activeTab, setActiveTab] = useState<'usage' | 'peak'>('usage');
-
-  const usageMonths = ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'];
-
-  const donutItems = [
-    { name: 'Supply / Generation', pct: 40.0, color: '#2563eb' },
-    { name: 'Distribution Charges', pct: 42.0, color: '#3b82f6' },
-    { name: 'Transmission Network', pct: 10.0, color: '#60a5fa' },
-    { name: 'System Benefit Charge (SBC)', pct: 4.0, color: '#93c5fd' },
-    { name: 'Taxes', pct: 3.0, color: '#cbd5e1' },
-    { name: 'Other Charges', pct: 1.0, color: '#e2e8f0' },
+  const dummyChartData = [
+    { month: 'May', bill: 38200, usage: 132000 },
+    { month: 'Jun', bill: 41500, usage: 141000 },
+    { month: 'Jul', bill: 45800, usage: 154000 },
+    { month: 'Aug', bill: 44200, usage: 149000 },
+    { month: 'Sep', bill: 41200, usage: 138000 },
+    { month: 'Oct', bill: 42850, usage: 145200 },
   ];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
-      {/* Left: 12-Month Electricity Usage Trend */}
-      <div className="lg:col-span-7 workspace-glass rounded-xl p-5 flex flex-col justify-between">
+    <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs mb-8">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-                <BarChart3 size={16} className="text-primary-blue" /> 12-Month Electricity Usage Trend
-              </h3>
-              <p className="text-xs text-text-secondary mt-0.5">Historical consumption curve with seasonal baseline overlay</p>
-            </div>
-            <div className="flex items-center gap-1 bg-bg-secondary p-0.5 rounded-lg text-xs font-semibold text-text-secondary border border-border-hairline">
-              <button
-                onClick={() => setActiveTab('usage')}
-                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                  activeTab === 'usage' ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs' : 'hover:text-text-primary'
-                }`}
-              >
-                kWh Usage
-              </button>
-              <button
-                onClick={() => setActiveTab('peak')}
-                className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
-                  activeTab === 'peak' ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs' : 'hover:text-text-primary'
-                }`}
-              >
-                Peak Demand (kW)
-              </button>
-            </div>
-          </div>
-
-          {/* Responsive Area Chart */}
-          <div className="h-48 w-full relative pt-4 pb-2">
-            <svg viewBox="0 0 500 150" className="w-full h-full overflow-visible">
-              <defs>
-                <linearGradient id="usageGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2563eb" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
-                </linearGradient>
-              </defs>
-
-              <line x1="0" y1="30" x2="500" y2="30" stroke="#f1f5f9" strokeDasharray="4,4" />
-              <line x1="0" y1="70" x2="500" y2="70" stroke="#f1f5f9" strokeDasharray="4,4" />
-              <line x1="0" y1="110" x2="500" y2="110" stroke="#f1f5f9" strokeDasharray="4,4" />
-
-              <polygon
-                fill="url(#usageGradient)"
-                points="0,130 0,70 45,45 90,40 136,60 181,80 227,90 272,65 318,30 363,10 409,15 454,35 500,40 500,130"
-              />
-
-              <path
-                d="M 0,70 Q 45,45 90,40 T 181,80 T 272,65 T 363,10 T 454,35 T 500,40"
-                fill="none"
-                stroke="#2563eb"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-
-              {[
-                [0, 70], [45, 45], [90, 40], [136, 60], [181, 80],
-                [227, 90], [272, 65], [318, 30], [363, 10], [409, 15], [454, 35], [500, 40]
-              ].map(([x, y], idx) => (
-                <circle
-                  key={idx}
-                  cx={x}
-                  cy={y}
-                  r="3.5"
-                  className="fill-white stroke-blue-600 stroke-2 hover:r-5 transition-all cursor-pointer"
-                />
-              ))}
-            </svg>
-
-            <div className="flex justify-between text-[11px] font-medium text-slate-400 mt-2">
-              {usageMonths.map((m) => (
-                <span key={m}>{m}</span>
-              ))}
-            </div>
-          </div>
+          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+            <Activity size={18} className="text-blue-600" /> Historical Billing & Consumption Trend
+          </h3>
+          <p className="text-xs text-slate-500 mt-0.5">Six-month audited utility expenditure vs volume load</p>
         </div>
-
-        <div className="mt-4 pt-3 border-t border-border-hairline flex items-center justify-between text-xs text-text-secondary">
-          <span>Peak Usage Month: <strong className="text-text-primary">August (162 MWh)</strong></span>
-          <span className="text-savings-green font-semibold">12-Mo Trailing Shift: -1.8%</span>
+        <div className="flex items-center gap-4 text-xs font-semibold">
+          <div className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-sm bg-blue-600" />
+            <span className="text-slate-600">Total Bill ($)</span>
+          </div>
         </div>
       </div>
 
-      {/* Right: Bill Component Breakdown Donut */}
-      <div className="lg:col-span-5 workspace-glass rounded-xl p-5 flex flex-col justify-between">
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-                <PieChart size={16} className="text-primary-blue" /> Bill Component Breakdown
-              </h3>
-              <p className="text-xs text-text-secondary mt-0.5">Distribution of utility charge line items</p>
-            </div>
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-bg-secondary text-text-secondary border border-border-hairline">
-              Current Cycle
-            </span>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center gap-4 py-2">
-            <div className="relative w-36 h-36 shrink-0 flex items-center justify-center">
-              <svg viewBox="0 0 36 36" className="w-full h-full transform -rotate-90 overflow-visible">
-                <circle cx="18" cy="18" r="14.3" fill="none" stroke="#e2e8f0" strokeWidth="4.2" />
-                {/* Supply 40% */}
-                <circle cx="18" cy="18" r="14.3" fill="none" stroke="#2563eb" strokeWidth="4.5" strokeDasharray="36 64" strokeDashoffset="0" />
-                {/* Distribution 42% */}
-                <circle cx="18" cy="18" r="14.3" fill="none" stroke="#3b82f6" strokeWidth="4.5" strokeDasharray="37.8 62.2" strokeDashoffset="-36" />
-                {/* Transmission 10% */}
-                <circle cx="18" cy="18" r="14.3" fill="none" stroke="#60a5fa" strokeWidth="4.5" strokeDasharray="9 81" strokeDashoffset="-73.8" />
-                {/* SBC 4% */}
-                <circle cx="18" cy="18" r="14.3" fill="none" stroke="#93c5fd" strokeWidth="4.5" strokeDasharray="3.6 86.4" strokeDashoffset="-82.8" />
-              </svg>
-              <div className="absolute text-center">
-                <div className="text-[10px] text-slate-400 font-medium">Distribution</div>
-                <div className="text-sm font-bold text-slate-900 font-mono">42.0%</div>
-              </div>
-            </div>
-
-            <div className="space-y-1.5 w-full text-xs">
-              {donutItems.map((item) => (
-                <div key={item.name} className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                    <span className="text-slate-600 truncate font-medium">{item.name}</span>
-                  </div>
-                  <span className="font-semibold text-slate-900 font-mono">{item.pct.toFixed(1)}%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-          <span>Primary Cost Driver: <strong>Distribution Peak Demand</strong></span>
-        </div>
+      <div className="h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={dummyChartData}>
+            <defs>
+              <linearGradient id="billTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
+            <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} />
+            <Tooltip formatter={(value: any) => [`$${Number(value).toLocaleString()}`, 'Total Bill']} />
+            <Area type="monotone" dataKey="bill" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#billTrendGrad)" />
+          </AreaChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
 };
 
-// ─── 6. Quick Actions ──────────────────────────────────────────────────────────
+// ─── 6. Executive Quick Actions ───────────────────────────────────────────────
 const QuickActions = () => {
   const navigate = useNavigation();
 
   const actions = [
     {
-      id: 'action-upload',
-      title: 'Upload New Bill',
-      desc: 'Parse PDF utility statement with OCR intelligence',
-      icon: <Upload size={18} className="text-blue-600" />,
-      buttonText: 'Upload Statement',
+      id: 'qa-upload',
+      title: 'Upload Utility Bill',
+      desc: 'Ingest PDF statements or CSV intervals for instant AI parsing',
+      icon: <DollarSign className="w-5 h-5 text-blue-600" />,
+      buttonText: 'Upload File',
       tab: 'Bill Analysis',
     },
     {
-      id: 'action-simulation',
-      title: 'Run Bill Simulation',
-      desc: 'Simulate peak shaving and alternative tariff rates',
-      icon: <Sliders size={18} className="text-indigo-600" />,
-      buttonText: 'Simulate Scenario',
+      id: 'qa-rate',
+      title: 'Rate Schedule Match',
+      desc: 'Simulate alternative commercial rate structures to optimize costs',
+      icon: <Activity className="w-5 h-5 text-indigo-600" />,
+      buttonText: 'Compare Rates',
       tab: 'Impact & Simulation',
     },
     {
-      id: 'action-forecast',
-      title: 'View Forecast',
-      desc: 'Inspect ensemble ML monthly projections',
-      icon: <BarChart3 size={18} className="text-amber-600" />,
-      buttonText: 'Open Forecast',
+      id: 'qa-forecast',
+      title: 'Load Forecasting',
+      desc: 'Project future demand spikes and peak charges using ML models',
+      icon: <BarChart3 className="w-5 h-5 text-amber-600" />,
+      buttonText: 'View Forecast',
       tab: 'Forecast',
     },
     {
-      id: 'action-report',
-      title: 'Generate Executive Report',
-      desc: 'Download board-ready PDF summary package',
-      icon: <FileText size={18} className="text-emerald-600" />,
-      buttonText: 'Generate PDF',
+      id: 'qa-[#regional]',
+      title: 'Regional Benchmarks',
+      desc: 'Compare building energy intensity against peer utility territories',
+      icon: <Sparkles className="w-5 h-5 text-purple-600" />,
+      buttonText: 'Explore Map',
       tab: 'Regional Insights',
     },
     {
-      id: 'action-ask-ai',
-      title: 'Ask AI Assistant',
-      desc: 'Query facility energy models & savings recipes',
-      icon: <Sparkles size={18} className="text-sky-600" />,
-      buttonText: 'Launch Copilot',
+      id: 'qa-[#ai]',
+      title: 'AI Tariff Copilot',
+      desc: 'Interactive chat assistant for tariff rules, Peak Demand, and TOU',
+      icon: <ShieldAlert className="w-5 h-5 text-cyan-600" />,
+      buttonText: 'Open Copilot',
       tab: 'Impact & Simulation',
     },
   ];
@@ -1015,24 +631,24 @@ const QuickActions = () => {
           <div
             key={act.id}
             id={act.id}
-            className="workspace-glass rounded-xl p-4 transition-all flex flex-col justify-between group hover:border-primary-blue/30 cursor-pointer"
+            className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer hover:-translate-y-0.5"
           >
             <div className="space-y-2.5">
-              <div className="w-9 h-9 rounded-lg bg-bg-secondary border border-border-hairline flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
                 {act.icon}
               </div>
               <div>
-                <h4 className="text-xs font-bold text-text-primary group-hover:text-primary-blue transition-colors">
+                <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
                   {act.title}
                 </h4>
-                <p className="text-[11px] text-text-secondary font-medium leading-relaxed mt-1">{act.desc}</p>
+                <p className="text-[11px] text-slate-500 font-normal leading-relaxed mt-1">{act.desc}</p>
               </div>
             </div>
 
             <div className="pt-4 mt-2">
               <button
                 onClick={() => navigate(act.tab)}
-                className="w-full py-1.5 px-3 rounded-lg bg-primary-blue hover:opacity-90 text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-1.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>{act.buttonText}</span>
                 <ChevronRight size={12} />
@@ -1046,7 +662,6 @@ const QuickActions = () => {
 };
 
 // ─── Main Mission Control Dashboard Component ──────────────────────────────────
-// ─── Main Mission Control Dashboard Component ──────────────────────────────────
 const MissionControlDashboard = () => {
   const { uploadedBill } = useBill();
   const navigate = useNavigation();
@@ -1059,9 +674,6 @@ const MissionControlDashboard = () => {
   const effectiveRate = uploadedBill?.effective_rate ?? kpisFromDb?.effective_rate ?? (usageKwh > 0 ? currentBill / usageKwh : 0.295);
   const forecastBill = dashboardData?.forecast_results?.status === "success" ? (kpisFromDb?.forecast_next_month ?? 0.0) : 0.0;
   const billChangePct = kpisFromDb?.bill_change_pct ?? 3.2;
-  const usageChangePct = kpisFromDb?.usage_change_pct ?? -1.5;
-  const rateChangePct = kpisFromDb?.rate_change_pct ?? 0.0;
-  const stateRank = kpisFromDb?.state_rank ?? (currentBill > 2000 ? 4 : 8);
   const savingsOpportunity = ((kpisFromDb as unknown as Record<string, number>)?.savings_opportunity) ?? (uploadedBill?.total_bill ? Math.max(0, Math.round((currentBill - 118.0) * 100) / 100) : 4350.00);
 
   const utilityName = uploadedBill?.utility ?? 'Public Service Electric & Gas Co';
@@ -1116,81 +728,6 @@ const MissionControlDashboard = () => {
       title: 'Off-Peak Shift Opportunity',
       description: `Shift 15% of flexible load to off-peak hours (10 PM–8 AM) to save estimated $${savingsOpportunity.toFixed(2)}/mo.`,
       actionText: 'Simulate Load Shift',
-    },
-  ];
-
-  const KPI_CARDS: KpiCardProps[] = [
-    {
-      id: 'kpi-current-bill',
-      label: 'Current Bill',
-      value: `$${currentBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      changePct: billChangePct,
-      changeLabel: 'vs last month',
-      accentColor: '#2563eb',
-      utilityIcon: <DollarSign size={16} />,
-      sparklineData: [currentBill * 0.9, currentBill * 0.93, currentBill * 0.96, currentBill * 0.94, currentBill * 0.98, currentBill],
-      statusBadge: { text: 'Audited Statement', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-      targetTab: 'Bill Analysis',
-    },
-    {
-      id: 'kpi-usage',
-      label: 'Usage',
-      value: usageKwh.toLocaleString('en-US'),
-      unit: 'kWh',
-      changePct: usageChangePct,
-      changeLabel: 'vs last month',
-      accentColor: '#0ea5e9',
-      utilityIcon: <Zap size={16} />,
-      sparklineData: [usageKwh * 0.95, usageKwh * 0.98, usageKwh * 0.96, usageKwh * 0.97, usageKwh * 0.99, usageKwh],
-      statusBadge: { text: '-1.5% Efficiency', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
-      targetTab: 'Bill Analysis',
-    },
-    {
-      id: 'kpi-rate',
-      label: 'Effective Rate',
-      value: `$${effectiveRate.toFixed(3)}`,
-      unit: '/kWh',
-      changePct: rateChangePct,
-      changeLabel: 'vs last month',
-      accentColor: '#6366f1',
-      utilityIcon: <Activity size={16} />,
-      sparklineData: [effectiveRate * 0.98, effectiveRate * 0.99, effectiveRate * 0.995, effectiveRate, effectiveRate * 1.005, effectiveRate],
-      statusBadge: { text: 'Stable Rate', color: 'bg-slate-100 text-slate-700 border border-slate-200' },
-      targetTab: 'Impact & Simulation',
-    },
-    {
-      id: 'kpi-forecast',
-      label: 'Next Month Forecast',
-      value: `$${forecastBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      subtext: 'ML Ensemble Model (+2.1%)',
-      accentColor: '#f59e0b',
-      utilityIcon: <BarChart3 size={16} />,
-      sparklineData: [currentBill * 0.93, currentBill * 0.95, currentBill * 0.98, currentBill, forecastBill * 0.99, forecastBill],
-      statusBadge: { text: 'High Confidence', color: 'bg-amber-50 text-amber-700 border border-amber-200' },
-      targetTab: 'Forecast',
-    },
-    {
-      id: 'kpi-savings',
-      label: 'Savings Opportunity',
-      value: savingsOpportunity > 0 ? `$${savingsOpportunity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Optimized',
-      unit: '/mo',
-      subtext: savingsOpportunity > 0 ? 'vs. state avg baseline' : 'Below state average',
-      accentColor: '#10b981',
-      utilityIcon: <Award size={16} />,
-      sparklineData: [savingsOpportunity * 0.7, savingsOpportunity * 0.8, savingsOpportunity * 0.88, savingsOpportunity * 0.92, savingsOpportunity * 0.96, savingsOpportunity],
-      statusBadge: { text: savingsOpportunity > 0 ? 'High Potential' : 'Optimized', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
-      targetTab: 'Impact & Simulation',
-    },
-    {
-      id: 'kpi-regional-rank',
-      label: 'Regional Rank',
-      value: `#${stateRank}`,
-      unit: '/ 120',
-      subtext: 'Top 5% Facility Efficiency',
-      accentColor: '#8b5cf6',
-      utilityIcon: <Award size={16} />,
-      sparklineData: [14, 12, 10, 9, 8, stateRank],
-      targetTab: 'Regional Insights',
     },
   ];
 
@@ -1261,19 +798,47 @@ const MissionControlDashboard = () => {
 
       {dashboardMode === 'billing' ? (
         <>
-          {/* 2. KPI Summary Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-            {KPI_CARDS.map((kpi) => (
-              kpi.id === 'kpi-forecast' ? (
-                <ForecastKpiCard 
-                  key={kpi.id} 
-                  forecastResults={dashboardData?.forecast_results} 
-                  navigate={navigate} 
-                  />
-              ) : (
-                <ExecutiveKpiCard key={kpi.id} {...kpi} />
-              )
-            ))}
+          {/* 2. Rebalanced 4-KPI Summary Cards Grid (Enterprise SaaS Style) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <SaaSExecutiveKpiCard
+              id="kpi-current-bill"
+              label="Current Bill"
+              value={`$${currentBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              description="Total electricity charges for the current billing period."
+              icon={<DollarSign className="w-5 h-5" />}
+              iconBgColor="bg-blue-50 text-blue-600 border-blue-100"
+              statusBadge={{ text: 'Audited Statement', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }}
+              targetTab="Bill Analysis"
+            />
+
+            <SaaSExecutiveKpiCard
+              id="kpi-usage"
+              label="Energy Usage"
+              value={usageKwh.toLocaleString('en-US')}
+              unit="kWh"
+              description="Total electricity consumed during the current billing period."
+              icon={<Zap className="w-5 h-5" />}
+              iconBgColor="bg-cyan-50 text-cyan-600 border-cyan-100"
+              statusBadge={{ text: 'Stable', color: 'bg-blue-50 text-blue-700 border-blue-200' }}
+              targetTab="Bill Analysis"
+            />
+
+            <SaaSExecutiveKpiCard
+              id="kpi-rate"
+              label="Effective Rate"
+              value={`$${effectiveRate.toFixed(3)}`}
+              unit="/kWh"
+              description="Blended average cost per kilowatt-hour across all tariff tiers."
+              icon={<Activity className="w-5 h-5" />}
+              iconBgColor="bg-indigo-50 text-indigo-600 border-indigo-100"
+              statusBadge={{ text: 'Stable Rate', color: 'bg-slate-100 text-slate-700 border-slate-200' }}
+              targetTab="Impact & Simulation"
+            />
+
+            <ForecastKpiCard
+              forecastResults={dashboardData?.forecast_results}
+              navigate={navigate}
+            />
           </div>
 
           {/* 3. Executive AI Summary Focal Point */}
@@ -1290,18 +855,18 @@ const MissionControlDashboard = () => {
           {/* 4. Main Analytics Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
             {/* Left Column: Recent Billing History */}
-            <div className="lg:col-span-5 workspace-glass rounded-xl p-5 flex flex-col justify-between">
+            <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
               <div>
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-hairline">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
                   <div>
-                    <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-                      <FileText size={16} className="text-primary-blue" /> Recent Billing History
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <FileText size={16} className="text-blue-600" /> Recent Billing History
                     </h3>
-                    <p className="text-xs text-text-secondary mt-0.5">Historical audited monthly invoices</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Historical audited monthly invoices</p>
                   </div>
                   <button
                     onClick={() => navigate('Bill Analysis')}
-                    className="text-xs font-bold text-primary-blue hover:opacity-85 transition-all cursor-pointer"
+                    className="text-xs font-bold text-blue-600 hover:opacity-85 transition-all cursor-pointer"
                   >
                     Full History →
                   </button>
@@ -1311,15 +876,15 @@ const MissionControlDashboard = () => {
             </div>
 
             {/* Right Column: Expanded Smart Alerts */}
-            <div className="lg:col-span-7 workspace-glass rounded-xl p-5 space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-border-hairline">
+            <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div>
-                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-                    <ShieldAlert size={16} className="text-warning-amber" /> Smart Alerts & Facility Exceptions
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <ShieldAlert size={16} className="text-amber-500" /> Smart Alerts & Facility Exceptions
                   </h3>
-                  <p className="text-xs text-text-secondary mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
                 </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-warning-amber/10 text-warning-amber border border-warning-amber/20">
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
                   3 Active Exceptions
                 </span>
               </div>
@@ -1349,70 +914,75 @@ const MissionControlDashboard = () => {
         <>
           {/* Smart Metering Sub-Dashboard */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-            <ExecutiveKpiCard
+            <SaaSExecutiveKpiCard
               id="sm-demand"
               label="Current Demand"
-              value={`${meterKpis.current_demand_kw} kW`}
-              accentColor="#2563eb"
-              utilityIcon={<Zap size={16} />}
-              sparklineData={[1.8, 2.0, 2.4, 2.2, 2.5, meterKpis.current_demand_kw]}
+              value={`${meterKpis.current_demand_kw}`}
+              unit="kW"
+              description="Instantaneous active power demand."
+              icon={<Zap className="w-5 h-5 text-blue-600" />}
+              iconBgColor="bg-blue-50 border-blue-100"
               statusBadge={{ text: "Live Telemetry", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
             />
-            <ExecutiveKpiCard
+            <SaaSExecutiveKpiCard
               id="sm-pf"
               label="Power Factor"
               value={`${meterKpis.current_power_factor}`}
-              accentColor="#6366f1"
-              utilityIcon={<Activity size={16} />}
-              sparklineData={[0.95, 0.94, 0.95, 0.96, 0.95, meterKpis.current_power_factor]}
+              description="Real-to-apparent power phase ratio."
+              icon={<Activity className="w-5 h-5 text-indigo-600" />}
+              iconBgColor="bg-indigo-50 border-indigo-100"
               statusBadge={{ text: "Optimal (>0.95)", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
             />
-            <ExecutiveKpiCard
+            <SaaSExecutiveKpiCard
               id="sm-voltage"
               label="Line Voltage"
-              value={`${meterKpis.voltage} V`}
-              accentColor="#8b5cf6"
-              utilityIcon={<Activity size={16} />}
-              sparklineData={[120.8, 121.0, 121.2, 120.9, 121.1, meterKpis.voltage]}
+              value={`${meterKpis.voltage}`}
+              unit="V"
+              description="Nominal service drop voltage."
+              icon={<Activity className="w-5 h-5 text-purple-600" />}
+              iconBgColor="bg-purple-50 border-purple-100"
               statusBadge={{ text: "Steady Status", color: "bg-slate-100 text-slate-700 border-slate-200" }}
             />
-            <ExecutiveKpiCard
+            <SaaSExecutiveKpiCard
               id="sm-cons"
               label="Today's Total"
-              value={`${meterKpis.today_consumption_kwh.toFixed(1)} kWh`}
-              accentColor="#0ea5e9"
-              utilityIcon={<Zap size={16} />}
-              sparklineData={[15, 20, 28, 32, 35, meterKpis.today_consumption_kwh]}
+              value={`${meterKpis.today_consumption_kwh.toFixed(1)}`}
+              unit="kWh"
+              description="Cumulative energy consumption today."
+              icon={<Zap className="w-5 h-5 text-cyan-600" />}
+              iconBgColor="bg-cyan-50 border-cyan-100"
               statusBadge={{ text: "On Track", color: "bg-blue-50 text-blue-700 border-blue-200" }}
             />
-            <ExecutiveKpiCard
+            <SaaSExecutiveKpiCard
               id="sm-peak"
               label="Peak Demand"
-              value={`${meterKpis.peak_demand_kw} kW`}
-              accentColor="#f59e0b"
-              utilityIcon={<BarChart3 size={16} />}
-              sparklineData={[3.5, 4.0, 4.2, 4.5, 4.4, meterKpis.peak_demand_kw]}
-              statusBadge={{ text: `Peak Hour ${meterKpis.peak_hour}`, color: "bg-amber-50 text-amber-700 border-amber-200" }}
+              value={`${meterKpis.peak_demand_kw}`}
+              unit="kW"
+              description="Highest recorded demand interval."
+              icon={<BarChart3 className="w-5 h-5 text-amber-600" />}
+              iconBgColor="bg-amber-50 border-amber-100"
+              statusBadge={{ text: `Peak ${meterKpis.peak_hour}`, color: "bg-amber-50 text-amber-700 border-amber-200" }}
             />
-            <ExecutiveKpiCard
+            <SaaSExecutiveKpiCard
               id="sm-base"
               label="Base Load"
-              value={`${meterKpis.base_load_kw} kW`}
-              accentColor="#10b981"
-              utilityIcon={<Award size={16} />}
-              sparklineData={[0.7, 0.68, 0.66, 0.65, 0.65, meterKpis.base_load_kw]}
+              value={`${meterKpis.base_load_kw}`}
+              unit="kW"
+              description="Continuous overnight baseline load."
+              icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+              iconBgColor="bg-emerald-50 border-emerald-100"
               statusBadge={{ text: "Base fraction 26%", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
             />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
             {/* 24-Hour Load Curve */}
-            <div className="lg:col-span-8 workspace-glass rounded-xl p-5 flex flex-col justify-between">
+            <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
               <div>
-                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
-                  <Activity size={16} className="text-primary-blue" /> 24-Hour Load Curve Telemetry
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                  <Activity size={16} className="text-blue-600" /> 24-Hour Load Curve Telemetry
                 </h3>
-                <p className="text-xs text-text-secondary mb-4">Hourly usage profiles from smart meter telemetry</p>
+                <p className="text-xs text-slate-500 mb-4">Hourly usage profiles from smart meter telemetry</p>
                 
                 <div className="h-64 w-full pt-2">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1435,12 +1005,12 @@ const MissionControlDashboard = () => {
             </div>
 
             {/* Smart Meter Live Alerts */}
-            <div className="lg:col-span-4 workspace-glass rounded-xl p-5 space-y-4">
+            <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-xs">
               <div>
-                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
-                  <ShieldAlert size={16} className="text-warning-amber" /> Live Telemetry Anomalies
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+                  <ShieldAlert size={16} className="text-amber-500" /> Live Telemetry Anomalies
                 </h3>
-                <p className="text-xs text-text-secondary">Instantaneous load curves threshold exceptions</p>
+                <p className="text-xs text-slate-500">Instantaneous load curves threshold exceptions</p>
               </div>
 
               <div className="space-y-3">
@@ -1469,11 +1039,11 @@ const MissionControlDashboard = () => {
           </div>
 
           {/* 7-Day Demand Heatmap */}
-          <div className="workspace-glass rounded-xl p-5">
-            <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
-              <BarChart3 size={16} className="text-primary-blue" /> Hourly Load Intensity Heatmap (kW)
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
+              <BarChart3 size={16} className="text-blue-600" /> Hourly Load Intensity Heatmap (kW)
             </h3>
-            <p className="text-xs text-text-secondary mb-5">Visualizing average power draw per hour (x-axis) across weekdays (y-axis)</p>
+            <p className="text-xs text-slate-500 mb-5">Visualizing average power draw per hour (x-axis) across weekdays (y-axis)</p>
 
             <div className="overflow-x-auto">
               <div className="min-w-[800px] space-y-2">

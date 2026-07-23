@@ -6,18 +6,10 @@ import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext.tsx';
 
-// ── Redesigned UI Components ──────────────────────────────────────────────
-import Background3D from '../components/login/Background3D.tsx';
-import SystemHealthCard from '../components/login/SystemHealthCard.tsx';
-import LiveGridLoadCard from '../components/login/LiveGridLoadCard.tsx';
-import LoginCard from '../components/login/LoginCard.tsx';
-import InputField from '../components/login/InputField.tsx';
-import PasswordInput from '../components/login/PasswordInput.tsx';
-import RememberMe from '../components/login/RememberMe.tsx';
-import AuthButton from '../components/login/AuthButton.tsx';
-import Footer from '../components/login/Footer.tsx';
+// ── UI Components & Login Card ──────────────────────────────────────────────
+import { SignIn6 } from '../components/ui/sign-in-6.tsx';
 
-// ── Zod Schema Validation (Preserved) ──────────────────────────────────────
+// ── Zod Schema Validation ────────────────────────────────────────────────────
 const loginSchema = z.object({
   email: z.string().min(1, 'Email address is required').email('Please enter a valid email address'),
   password: z.string().min(1, 'Password is required'),
@@ -31,7 +23,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // ── React Hook Form Setup (Preserved) ────────────────────────────────────
+  // ── React Hook Form Setup ──────────────────────────────────────────────────
   const {
     register,
     handleSubmit,
@@ -45,7 +37,7 @@ export default function LoginPage() {
     },
   });
 
-  // ── TanStack Query Mutation (Preserved) ──────────────────────────────────
+  // ── TanStack Query Mutation ────────────────────────────────────────────────
   const loginMutation = useMutation({
     mutationFn: async (data: LoginFormData) => {
       setAuthError(null);
@@ -73,65 +65,25 @@ export default function LoginPage() {
     console.log('Initiating SSO Google Auth...');
   };
 
-  const handleAzureSignIn = () => {
-    console.log('Initiating SSO Azure AD Auth...');
-  };
-
   return (
-    <div className="relative min-h-screen w-full bg-[#050711] font-sans flex items-center justify-center p-4 sm:p-8 overflow-hidden select-none">
-      {/* 1. Full-screen 3D Perspective Grid and Cyber-Orb background */}
-      <Background3D />
+    <div className="relative min-h-screen w-full bg-white font-sans flex items-center justify-center p-4 sm:p-8 overflow-hidden select-none">
+      {/* Subtle Ambient Background Orbs */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-50 rounded-full blur-3xl pointer-events-none -z-10" />
+      <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-cyan-50 rounded-full blur-3xl pointer-events-none -z-10" />
 
-      {/* 2. Three-Panel Dashboard login row (centered on mobile, floating on desktop) */}
-      <div className="relative flex items-center justify-center w-full max-w-[460px] z-10">
-        
-        {/* Left Telemetry Card (System Health) */}
-        <div className="hidden xl:block absolute -left-[315px] top-[12%]">
-          <SystemHealthCard />
-        </div>
-
-        {/* Center Login Card Container */}
-        <LoginCard error={authError}>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-            {/* Email Address */}
-            <InputField
-              label="Email Address"
-              type="email"
-              placeholder="Email Address"
-              error={errors.email?.message}
-              autoComplete="email"
-              {...register('email')}
-            />
-
-            {/* Password */}
-            <PasswordInput
-              label="Password"
-              placeholder="Password"
-              error={errors.password?.message}
-              autoComplete="current-password"
-              {...register('password')}
-            />
-
-            {/* Remember Me and Forgot Password */}
-            <RememberMe {...register('rememberMe')} />
-
-            {/* Submit Auth Button */}
-            <AuthButton isLoading={loginMutation.isPending}>
-              Sign In
-            </AuthButton>
-          </form>
-
-          {/* OAuth Buttons and Footer links */}
-          <Footer
-            onGoogleSignIn={handleGoogleSignIn}
-            onAzureSignIn={handleAzureSignIn}
-          />
-        </LoginCard>
-
-        {/* Right Telemetry Card (Live Grid Load) */}
-        <div className="hidden xl:block absolute -right-[325px] top-[18%]">
-          <LiveGridLoadCard />
-        </div>
+      {/* Main Login Container */}
+      <div className="relative flex items-center justify-center w-full max-w-4xl z-10 my-auto">
+        <SignIn6
+          onSubmit={handleSubmit(onSubmit)}
+          registerEmail={register('email')}
+          registerPassword={register('password')}
+          registerRemember={register('rememberMe')}
+          emailError={errors.email?.message}
+          passwordError={errors.password?.message}
+          authError={authError}
+          isLoading={loginMutation.isPending}
+          onGoogleSignIn={handleGoogleSignIn}
+        />
       </div>
     </div>
   );

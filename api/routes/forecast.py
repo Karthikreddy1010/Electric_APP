@@ -1,9 +1,11 @@
 """GET /forecast — electricity demand forecast via trained ensemble."""
 import asyncio
 import logging
-from fastapi import APIRouter, HTTPException, Query
+import pandas as pd
+from fastapi import APIRouter, HTTPException, Query, Body
 from api.state import app_state
 from api.cache import cached
+from api.services.anomaly_detection_service import anomaly_detection_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["forecast"])
@@ -30,7 +32,6 @@ async def forecast_costs(
             
         forecast_results = await asyncio.to_thread(ensemble.get_forecast, days=days_ahead, model_type=model)
 
-        import pandas as pd
         mapped_forecast = []
         for fc in forecast_results:
             # Anchor historical vs predicted values safely
@@ -92,9 +93,6 @@ async def forecast_costs(
 
 
 # ── Anomaly Detection & Cleaning Extensions ───────────────────────────────────
-
-from api.services.anomaly_detection_service import anomaly_detection_service
-from fastapi import Body
 
 
 @router.get("/forecast/anomalies")
