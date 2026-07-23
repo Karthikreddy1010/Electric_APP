@@ -255,3 +255,174 @@
   border: 1px solid var(--border-hairline);
   box-shadow: var(--sh-soft);
 }
+
+/* ─── Aurora Hero Animation System ─── */
+
+/* Slow floating drift for atmospheric glow orbs */
+@keyframes aurora-drift {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.4;
+  }
+  25% {
+    transform: translate(30px, -20px) scale(1.05);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-20px, 15px) scale(0.95);
+    opacity: 0.35;
+  }
+  75% {
+    transform: translate(15px, 25px) scale(1.02);
+    opacity: 0.55;
+  }
+}
+
+/* Alternate drift for second orb */
+@keyframes aurora-drift-alt {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.3;
+  }
+  33% {
+    transform: translate(-25px, 20px) scale(1.08);
+    opacity: 0.5;
+  }
+  66% {
+    transform: translate(20px, -15px) scale(0.92);
+    opacity: 0.25;
+  }
+}
+
+/* Electric pulse glow effect */
+@keyframes electric-pulse {
+  0%, 100% {
+    opacity: 0.15;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.02);
+  }
+}
+
+/* Sweeping light ray across hero */
+@keyframes light-ray {
+  0% {
+    transform: translateX(-100%) rotate(15deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.08;
+  }
+  50% {
+    opacity: 0.12;
+  }
+  90% {
+    opacity: 0.06;
+  }
+  100% {
+    transform: translateX(200%) rotate(15deg);
+    opacity: 0;
+  }
+}
+
+/* Enhanced shimmer for gradient text */
+@keyframes shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+/* Subtle float for hero elements */
+@keyframes hero-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+/* Glow pulse for buttons and badges */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.15), 0 0 40px rgba(0, 212, 255, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.25), 0 0 60px rgba(0, 212, 255, 0.1);
+  }
+}
+
+/* ─── Aurora Hero Utility Classes ─── */
+
+.animate-aurora-drift {
+  animation: aurora-drift 15s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.animate-aurora-drift-alt {
+  animation: aurora-drift-alt 18s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.animate-electric-pulse {
+  animation: electric-pulse 12s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+.animate-light-ray {
+  animation: light-ray 20s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.animate-shimmer {
+  animation: shimmer 6s ease-in-out infinite;
+  background-size: 200% auto;
+}
+
+.animate-hero-float {
+  animation: hero-float 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
+/* Glassmorphism presets */
+.hero-glass {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hero-glass-strong {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* Hero button glow on hover */
+.hero-btn-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hero-btn-glow:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(0, 212, 255, 0.3), 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+/* Vignette overlay */
+.hero-vignette {
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 50%,
+    transparent 30%,
+    rgba(5, 12, 24, 0.5) 70%,
+    rgba(5, 12, 24, 0.85) 100%
+  );
+}
