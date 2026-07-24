@@ -692,6 +692,37 @@ async def get_geo_grid_status(
         raise HTTPException(500, "Database query error")
 
 
+# ── Census Demographics & Energy Burden Endpoints ────────────────────────────
+
+@router.get("/energy-burden")
+async def get_energy_burden(
+    zip_code: str = Query("07101", description="5-digit ZIP code"),
+    annual_bill: float = Query(1920.0, ge=0),
+):
+    """Calculate Energy Burden Score and Social Vulnerability Index (SVI) for a ZIP code."""
+    from api.services.census_service import census_service
+    return census_service.calculate_energy_burden(zip_code=zip_code, annual_bill=annual_bill)
+
+
+@router.get("/census-demographics")
+async def get_census_demographics(
+    zip_code: str = Query("07101"),
+):
+    """Retrieve Census ACS demographics (income, poverty rate, housing tenure, age)."""
+    from api.services.census_service import census_service
+    return census_service.get_demographics_by_zip(zip_code=zip_code)
+
+
+@router.get("/county-demographics")
+async def get_county_demographics(
+    state: str = Query("NJ"),
+):
+    """Retrieve county-level aggregated Census ACS demographics."""
+    from api.services.census_service import census_service
+    return {"data": census_service.get_county_demographics(state=state)}
+
+
+
 
 
 

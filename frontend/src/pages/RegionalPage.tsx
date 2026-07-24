@@ -123,6 +123,220 @@ const HoverTooltip = ({ visible, data, tooltipRef }: any) => {
   );
 };
 
+const GridReliabilitySection = ({ state }: { state: string }) => {
+  const { data: relRes } = useQuery({
+    queryKey: ['reliability-section', state],
+    queryFn: async () => {
+      const res = await axios.get(`/api/municipal/reliability?state=${state}`);
+      return res.data;
+    }
+  });
+
+  const { data: kpis } = useQuery({
+    queryKey: ['reliability-kpis', state],
+    queryFn: async () => {
+      const res = await axios.get(`/api/municipal/reliability/kpis?state=${state}`);
+      return res.data;
+    }
+  });
+
+  const records = relRes?.data || [];
+
+  return (
+    <div className="panel-operational space-y-4 bg-bg-surface border border-border-hairline p-5 rounded-xl font-sans">
+      <div className="flex items-center justify-between border-b border-border-hairline pb-3">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+            <Activity size={16} className="text-primary-blue" /> EIA-861 Distribution Grid Reliability Indices (SAIDI / SAIFI)
+          </h3>
+          <p className="text-[11px] text-text-secondary">
+            System Average Interruption Duration (SAIDI) and Frequency (SAIFI) benchmarks for {state} Electric Distribution Companies (EDCs).
+          </p>
+        </div>
+        <span className="text-[10px] bg-primary-blue/10 text-primary-blue border border-primary-blue/20 px-2.5 py-1 rounded font-bold">
+          IEEE Standard 1366
+        </span>
+      </div>
+
+      {kpis && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+            <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block">State Avg SAIDI</span>
+            <span className="text-lg font-bold text-text-primary font-mono-numbers">{kpis.avg_saidi_minutes}</span>
+            <span className="text-[9px] text-text-secondary block">minutes outage / cust / yr</span>
+          </div>
+
+          <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+            <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block">State Avg SAIFI</span>
+            <span className="text-lg font-bold text-primary-blue font-mono-numbers">{kpis.avg_saifi}</span>
+            <span className="text-[9px] text-text-secondary block">outages / cust / yr</span>
+          </div>
+
+          <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+            <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block">State Avg CAIDI</span>
+            <span className="text-lg font-bold text-energy-teal font-mono-numbers">{kpis.avg_caidi_minutes}</span>
+            <span className="text-[9px] text-text-secondary block">min / outage restoration</span>
+          </div>
+
+          <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+            <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block">Total Customers Served</span>
+            <span className="text-lg font-bold text-text-primary font-mono-numbers">{(kpis.total_customers / 1e6).toFixed(2)}M</span>
+            <span className="text-[9px] text-text-secondary block">metered customers</span>
+          </div>
+        </div>
+      )}
+
+      {records.length > 0 && (
+        <div className="overflow-x-auto pt-2">
+          <table className="w-full text-xs text-left">
+            <thead>
+              <tr className="border-b border-border-hairline text-text-secondary uppercase tracking-widest text-[9px]">
+                <th className="py-2.5">Utility Name</th>
+                <th className="py-2.5 text-right">SAIDI (min/yr)</th>
+                <th className="py-2.5 text-right">SAIFI (events/yr)</th>
+                <th className="py-2.5 text-right">CAIDI (min/restoration)</th>
+                <th className="py-2.5 text-right">Outage Hours/Yr</th>
+                <th className="py-2.5 text-right">Rating</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border-hairline font-mono-numbers">
+              {records.slice(0, 8).map((r: any, idx: number) => {
+                const ratingBadge = r.reliability_rating === 'excellent' 
+                  ? 'bg-savings-green/10 text-savings-green border-savings-green/20' 
+                  : r.reliability_rating === 'good'
+                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                  : 'bg-amber-500/10 text-amber-500 border-amber-500/20';
+
+                return (
+                  <tr key={idx} className="hover:bg-bg-secondary/40 transition-colors font-sans">
+                    <td className="py-2.5 font-bold text-text-primary">{r.utility_name}</td>
+                    <td className="py-2.5 text-right font-mono-numbers text-text-primary font-bold">{r.saidi_minutes}</td>
+                    <td className="py-2.5 text-right font-mono-numbers text-primary-blue">{r.saifi}</td>
+                    <td className="py-2.5 text-right font-mono-numbers text-text-secondary">{r.caidi_minutes}</td>
+                    <td className="py-2.5 text-right font-mono-numbers text-text-secondary">{r.outage_hours_per_year} hrs</td>
+                    <td className="py-2.5 text-right">
+                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase ${ratingBadge}`}>
+                        {r.reliability_rating}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CensusEnergyBurdenSection = ({ state }: { state: string }) => {
+  const { data: countyRes } = useQuery({
+    queryKey: ['county-demographics', state],
+    queryFn: async () => (await axios.get(`/api/geo/county-demographics?state=${state}`)).data
+  });
+
+  const counties = countyRes?.data || [];
+
+  return (
+    <div className="panel-operational space-y-4 bg-bg-surface border border-border-hairline p-5 rounded-xl font-sans">
+      <div className="flex items-center justify-between border-b border-border-hairline pb-3">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+            <Users size={16} className="text-primary-blue" /> Census ACS Demographics & Social Vulnerability Index (SVI)
+          </h3>
+          <p className="text-[11px] text-text-secondary">
+            County-level household income, poverty rates, homeownership tenure, and regional energy burden benchmarks.
+          </p>
+        </div>
+        <span className="text-[10px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 rounded font-bold">
+          US Census ACS 5-Yr
+        </span>
+      </div>
+
+      <div className="overflow-x-auto pt-2">
+        <table className="w-full text-xs text-left">
+          <thead>
+            <tr className="border-b border-border-hairline text-text-secondary uppercase tracking-widest text-[9px]">
+              <th className="py-2.5">County</th>
+              <th className="py-2.5 text-right">Population</th>
+              <th className="py-2.5 text-right">Median Income</th>
+              <th className="py-2.5 text-right">Poverty Rate</th>
+              <th className="py-2.5 text-right">Homeownership</th>
+              <th className="py-2.5 text-right">Energy Burden</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border-hairline font-mono-numbers">
+            {counties.map((c: any, idx: number) => {
+              const estBurden = ((1920.0 / c.median_household_income) * 100).toFixed(2);
+              return (
+                <tr key={idx} className="hover:bg-bg-secondary/40 transition-colors font-sans">
+                  <td className="py-2.5 font-bold text-text-primary">{c.county} County</td>
+                  <td className="py-2.5 text-right font-mono-numbers text-text-secondary">{c.total_population.toLocaleString()}</td>
+                  <td className="py-2.5 text-right font-mono-numbers text-text-primary font-bold">${c.median_household_income.toLocaleString()}</td>
+                  <td className="py-2.5 text-right font-mono-numbers text-amber-500">{c.poverty_rate_pct}%</td>
+                  <td className="py-2.5 text-right font-mono-numbers text-text-secondary">{c.homeownership_pct}%</td>
+                  <td className="py-2.5 text-right font-mono-numbers text-primary-blue font-bold">{estBurden}%</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const GridInterchangeSection = ({ ba }: { ba: string }) => {
+  const { data: interchange } = useQuery({
+    queryKey: ['grid-interchange', ba],
+    queryFn: async () => (await axios.get(`/api/eia930/grid/interchange?ba=${ba}`)).data
+  });
+
+  if (!interchange) return null;
+
+  return (
+    <div className="panel-operational space-y-4 bg-bg-surface border border-border-hairline p-5 rounded-xl font-sans">
+      <div className="flex items-center justify-between border-b border-border-hairline pb-3">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+            <Globe size={16} className="text-energy-teal" /> EIA-930 Regional Grid Interchange & Flow Balance
+          </h3>
+          <p className="text-[11px] text-text-secondary">
+            Net power imports vs exports across neighboring Balancing Authorities for {ba}.
+          </p>
+        </div>
+        <span className="text-[10px] bg-energy-teal/10 text-energy-teal border border-energy-teal/20 px-2.5 py-1 rounded font-bold">
+          Self-Sufficiency: {interchange.self_sufficiency_score}%
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono-numbers">
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">Net Interchange</span>
+          <span className="text-lg font-bold text-text-primary">{interchange.net_interchange_mw} MW</span>
+          <span className="text-[9px] text-text-secondary block font-sans">positive = exporting</span>
+        </div>
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">Total Imports</span>
+          <span className="text-lg font-bold text-amber-500">{interchange.total_imports_mwh} MWh</span>
+          <span className="text-[9px] text-text-secondary block font-sans">power drawn in</span>
+        </div>
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">Total Exports</span>
+          <span className="text-lg font-bold text-savings-green">{interchange.total_exports_mwh} MWh</span>
+          <span className="text-[9px] text-text-secondary block font-sans">power supplied out</span>
+        </div>
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">Dependency Ratio</span>
+          <span className="text-lg font-bold text-primary-blue">{interchange.dependency_ratio_pct}%</span>
+          <span className="text-[9px] text-text-secondary block font-sans">import dependence</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SUB_TABS = [
   { id: 'summary',    label: 'Summary',    desc: 'Territory benchmarking parameters' },
   { id: 'map',        label: 'Map',        desc: 'Spatial drilldown network' },
@@ -950,6 +1164,8 @@ const RegionalPage = () => {
                     </ResponsiveContainer>
                   </div>
                 </div>
+                {/* Census ACS Demographics & Energy Burden Section */}
+                <CensusEnergyBurdenSection state={selectedState} />
               </div>
             )}
           </SectionWrapper>
@@ -1629,6 +1845,12 @@ const RegionalPage = () => {
                 )}
               </div>
             </div>
+
+            {/* Distribution Grid Reliability Indices (SAIDI / SAIFI) */}
+            <GridReliabilitySection state={selectedState} />
+
+            {/* EIA-930 Regional Grid Interchange & Flow Balance */}
+            <GridInterchangeSection ba="PJM" />
           </SectionWrapper>
         )}
 

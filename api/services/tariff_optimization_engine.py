@@ -156,18 +156,6 @@ class TariffOptimizationEngine:
                 }
             ]
 
-        # Sort by simulated cost ascending
-        comparison = sorted(comparison, key=lambda x: x["simulated_annual_cost"])
-        
-        best = comparison[0]
-        worst = comparison[-1]
-        
-        # Calculate net savings
-        annual_savings = max(0.0, annual_cost - best["simulated_annual_cost"])
-        if annual_savings == 0.0 and len(comparison) > 1:
-            annual_savings = comparison[1]["simulated_annual_cost"] - best["simulated_annual_cost"]
-            
-        payback_months = round((best["fixed_monthly"] * 12.0) / annual_savings, 1) if annual_savings > 0 else 0.0
         
         # Prepare recommendation report
         recommendation = {
@@ -190,6 +178,66 @@ class TariffOptimizationEngine:
         return {
             "comparison": comparison,
             "recommendation": recommendation
+        }
+
+    # ── Retail Supplier ETF & Risk Enhancements ─────────────────────────────
+
+    def evaluate_supplier_plan(
+        self,
+        plan_name: str = "CleanGreen Fixed 12",
+        supplier_name: str = "Green Mountain Energy",
+        rate_type: str = "fixed",
+        current_rate_kwh: float = 0.214,
+        proposed_rate_kwh: float = 0.178,
+        monthly_kwh: float = 750.0,
+        contract_months: int = 12,
+        cancellation_fee: float = 150.0,
+        remaining_contract_months: int = 6
+    ) -> dict:
+        """
+        Evaluate retail supplier plan exit penalties, break-even month,
+        volatility score, supplier risk rating, and net annual savings.
+        """
+        monthly_diff = (current_rate_kwh - proposed_rate_kwh) * monthly_kwh
+        annual_gross_savings = monthly_diff * 12.0
+
+        # ETF Exit Penalty Modeling
+        etf_penalty = cancellation_fee if cancellation_fee > 0 else (15.0 * remaining_contract_months)
+        net_year_1_savings = annual_gross_savings - etf_penalty
+        break_even_months = (etf_penalty / monthly_diff) if monthly_diff > 0 else 99.0
+
+        # Volatility Score & Supplier Risk Rating
+        if rate_type.lower() == "fixed":
+            volatility_score = 15.0
+            risk_rating = "Low"
+            stability_score = 92.0
+        elif rate_type.lower() == "variable":
+            volatility_score = 78.0
+            risk_rating = "High"
+            stability_score = 45.0
+        else:  # indexed / wholesale
+            volatility_score = 92.0
+            risk_rating = "High Risk (Wholesale Index)"
+            stability_score = 25.0
+
+        recommendation = "Switch Recommended" if (net_year_1_savings > 50 and break_even_months <= 4) else "Hold Current Tariff"
+
+        return {
+            "supplier_name": supplier_name,
+            "plan_name": plan_name,
+            "rate_type": rate_type,
+            "current_rate_kwh": current_rate_kwh,
+            "proposed_rate_kwh": proposed_rate_kwh,
+            "monthly_kwh": monthly_kwh,
+            "monthly_savings_usd": round(monthly_diff, 2),
+            "annual_gross_savings_usd": round(annual_gross_savings, 2),
+            "cancellation_fee_etf": round(etf_penalty, 2),
+            "net_year_1_savings_usd": round(net_year_1_savings, 2),
+            "break_even_months": round(break_even_months, 1),
+            "volatility_score": volatility_score,
+            "stability_score": stability_score,
+            "supplier_risk_rating": risk_rating,
+            "recommendation": recommendation,
         }
 
 

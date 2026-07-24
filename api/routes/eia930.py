@@ -514,3 +514,28 @@ async def get_node_lmp_history(node_id: str):
         logger.error(f"Error querying node history: {e}")
         raise HTTPException(500, f"Database query error: {e}")
 
+
+# ── Interchange & Flow Analytics Endpoints ───────────────────────────────
+
+@router.get("/grid/interchange")
+@router.get("/eia930/grid/interchange")
+async def get_interchange_analytics(
+    ba: str = Query("PJM", description="Balancing Authority code"),
+    days: int = Query(30, ge=1, le=365),
+):
+    """Retrieve net interchange, total imports, total exports, and neighbor BA flow splits."""
+    from api.services.eia930_service import eia930_service
+    return eia930_service.get_interchange_analytics(ba_code=ba, days=days)
+
+
+@router.get("/grid/interchange-trends")
+@router.get("/eia930/grid/interchange-trends")
+async def get_interchange_trends(
+    ba: str = Query("PJM", description="Balancing Authority code"),
+    days: int = Query(30, ge=1, le=365),
+):
+    """Retrieve daily timeline of net imports vs exports."""
+    from api.services.eia930_service import eia930_service
+    return {"data": eia930_service.get_interchange_trends(ba_code=ba, days=days)}
+
+

@@ -187,3 +187,45 @@ async def get_utility_metrics(utility_id: int, state: str | None = None):
     }
 
 
+# ── NEW: Operational Benchmarking & Incentive Endpoints ───────────────────
+
+@router.get("/operational-benchmark")
+async def get_operational_benchmark(
+    state: str = Query("NJ", description="State abbreviation"),
+    year: int = Query(None, description="Filter to specific year"),
+):
+    """Get operational benchmark metrics for utilities in a state."""
+    from api.services.eia861_analytics_service import eia861_analytics_service
+    data = eia861_analytics_service.get_operational_benchmark(state=state, year=year)
+    return {"count": len(data), "data": data}
+
+
+@router.get("/incentives")
+async def get_incentive_programs(
+    state: str = Query("NJ"),
+    utility_id: int = Query(None, description="Filter to specific utility"),
+):
+    """Get available incentive programs (Net Metering, DR, TOU) for a state/utility."""
+    from api.services.eia861_analytics_service import eia861_analytics_service
+    return eia861_analytics_service.get_available_incentives(
+        utility_id=utility_id, state=state
+    )
+
+
+@router.get("/tou-savings")
+async def estimate_tou_savings(
+    usage_kwh: float = Query(750, ge=0),
+    peak_pct: float = Query(0.40, ge=0, le=1),
+    shift_pct: float = Query(0.15, ge=0, le=1),
+    peak_rate: float = Query(0.22, ge=0),
+    offpeak_rate: float = Query(0.09, ge=0),
+):
+    """Estimate savings from switching to a Time-of-Use rate plan."""
+    from api.services.eia861_analytics_service import eia861_analytics_service
+    return eia861_analytics_service.estimate_tou_savings(
+        monthly_usage_kwh=usage_kwh,
+        peak_pct=peak_pct,
+        shift_pct=shift_pct,
+        peak_rate=peak_rate,
+        offpeak_rate=offpeak_rate,
+    )

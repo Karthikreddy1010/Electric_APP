@@ -426,5 +426,85 @@ class SmartMeterService:
         }
 
 
+        return {
+            "load_curve_24h": load_curve,
+            "heatmap": heatmap,
+            "trends": trends
+        }
+
+    # ── Power Factor Correction & Voltage Optimization ─────────────────────
+
+    def analyze_power_factor_quality(
+        self,
+        current_pf: float = 0.84,
+        target_pf: float = 0.95,
+        peak_kw: float = 250.0,
+        monthly_kwh: float = 85000.0,
+        pf_penalty_rate_kw: float = 4.50
+    ) -> dict:
+        """
+        Calculate kVAR capacitor bank needed to raise Power Factor to target (0.95+),
+        saving utility reactive power penalty charges.
+        """
+        # kVAR required = Peak_kW * (tan(acos(PF_current)) - tan(acos(PF_target)))
+        theta_current = np.arccos(current_pf)
+        theta_target = np.arccos(target_pf)
+        kvar_needed = peak_kw * (np.tan(theta_current) - np.tan(theta_target))
+
+        # Monthly PF penalty fee
+        # Utility penalty applies when PF < 0.90
+        monthly_penalty = 0.0
+        if current_pf < 0.90:
+            deficit_kw = peak_kw * (0.90 - current_pf)
+            monthly_penalty = deficit_kw * pf_penalty_rate_kw
+
+        annual_penalty = monthly_penalty * 12.0
+        # Capacitor bank cost estimate ~$60 / kVAR installed
+        capacitor_cost = max(kvar_needed * 60.0, 1200.0)
+        payback_months = (capacitor_cost / monthly_penalty) if monthly_penalty > 0 else 99.0
+
+        return {
+            "current_power_factor": current_pf,
+            "target_power_factor": target_pf,
+            "peak_kw": peak_kw,
+            "kvar_capacitors_required": round(float(kvar_needed), 1),
+            "monthly_penalty_fee_usd": round(monthly_penalty, 2),
+            "annual_penalty_savings_usd": round(annual_penalty, 2),
+            "estimated_equipment_cost_usd": round(capacitor_cost, 2),
+            "payback_period_months": round(payback_months, 1),
+            "recommendation": "Install Capacitor Bank" if monthly_penalty > 50 else "Power Factor Healthy"
+        }
+
+    def analyze_cvr_voltage_optimization(
+        self,
+        nominal_voltage: float = 120.0,
+        operating_voltage: float = 124.5,
+        target_voltage: float = 117.0,
+        annual_kwh: float = 120000.0,
+        rate_kwh: float = 0.185
+    ) -> dict:
+        """
+        Calculate Conservation Voltage Reduction (CVR) energy savings.
+        Lowering operating voltage by 2-3% reduces energy consumption by ~0.8% per 1% voltage drop.
+        """
+        v_drop_pct = (operating_voltage - target_voltage) / operating_voltage * 100.0
+        # CVR factor = 0.8 (0.8% kWh reduction per 1% voltage reduction)
+        cvr_factor = 0.8
+        kwh_savings_pct = v_drop_pct * cvr_factor
+        annual_kwh_saved = annual_kwh * (kwh_savings_pct / 100.0)
+        annual_cost_saved = annual_kwh_saved * rate_kwh
+
+        return {
+            "operating_voltage": operating_voltage,
+            "target_voltage": target_voltage,
+            "voltage_reduction_pct": round(v_drop_pct, 2),
+            "cvr_factor": cvr_factor,
+            "kwh_savings_pct": round(kwh_savings_pct, 2),
+            "annual_kwh_saved": round(annual_kwh_saved, 1),
+            "annual_cost_saved_usd": round(annual_cost_saved, 2),
+            "co2_offset_tons": round(annual_kwh_saved * 0.00038, 2),
+        }
+
+
 # Centralized singleton instance
 smart_meter_service = SmartMeterService()

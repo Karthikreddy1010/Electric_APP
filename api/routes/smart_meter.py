@@ -109,3 +109,35 @@ def get_demand_history(
         "customer_id": customer_id,
         "heatmap": curves["heatmap"]
     }
+
+
+# ── Power Factor Correction & Voltage Optimization Endpoints ───────────────
+
+@router.get("/power-factor-analytics")
+def get_power_factor_analytics(
+    current_pf: float = Query(0.84, ge=0.5, le=1.0),
+    target_pf: float = Query(0.95, ge=0.8, le=1.0),
+    peak_kw: float = Query(250.0, ge=0),
+    monthly_kwh: float = Query(85000.0, ge=0),
+):
+    """Calculate kVAR capacitor bank needed to raise Power Factor to target and eliminate penalty fees."""
+    return smart_meter_service.analyze_power_factor_quality(
+        current_pf=current_pf, target_pf=target_pf, peak_kw=peak_kw, monthly_kwh=monthly_kwh
+    )
+
+
+@router.get("/cvr-optimization")
+def get_cvr_optimization(
+    operating_voltage: float = Query(124.5, ge=100, le=135),
+    target_voltage: float = Query(117.0, ge=100, le=135),
+    annual_kwh: float = Query(120000.0, ge=0),
+    rate_kwh: float = Query(0.185, ge=0),
+):
+    """Calculate Conservation Voltage Reduction (CVR) energy and cost savings."""
+    return smart_meter_service.analyze_cvr_voltage_optimization(
+        operating_voltage=operating_voltage,
+        target_voltage=target_voltage,
+        annual_kwh=annual_kwh,
+        rate_kwh=rate_kwh,
+    )
+

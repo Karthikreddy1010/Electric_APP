@@ -213,6 +213,15 @@ async def lifespan(app: FastAPI):
             f"pseg_distribution_rates={len(app_state['pseg_distribution_rates_df'])}"
         )
 
+        # ── Seed CPI and Reliability tables if not already populated ─────────
+        try:
+            from database.seed import seed_cpi_data, seed_utility_reliability
+            cpi_count = seed_cpi_data()
+            rel_count = seed_utility_reliability()
+            logger.info(f"CPI index: {cpi_count} rows | Reliability: {rel_count} rows")
+        except Exception as e_seed:
+            logger.warning(f"Dataset seeding failed (non-fatal): {e_seed}")
+
         # Build geo_monthly_df from state_monthly_prices directly
         mo_df = app_state["state_monthly_prices_df"].copy()
         
@@ -415,6 +424,15 @@ app.include_router(customers_router)
 app.include_router(bill_router)
 app.include_router(smart_meter_router)
 app.include_router(tariff_optimization_router)
+
+# ── Dataset Integration Routers ─────────────────────────────────────────────
+from api.routes.pjm_router import router as pjm_router
+from api.routes.inflation_router import router as inflation_router
+from api.routes.cross_dataset import router as cross_dataset_router
+
+app.include_router(pjm_router)
+app.include_router(inflation_router)
+app.include_router(cross_dataset_router)
 
 
 

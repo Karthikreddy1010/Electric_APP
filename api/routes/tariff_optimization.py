@@ -53,3 +53,32 @@ def apply_optimized_tariff(
         "success": True,
         "message": f"Successfully switched rate structure to tariff plan ID {tariff_id}."
     }
+
+
+# ── Retail Supplier ETF & Risk Evaluation Endpoints ─────────────────────────
+
+@router.get("/evaluate-supplier-plan")
+async def evaluate_supplier_plan(
+    plan_name: str = Query("CleanGreen Fixed 12"),
+    supplier_name: str = Query("Green Mountain Energy"),
+    rate_type: str = Query("fixed"),
+    current_rate_kwh: float = Query(0.214, ge=0),
+    proposed_rate_kwh: float = Query(0.178, ge=0),
+    monthly_kwh: float = Query(750.0, ge=0),
+    contract_months: int = Query(12, ge=1),
+    cancellation_fee: float = Query(150.0, ge=0),
+    remaining_contract_months: int = Query(6, ge=0),
+):
+    """Evaluate retail supplier plan exit penalties (ETF), volatility score, supplier risk, and break-even month."""
+    return tariff_optimization_engine.evaluate_supplier_plan(
+        plan_name=plan_name,
+        supplier_name=supplier_name,
+        rate_type=rate_type,
+        current_rate_kwh=current_rate_kwh,
+        proposed_rate_kwh=proposed_rate_kwh,
+        monthly_kwh=monthly_kwh,
+        contract_months=contract_months,
+        cancellation_fee=cancellation_fee,
+        remaining_contract_months=remaining_contract_months,
+    )
+

@@ -30,6 +30,33 @@ async def get_trends(months: int = Query(36, ge=6, le=84)):
     return build_trends(billing, months)
 
 
+# ── Customer Archetypes & Bill Health Endpoints ────────────────────────────
+
+@router.get("/customer-archetype")
+@router.get("/billing/customer-archetype")
+async def get_customer_archetype(
+    usage_kwh: float = Query(750.0, ge=0),
+    peak_kw: float = Query(0.0, ge=0),
+    renewable_pct: float = Query(0.0, ge=0, le=100),
+):
+    """Classify customer into analytical energy archetypes with personalized recommendations."""
+    from api.services.billing_service import classify_customer_archetype
+    return classify_customer_archetype(usage_kwh=usage_kwh, peak_kw=peak_kw, renewable_pct=renewable_pct)
+
+
+@router.get("/bill-health-score")
+@router.get("/billing/bill-health-score")
+async def get_bill_health_score(
+    usage_kwh: float = Query(750.0, ge=0),
+    total_bill: float = Query(160.65, ge=0),
+    ocr_error: bool = Query(False),
+):
+    """Compute automated Bill Health & Anomaly Score (0 to 100)."""
+    from api.services.billing_service import compute_bill_health_score
+    return compute_bill_health_score(usage_kwh=usage_kwh, total_bill=total_bill, OCR_error_flag=ocr_error)
+
+
+
 # ── Serve PSEG rate history ──────────────────────────────────────────────────
 @router.get("/pseg-rate-history")
 async def get_pseg_rate_history():

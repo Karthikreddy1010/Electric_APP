@@ -119,3 +119,100 @@ async def get_municipal_rankings(
         "county_summary": latest_county
     }
 
+
+# ── NEW: Community Analytics & Reliability Endpoints ───────────────────────
+
+@router.get("/community-rankings")
+async def get_community_rankings(
+    county: str = Query(None, description="Filter by county"),
+    year: int = Query(None, description="Filter by year"),
+    top_n: int = Query(20, ge=1, le=100),
+):
+    """Community-level energy consumption rankings with sector breakdown."""
+    from api.services.community_energy_service import community_energy_service
+    data = community_energy_service.get_community_rankings(
+        county=county, year=year, top_n=top_n
+    )
+    return {"count": len(data), "data": data}
+
+
+@router.get("/sector-history")
+async def get_sector_history(
+    municipality: str = Query(None, description="Municipality name"),
+    county: str = Query(None, description="County name"),
+):
+    """Yearly sector-level (residential, commercial, industrial) consumption trends."""
+    from api.services.community_energy_service import community_energy_service
+    data = community_energy_service.get_sector_history(
+        municipality=municipality, county=county
+    )
+    return {"data": data}
+
+
+@router.get("/compare")
+async def compare_municipalities(
+    municipalities: str = Query(..., description="Comma-separated municipality names"),
+    year: int = Query(None),
+):
+    """Compare energy metrics across multiple municipalities."""
+    from api.services.community_energy_service import community_energy_service
+    muni_list = [m.strip() for m in municipalities.split(",") if m.strip()]
+    data = community_energy_service.compare_municipalities(municipalities=muni_list, year=year)
+    return {"count": len(data), "data": data}
+
+
+@router.get("/county-benchmarks")
+async def get_county_benchmarks(
+    year: int = Query(None),
+):
+    """County-level aggregated energy benchmarks."""
+    from api.services.community_energy_service import community_energy_service
+    data = community_energy_service.get_county_benchmarks(year=year)
+    return {"count": len(data), "data": data}
+
+
+@router.get("/reliability")
+async def get_reliability_metrics(
+    state: str = Query("NJ"),
+    utility_name: str = Query(None, description="Filter by utility name (partial match)"),
+    year: int = Query(None),
+):
+    """Get SAIDI/SAIFI/CAIDI reliability metrics for utilities."""
+    from api.services.reliability_service import reliability_service
+    data = reliability_service.get_reliability_metrics(
+        state=state, utility_name=utility_name, year=year
+    )
+    return {"count": len(data), "data": data}
+
+
+@router.get("/reliability/trend")
+async def get_reliability_trend(
+    utility_name: str = Query(None),
+    state: str = Query("NJ"),
+):
+    """SAIDI/SAIFI trend over years for a utility or state average."""
+    from api.services.reliability_service import reliability_service
+    data = reliability_service.get_reliability_trend(
+        utility_name=utility_name, state=state
+    )
+    return {"data": data}
+
+
+@router.get("/reliability/compare")
+async def compare_reliability(
+    state: str = Query("NJ"),
+    year: int = Query(None),
+):
+    """Compare reliability metrics across utilities in a state."""
+    from api.services.reliability_service import reliability_service
+    data = reliability_service.compare_utilities(state=state, year=year)
+    return {"count": len(data), "data": data}
+
+
+@router.get("/reliability/kpis")
+async def get_reliability_kpis(
+    state: str = Query("NJ"),
+):
+    """Top-level reliability KPIs for a state."""
+    from api.services.reliability_service import reliability_service
+    return reliability_service.get_kpis(state=state)

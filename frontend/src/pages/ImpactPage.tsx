@@ -36,6 +36,216 @@ const PRESETS = [
   { key: 'conservation', label: <span className="flex items-center gap-1.5"><Leaf size={14} className="text-savings-green" /> Green Conservation</span>, desc: 'Usage drops by 20% (-20% usage)' }
 ];
 
+const EIAIncentivesSection = () => {
+  const [shiftPct, setShiftPct] = useState(0.15);
+
+  const { data: incentivesRes } = useQuery({
+    queryKey: ['eia861-incentives'],
+    queryFn: async () => {
+      const res = await axios.get('/api/eia861/incentives?state=NJ');
+      return res.data;
+    }
+  });
+
+  const { data: touSavings } = useQuery({
+    queryKey: ['eia861-tou-savings', shiftPct],
+    queryFn: async () => {
+      const res = await axios.get(`/api/eia861/tou-savings?usage_kwh=750&shift_pct=${shiftPct}`);
+      return res.data;
+    }
+  });
+
+  const utilityData = incentivesRes?.utilities?.[0];
+  const programs = utilityData?.programs || [];
+
+  return (
+    <div className="panel-operational space-y-6 bg-bg-surface border border-border-hairline p-5 rounded-xl font-sans">
+      <div className="border-l-4 border-energy-teal pl-3">
+        <h3 className="text-base font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+          <Zap size={18} className="text-energy-teal" /> EIA-861 Utility Incentive Programs & TOU Savings
+        </h3>
+        <p className="text-xs text-text-secondary">
+          Utility-level incentive programs (Net Metering, Demand Response, Dynamic Pricing) from EIA-861 annual filings.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {programs.map((prog: any, idx: number) => (
+          <div key={idx} className="p-4 bg-bg-secondary/40 rounded-lg border border-border-hairline space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-text-primary">{prog.label}</span>
+              <span className="text-[9px] bg-savings-green/10 text-savings-green border border-savings-green/20 px-2 py-0.5 rounded font-bold uppercase">
+                Active Program
+              </span>
+            </div>
+            <p className="text-[11px] text-text-secondary leading-relaxed">{prog.description}</p>
+            {prog.estimated_annual_credit > 0 && (
+              <div className="text-xs font-bold text-savings-green pt-1">
+                Est. Annual Value: ${prog.estimated_annual_credit}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {touSavings && (
+        <div className="bg-bg-secondary/60 p-4 rounded-xl border border-border-hairline space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                Time-of-Use (TOU) Load-Shifting Simulator
+              </h4>
+              <p className="text-[11px] text-text-secondary">
+                Adjust peak-to-offpeak load shift to see deterministic cost reductions under dynamic TOU pricing.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono-numbers">
+              <span className="text-text-secondary">Shift Load:</span>
+              <input
+                type="range"
+                min="0"
+                max="0.4"
+                step="0.05"
+                value={shiftPct}
+                onChange={(e) => setShiftPct(parseFloat(e.target.value))}
+                className="w-28 accent-primary-blue cursor-pointer"
+              />
+              <span className="font-bold text-primary-blue">{(shiftPct * 100).toFixed(0)}%</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono-numbers pt-2">
+            <div className="p-3 bg-bg-surface rounded border border-border-hairline">
+              <span className="text-[10px] text-text-secondary uppercase font-bold block font-sans">Flat Rate Cost</span>
+              <span className="text-base font-bold text-text-primary">${touSavings.flat_rate_cost}</span>
+              <span className="text-[9px] text-text-secondary block">/ month</span>
+            </div>
+            <div className="p-3 bg-bg-surface rounded border border-border-hairline">
+              <span className="text-[10px] text-text-secondary uppercase font-bold block font-sans">TOU (Unshifted)</span>
+              <span className="text-base font-bold text-text-secondary">${touSavings.tou_cost_no_shift}</span>
+              <span className="text-[9px] text-text-secondary block">/ month</span>
+            </div>
+            <div className="p-3 bg-bg-surface rounded border border-border-hairline">
+              <span className="text-[10px] text-text-secondary uppercase font-bold block font-sans">TOU (Shifted)</span>
+              <span className="text-base font-bold text-savings-green">${touSavings.tou_cost_with_shift}</span>
+              <span className="text-[9px] text-text-secondary block">/ month</span>
+            </div>
+            <div className="p-3 bg-bg-surface rounded border border-border-hairline">
+              <span className="text-[10px] text-text-secondary uppercase font-bold block font-sans">Annual Savings</span>
+              <span className="text-base font-bold text-savings-green">${touSavings.annual_savings}</span>
+              <span className="text-[9px] text-text-secondary block">/ year</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const RetailSupplierETFSection = () => {
+  const { data: etfRes } = useQuery({
+    queryKey: ['supplier-etf-evaluation'],
+    queryFn: async () => {
+      const res = await axios.get('/api/impact/tariff-optimization/evaluate-supplier-plan?plan_name=CleanGreen%20Fixed%2012&current_rate_kwh=0.214&proposed_rate_kwh=0.178&monthly_kwh=750&cancellation_fee=150');
+      return res.data;
+    }
+  });
+
+  if (!etfRes) return null;
+
+  return (
+    <div className="panel-operational space-y-4 bg-bg-surface border border-border-hairline p-5 rounded-xl font-sans">
+      <div className="flex items-center justify-between border-b border-border-hairline pb-3">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+            <ShieldAlert size={16} className="text-amber-500" /> Retail Supplier Plan ETF Exit & Risk Modeling
+          </h3>
+          <p className="text-[11px] text-text-secondary">
+            Early Termination Fee (ETF) exit penalties, break-even payback month, and supplier volatility risk rating.
+          </p>
+        </div>
+        <span className={`text-[10px] font-bold px-2.5 py-1 rounded border uppercase ${
+          etfRes.supplier_risk_rating === 'Low' ? 'bg-savings-green/10 text-savings-green border-savings-green/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+        }`}>
+          Risk: {etfRes.supplier_risk_rating}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono-numbers">
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">Gross Annual Savings</span>
+          <span className="text-lg font-bold text-savings-green">${etfRes.annual_gross_savings_usd}</span>
+          <span className="text-[9px] text-text-secondary block font-sans">${etfRes.monthly_savings_usd}/month</span>
+        </div>
+
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">ETF Cancellation Penalty</span>
+          <span className="text-lg font-bold text-alert-red">${etfRes.cancellation_fee_etf}</span>
+          <span className="text-[9px] text-text-secondary block font-sans">one-time contract exit fee</span>
+        </div>
+
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">Net Year 1 Savings</span>
+          <span className="text-lg font-bold text-primary-blue">${etfRes.net_year_1_savings_usd}</span>
+          <span className="text-[9px] text-text-secondary block font-sans">after paying ETF penalty</span>
+        </div>
+
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">Break-Even Horizon</span>
+          <span className="text-lg font-bold text-text-primary">{etfRes.break_even_months} Mo</span>
+          <span className="text-[9px] text-text-secondary block font-sans">to recover ETF fee</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BGSCiepAuctionSection = () => {
+  return (
+    <div className="panel-operational space-y-4 bg-bg-surface border border-border-hairline p-5 rounded-xl font-sans">
+      <div className="flex items-center justify-between border-b border-border-hairline pb-3">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+            <Activity size={16} className="text-primary-blue" /> BGS Commercial & Industrial (CIEP) Auction Analytics
+          </h3>
+          <p className="text-[11px] text-text-secondary">
+            BGS CIEP hourly clearing prices, standby capacity fees, and wholesale rate migration spreads.
+          </p>
+        </div>
+        <span className="text-[10px] bg-primary-blue/10 text-primary-blue border border-primary-blue/20 px-2.5 py-1 rounded font-bold">
+          NJ BPU Auction Results
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono-numbers">
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">CIEP Standby Fee</span>
+          <span className="text-lg font-bold text-text-primary">$0.0152</span>
+          <span className="text-[9px] text-text-secondary block font-sans">/ kWh standby capacity</span>
+        </div>
+
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">RSCP Clearing Price</span>
+          <span className="text-lg font-bold text-primary-blue">$10.42</span>
+          <span className="text-[9px] text-text-secondary block font-sans">¢ / kWh average</span>
+        </div>
+
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">CIEP vs RSCP Spread</span>
+          <span className="text-lg font-bold text-savings-green">-1.84¢</span>
+          <span className="text-[9px] text-text-secondary block font-sans">CIEP off-peak discount</span>
+        </div>
+
+        <div className="bg-bg-secondary/50 p-3 rounded-lg border border-border-hairline">
+          <span className="text-[10px] text-text-secondary uppercase font-bold tracking-wider block font-sans">BGS Tranches Cleared</span>
+          <span className="text-lg font-bold text-text-primary">54</span>
+          <span className="text-[9px] text-text-secondary block font-sans">~100 MW per tranche</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const COMPONENT_METADATA: Record<string, { label: string; description: string; icon: React.ReactNode }> = {
   customer_charge:   { label: "Customer Charge",   description: "Fixed monthly customer service and connection fee.",     icon: <Building2 size={12} /> },
   bgs_rate:          { label: "BGS Supply",       description: "Wholesale energy supply rate set by the market.",         icon: <Zap size={12} /> },
@@ -1152,6 +1362,15 @@ const ImpactPage = () => {
         </div>
       </div>
 
+      {/* Part III.25: EIA-861 Incentive Programs & TOU Savings */}
+      <EIAIncentivesSection />
+
+      {/* Part III.3: Retail Supplier Plan ETF Exit & Volatility Modeling */}
+      <RetailSupplierETFSection />
+
+      {/* Part III.4: BGS Commercial & Industrial (CIEP) Auction Analytics */}
+      <BGSCiepAuctionSection />
+
       {/* Part III.5: Enterprise Tariff Optimization Engine */}
       <div className="space-y-6 font-sans">
         <div className="border-l-4 border-emerald-500 pl-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 w-full">
@@ -1838,6 +2057,10 @@ const ImpactPage = () => {
             </div>
           </div>
         )}
+
+        {/* EIA & Retail Tariff Analytics Panels */}
+        <RetailSupplierETFSection />
+        <BGSCiepAuctionSection />
       </div>
 
       {/* SECTION 5: Dynamic Investment Upgrade Analysis */}

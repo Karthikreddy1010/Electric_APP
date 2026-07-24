@@ -8,7 +8,7 @@
  * It does NOT own: sensitivity analysis, driver analysis, component breakdown,
  * or what-if simulation. Those live in Impact & Simulation.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Upload, FileText, RefreshCw,
   Terminal, ShieldCheck, Play, Download,
@@ -230,6 +230,133 @@ const UploadView = () => {
   );
 };
 
+// ─── Real-Dollar CPI Inflation Card ──────────────────────────────────────────
+
+const RealDollarInflationCard = ({ totalBill, billDate }: { totalBill: number; billDate?: string }) => {
+  const year = billDate ? parseInt(billDate.split('-')[0]) || 2024 : 2024;
+  const month = billDate ? parseInt(billDate.split('-')[1]) || 1 : 1;
+
+  const [adjustedData, setAdjustedData] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchInflation = async () => {
+      try {
+        const res = await apiClient.post('/inflation/adjust-bill', {
+          nominal_bill: totalBill || 160.65,
+          bill_year: year,
+          bill_month: month,
+        });
+        setAdjustedData(res.data);
+      } catch (err) {
+        console.warn("Failed to adjust bill for inflation:", err);
+      }
+    };
+    fetchInflation();
+  }, [totalBill, year, month]);
+
+  if (!adjustedData) return null;
+
+  return (
+    <div className="bg-bg-surface border border-border-hairline p-4 rounded-xl shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 font-sans">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-primary-blue/10 rounded-lg text-primary-blue border border-primary-blue/20">
+          <TrendingUp size={18} />
+        </div>
+        <div>
+          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block font-sans">
+            BLS Consumer Price Index (CPI-U) Real Dollar Deflator
+          </span>
+          <p className="text-xs text-text-primary font-semibold mt-0.5">
+            Nominal Bill: <span className="font-mono-numbers text-text-primary font-bold">${adjustedData.nominal_bill}</span> → Real (CPI Base {adjustedData.base_year}): <span className="font-mono-numbers text-savings-green font-bold">${adjustedData.real_bill}</span>
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 text-xs font-mono-numbers">
+        <div className="text-right">
+          <span className="text-[9px] text-text-secondary uppercase font-bold block font-sans">CPI Deflator Factor</span>
+          <span className="text-sm font-bold text-primary-blue">{adjustedData.deflator}x</span>
+        </div>
+        <div className="text-right border-l border-border-hairline pl-4">
+          <span className="text-[9px] text-text-secondary uppercase font-bold block font-sans">Inflation Adjustment</span>
+          <span className="text-sm font-bold text-amber-500">+${adjustedData.inflation_adjustment}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Customer Archetype & Bill Health Score Card ─────────────────────────────
+const CustomerArchetypeAndHealthCard = ({ usageKwh, totalBill }: { usageKwh: number; totalBill: number }) => {
+  const [healthData, setHealthData] = useState<any>(null);
+  const [archetypeData, setArchetypeData] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchAudit() {
+      try {
+        const [hRes, aRes] = await Promise.all([
+          apiClient.get(`/billing/bill-health-score?usage_kwh=${usageKwh}&total_bill=${totalBill}`),
+          apiClient.get(`/billing/customer-archetype?usage_kwh=${usageKwh}`)
+        ]);
+        setHealthData(hRes.data);
+        setArchetypeData(aRes.data);
+      } catch (err) {
+        console.warn("Failed to load bill health audit:", err);
+      }
+    }
+    fetchAudit();
+  }, [usageKwh, totalBill]);
+
+  if (!healthData || !archetypeData) return null;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
+      {/* Bill Health Audit Score */}
+      <div className="p-4 bg-bg-surface border border-border-hairline rounded-xl shadow-sm space-y-2">
+        <div className="flex items-center justify-between border-b border-border-hairline pb-2">
+          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block font-sans">
+            Automated Bill Audit & Health Score
+          </span>
+          <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded border uppercase ${
+            healthData.bill_health_score >= 90 ? 'bg-savings-green/10 text-savings-green border-savings-green/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+          }`}>
+            Grade {healthData.health_grade} ({healthData.bill_health_score}/100)
+          </span>
+        </div>
+        <p className="text-xs text-text-primary font-semibold">
+          Audit Status: <span className="font-bold text-savings-green">{healthData.audit_status}</span> · Effective Rate: <span className="font-mono-numbers font-bold">${healthData.effective_rate}/kWh</span>
+        </p>
+        {healthData.anomalies_detected?.length > 0 ? (
+          <ul className="space-y-1 text-[11px] text-amber-500">
+            {healthData.anomalies_detected.map((a: string, i: number) => (
+              <li key={i} className="flex items-start gap-1">
+                <span>⚠️</span> <span>{a}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[11px] text-text-secondary italic">No billing component anomalies or extraction mismatches detected.</p>
+        )}
+      </div>
+
+      {/* Customer Archetype */}
+      <div className="p-4 bg-bg-surface border border-border-hairline rounded-xl shadow-sm space-y-2">
+        <div className="flex items-center justify-between border-b border-border-hairline pb-2">
+          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block font-sans">
+            Customer Load Archetype
+          </span>
+          <span className="text-xs font-bold px-2.5 py-0.5 rounded border bg-primary-blue/10 text-primary-blue border-primary-blue/20">
+            {archetypeData.archetype}
+          </span>
+        </div>
+        <p className="text-xs text-text-primary leading-relaxed">{archetypeData.profile_description}</p>
+        <p className="text-[11px] text-savings-green font-medium leading-relaxed">
+          💡 <strong className="font-bold">Advice:</strong> {archetypeData.savings_advice}
+        </p>
+      </div>
+    </div>
+  );
+};
+
 // ─── Analysis View (bill loaded) ──────────────────────────────────────────────
 
 const AnalysisView = () => {
@@ -428,6 +555,18 @@ const AnalysisView = () => {
           </span>
         </div>
       </div>
+
+      {/* Real-Dollar CPI Inflation Adjustment Banner */}
+      <RealDollarInflationCard
+        totalBill={Number(corrections.total_bill || uploadedBill.total_bill || 160.65)}
+        billDate={canonical.normalized_values.bill_date}
+      />
+
+      {/* Customer Archetype & Automated Bill Audit Scorecard */}
+      <CustomerArchetypeAndHealthCard
+        usageKwh={Number(canonical.normalized_values.usage_kwh || uploadedBill.usage_kwh || 750)}
+        totalBill={Number(corrections.total_bill || uploadedBill.total_bill || 160.65)}
+      />
 
       {/* Segment Tab Controls */}
       <div className="flex border-b border-border-hairline gap-4 text-sm font-semibold overflow-x-auto">

@@ -1016,6 +1016,64 @@ class UserBillCorrection(Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  CPI INFLATION INDEX
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CpiIndex(Base):
+    """
+    US Bureau of Labor Statistics Consumer Price Index (CPI-U) monthly data.
+    Used for inflation-adjusting electricity bills and computing real cost trends.
+    Source: cpi_monthly.csv and cpi_yearly.csv from BLS.
+    """
+    __tablename__ = "cpi_index"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)
+    cpi = Column(Float, nullable=False)                          # CPI-U All Urban Consumers
+    cpi_annual_avg = Column(Float)                               # Annual average CPI
+    deflator = Column(Float)                                     # Deflator relative to base year
+    inflation_pct = Column(Float)                                # YoY inflation %
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_cpi_year_month"),
+        Index("ix_cpi_year_month", "year", "month"),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  UTILITY RELIABILITY INDICES (SAIDI / SAIFI)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UtilityReliability(Base):
+    """
+    EIA-861 utility-level distribution reliability indices.
+    SAIDI = System Average Interruption Duration Index (minutes/customer/year).
+    SAIFI = System Average Interruption Frequency Index (interruptions/customer/year).
+    CAIDI = Customer Average Interruption Duration Index (minutes/interruption).
+    """
+    __tablename__ = "utility_reliability"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    utility_id = Column(Integer, nullable=False, index=True)
+    utility_name = Column(String(200))
+    state = Column(String(2), nullable=False, index=True)
+    saidi = Column(Float)                                        # Minutes per customer per year
+    saifi = Column(Float)                                        # Interruptions per customer per year
+    caidi = Column(Float)                                        # Minutes per interruption
+    customers_affected = Column(Integer)
+    total_customers = Column(Integer)
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "utility_id", "state", name="uq_reliability_yr_util_st"),
+        Index("ix_reliability_util_year", "utility_id", "year"),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  AUTH MODELS — imported here so Base.metadata.create_all includes them
 # ─────────────────────────────────────────────────────────────────────────────
 # This import must remain at the bottom to avoid a circular import

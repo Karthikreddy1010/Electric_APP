@@ -661,6 +661,121 @@ const QuickActions = () => {
   );
 };
 
+// ─── Inflation & Real Dollar CPI Banner Component ─────────────────────────────
+const InflationKpiBanner = () => {
+  const [inflationKpis, setInflationKpis] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchInflation() {
+      try {
+        const res = await apiClient.get('/inflation/kpis');
+        setInflationKpis(res.data);
+      } catch (err) {
+        console.warn("Failed to load inflation KPIs:", err);
+      }
+    }
+    fetchInflation();
+  }, []);
+
+  if (!inflationKpis) return null;
+
+  return (
+    <div className="bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-slate-900/5 border border-blue-200/60 rounded-2xl p-4 mb-8 flex flex-col md:flex-row items-center justify-between gap-4 font-sans">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+          CPI
+        </div>
+        <div>
+          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+            BLS Consumer Price Index Inflation Benchmark
+          </span>
+          <p className="text-sm font-bold text-slate-900 mt-0.5">
+            US CPI-U YoY Inflation: <span className="text-blue-600 font-mono-numbers">{inflationKpis.inflation_rate}%</span> · Cumulative Inflation: <span className="text-indigo-600 font-mono-numbers">{inflationKpis.cumulative_inflation}%</span>
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-6 text-xs font-mono-numbers">
+        <div className="text-right">
+          <span className="text-[10px] font-bold text-slate-400 uppercase block font-sans">Real Dollar Purchasing Power</span>
+          <span className="text-base font-extrabold text-emerald-600">${inflationKpis.purchasing_power}</span>
+        </div>
+        <div className="text-right border-l border-slate-200 pl-6">
+          <span className="text-[10px] font-bold text-slate-400 uppercase block font-sans">Current CPI Level</span>
+          <span className="text-base font-extrabold text-slate-900">{inflationKpis.latest_cpi}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── 360° Unified Cross-Dataset Intelligence Card ─────────────────────────────
+const Unified360CustomerCard = () => {
+  const [data360, setData360] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetch360() {
+      try {
+        const res = await apiClient.get('/cross-dataset/unified-insights?usage_kwh=750&nominal_bill=160.65&zip_code=07101');
+        setData360(res.data);
+      } catch (err) {
+        console.warn("Failed to load 360° cross-dataset insights:", err);
+      }
+    }
+    fetch360();
+  }, []);
+
+  if (!data360) return null;
+
+  return (
+    <div className="bg-white border border-slate-200/80 rounded-2xl p-6 mb-8 shadow-xs font-sans space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-blue-600/10 text-blue-600 border border-blue-200 flex items-center justify-center font-bold">
+            360°
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              Cross-Dataset 360° Utility Intelligence Engine
+            </h3>
+            <p className="text-xs text-slate-500">
+              Unified synthesis joining Bills ↔ Weather ↔ PJM Wholesale ↔ Tariffs ↔ CPI ↔ Census ↔ EIA-861
+            </p>
+          </div>
+        </div>
+        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+          Fully Synthesized Matrix
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono-numbers pt-1">
+        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Weather vs Rate Variance</span>
+          <span className="text-base font-extrabold text-blue-600">${data360.weather_variance_breakdown?.weather_driven_cost}</span>
+          <span className="text-[10px] text-slate-500 block font-sans font-medium">due to climate ({data360.weather_variance_breakdown?.weather_usage_pct}% of load)</span>
+        </div>
+
+        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Wholesale LMP Exposure</span>
+          <span className="text-base font-extrabold text-indigo-600">${data360.wholesale_pjm_exposure?.wholesale_cost_estimate}</span>
+          <span className="text-[10px] text-slate-500 block font-sans font-medium">PJM supply cost (${data360.wholesale_pjm_exposure?.avg_lmp_mwh}/MWh)</span>
+        </div>
+
+        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Census Energy Burden</span>
+          <span className="text-base font-extrabold text-amber-600">{data360.demographic_energy_burden?.energy_burden_pct}%</span>
+          <span className="text-[10px] text-slate-500 block font-sans font-medium">income share (SVI: {data360.demographic_energy_burden?.social_vulnerability_index})</span>
+        </div>
+
+        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Carbon Footprint</span>
+          <span className="text-base font-extrabold text-emerald-600">{data360.environmental_footprint?.scope_2_co2_kg} kg</span>
+          <span className="text-[10px] text-slate-500 block font-sans font-medium">CO2 (Offset: {data360.environmental_footprint?.trees_equivalent} trees/yr)</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Main Mission Control Dashboard Component ──────────────────────────────────
 const MissionControlDashboard = () => {
   const { uploadedBill } = useBill();
@@ -840,6 +955,12 @@ const MissionControlDashboard = () => {
               navigate={navigate}
             />
           </div>
+
+          {/* 360° Unified Cross-Dataset Intelligence Card */}
+          <Unified360CustomerCard />
+
+          {/* Inflation & Real Dollar CPI KPI Banner */}
+          <InflationKpiBanner />
 
           {/* 3. Executive AI Summary Focal Point */}
           <ExecutiveAiSummary
