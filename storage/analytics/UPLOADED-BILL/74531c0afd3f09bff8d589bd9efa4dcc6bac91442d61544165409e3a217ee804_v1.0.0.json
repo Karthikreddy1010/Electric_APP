@@ -1,0 +1,267 @@
+{
+  "bill_hash": "74531c0afd3f09bff8d589bd9efa4dcc6bac91442d61544165409e3a217ee804",
+  "customer_id": "UPLOADED-BILL",
+  "utility_name": "PSE&G",
+  "zip_code": "07102",
+  "rate_schedule": "RS",
+  "analytics_version": "1.0.0",
+  "ocr_version": "1.0.0",
+  "parser_version": "1.0.0",
+  "tariff_version": "2026.07",
+  "weather_version": "2026.07",
+  "dataset_version": "2026.07",
+  "generated_at": "2026-07-26T13:40:48.745018+00:00",
+  "processing_time_ms": {
+    "tariff_ms": 0.04,
+    "fixed_charges_ms": 0.01,
+    "variable_charges_ms": 0.02,
+    "taxes_ms": 0.01,
+    "breakdown_ms": 0.04,
+    "historical_ms": 0.02,
+    "weather_ms": 0.06,
+    "trends_ms": 0.01,
+    "anomalies_ms": 0.01,
+    "savings_ms": 0.02,
+    "recommendations_ms": 0.03,
+    "forecast_inputs_ms": 0.02,
+    "total_engine_ms": 0.29
+  },
+  "confidence_score": 0.98,
+  "quality_checks": {
+    "passed": true,
+    "checks": [
+      "Accounting identity check PASSED"
+    ]
+  },
+  "warnings": [],
+  "component_breakdown": {
+    "fixed_total": 8.24,
+    "variable_total": 130.27,
+    "supply_total": 78.9,
+    "delivery_total": 59.61,
+    "taxes_total": 8.63,
+    "total_bill": 147.14,
+    "components": [
+      {
+        "name": "Customer Charge",
+        "amount": 8.24,
+        "percentage": 5.6,
+        "category": "fixed",
+        "type": "fixed",
+        "controllable": "No",
+        "driver": "fixed",
+        "rate_per_kwh": null
+      },
+      {
+        "name": "BGS Supply",
+        "amount": 78.9,
+        "percentage": 53.6,
+        "category": "supply",
+        "type": "variable",
+        "controllable": "Yes",
+        "driver": "market",
+        "rate_per_kwh": 0.1052
+      },
+      {
+        "name": "Distribution Charge",
+        "amount": 31.65,
+        "percentage": 21.5,
+        "category": "delivery",
+        "type": "variable",
+        "controllable": "Partial",
+        "driver": "infrastructure",
+        "rate_per_kwh": 0.0422
+      },
+      {
+        "name": "Transmission Charge",
+        "amount": 11.77,
+        "percentage": 8.0,
+        "category": "delivery",
+        "type": "variable",
+        "controllable": "No",
+        "driver": "market",
+        "rate_per_kwh": 0.0157
+      },
+      {
+        "name": "Societal Benefits Charge",
+        "amount": 2.7,
+        "percentage": 1.8,
+        "category": "delivery",
+        "type": "variable",
+        "controllable": "No",
+        "driver": "policy",
+        "rate_per_kwh": 0.0036
+      },
+      {
+        "name": "Sales Tax (6.625%)",
+        "amount": 8.63,
+        "percentage": 5.9,
+        "category": "tax",
+        "type": "fixed",
+        "controllable": "No",
+        "driver": "policy",
+        "rate_per_kwh": null
+      }
+    ]
+  },
+  "tariff_calculations": {
+    "utility_name": "PSE&G",
+    "rate_schedule": "RS",
+    "effective_volumetric_rate": 0.1852,
+    "bgs_rate": 0.1052,
+    "distribution_rate": 0.0422,
+    "transmission_rate": 0.0157,
+    "sbc_rate": 0.0036,
+    "transition_rate": 0.002,
+    "rider_rate": 0.004,
+    "nug_rate": 0.001
+  },
+  "fixed_charges": {
+    "customer_charge": 8.24,
+    "meter_fee": 0.0,
+    "total_fixed_charges": 8.24
+  },
+  "variable_charges": {
+    "usage_kwh": 750.0,
+    "bgs_supply_cost": 78.9,
+    "distribution_cost": 31.65,
+    "transmission_cost": 11.77,
+    "sbc_cost": 2.7,
+    "transition_cost": 1.5,
+    "rider_cost": 3.0,
+    "nug_cost": 0.75,
+    "total_variable_charges": 130.27
+  },
+  "taxes": {
+    "tax_rate": 0.06625,
+    "taxable_subtotal": 138.51,
+    "calculated_tax": 9.18,
+    "billed_tax": 8.63,
+    "tax_discrepancy": -0.55
+  },
+  "historical_comparison": {
+    "prior_period_kwh": 712.5,
+    "prior_period_cost": 131.96,
+    "prior_year_kwh": 690.0,
+    "prior_year_cost": 125.01,
+    "month_over_month": {
+      "kwh_change": 37.5,
+      "pct_change_kwh": 5.3,
+      "cost_change": 6.94,
+      "pct_change_cost": 5.3
+    },
+    "year_over_year": {
+      "kwh_change": 60.0,
+      "pct_change_kwh": 8.7,
+      "cost_change": 13.89,
+      "pct_change_cost": 11.1
+    }
+  },
+  "month_over_month": {
+    "kwh_change": 37.5,
+    "pct_change_kwh": 5.3,
+    "cost_change": 6.94,
+    "pct_change_cost": 5.3
+  },
+  "year_over_year": {
+    "kwh_change": 60.0,
+    "pct_change_kwh": 8.7,
+    "cost_change": 13.89,
+    "pct_change_cost": 11.1
+  },
+  "weather_normalization": {
+    "month": 7,
+    "hdd": 0.0,
+    "cdd": 310.0,
+    "base_temperature_f": 65.0,
+    "temperature_sensitivity_kwh_per_degree": 0.85,
+    "weather_driven_kwh": 263.5,
+    "weather_driven_cost": 48.8,
+    "base_discretionary_kwh": 486.5,
+    "weather_normalized_kwh": 614.0
+  },
+  "trend_analysis": {
+    "direction": "UPWARD",
+    "velocity_kwh_per_month": 37.5,
+    "moving_avg_3m_kwh": 712.5,
+    "moving_avg_6m_kwh": 712.5,
+    "cost_trend_slope": 6.94
+  },
+  "anomaly_detection": {
+    "has_anomalies": false,
+    "anomaly_count": 0,
+    "anomalies": []
+  },
+  "savings_estimation": {
+    "total_potential_annual_savings": 333.36,
+    "potential_savings_pct": 20.0,
+    "opportunities": [
+      {
+        "category": "Conservation",
+        "title": "10% Energy Conservation Target",
+        "estimated_annual_savings": 166.68,
+        "estimated_kwh_reduction": 900.0,
+        "feasibility": "EASY",
+        "payback_months": 0
+      },
+      {
+        "category": "Demand Shift",
+        "title": "Off-Peak Load Shifting",
+        "estimated_annual_savings": 33.34,
+        "estimated_kwh_reduction": 450.0,
+        "feasibility": "EASY",
+        "payback_months": 0
+      },
+      {
+        "category": "Equipment",
+        "title": "Programmable Thermostat Setpoints",
+        "estimated_annual_savings": 133.34,
+        "estimated_kwh_reduction": 720.0,
+        "feasibility": "MODERATE",
+        "payback_months": 6
+      }
+    ]
+  },
+  "recommendations": [
+    {
+      "rank": 1,
+      "title": "Adjust Summer AC Setpoints to 78\u00b0F",
+      "description": "Raise thermostat by 2\u00b0F during peak summer afternoons to reduce CDD volumetric supply charges.",
+      "category": "Behavioral",
+      "score": 96.0,
+      "estimated_monthly_savings": 11.11
+    },
+    {
+      "rank": 2,
+      "title": "Shift Laundry & Dishwashing Off-Peak",
+      "description": "Operate high-wattage resistive appliances before 8 AM or after 10 PM to avoid distribution demand peaks.",
+      "category": "Behavioral",
+      "score": 71.5,
+      "estimated_monthly_savings": 6.95
+    },
+    {
+      "rank": 3,
+      "title": "Upgrade High-Use Fixtures to LED",
+      "description": "Replace top 5 longest-operating incandescent bulbs in primary living spaces with LEDs.",
+      "category": "Equipment",
+      "score": 66.0,
+      "estimated_monthly_savings": 5.56
+    },
+    {
+      "rank": 4,
+      "title": "Install Smart Power Strips for Phantom Loads",
+      "description": "Eliminate standby vampire draw from entertainment systems and home office setups.",
+      "category": "Equipment",
+      "score": 60.5,
+      "estimated_monthly_savings": 4.17
+    }
+  ],
+  "forecast_inputs": {
+    "baseline_daily_kwh": 25.0,
+    "peak_demand_ratio": 1.15,
+    "seasonal_factor": 1.25,
+    "weather_sensitivity_factor": 0.85,
+    "base_annual_kwh_projection": 11406.2,
+    "trend_coefficient": 0.01
+  }
+}

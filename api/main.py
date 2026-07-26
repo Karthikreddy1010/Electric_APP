@@ -408,6 +408,7 @@ app.include_router(forecast_router)
 app.include_router(bgs_router)
 app.include_router(municipal_router)
 app.include_router(eia861_router)
+app.include_router(eia861_router, prefix="/api")
 app.include_router(monitoring_router)
 app.include_router(eia861m_router)
 app.include_router(openei_router)
@@ -415,15 +416,19 @@ app.include_router(eia930_router)
 app.include_router(overview_router)
 app.include_router(report_router)
 app.include_router(simulate_router)
+app.include_router(simulate_router, prefix="/api")
 app.include_router(geo_boundaries_router)
 app.include_router(metrics_router)
 from api.routes.tariff_analytics import router as tariffs_router
 app.include_router(tariffs_router)
+app.include_router(tariffs_router, prefix="/api")
 app.include_router(service_territory_router)
 app.include_router(customers_router)
 app.include_router(bill_router)
 app.include_router(smart_meter_router)
 app.include_router(tariff_optimization_router)
+app.include_router(tariff_optimization_router, prefix="/api")
+app.include_router(bill_impact_router, prefix="/api")
 
 # ── Dataset Integration Routers ─────────────────────────────────────────────
 from api.routes.pjm_router import router as pjm_router
@@ -433,6 +438,11 @@ from api.routes.cross_dataset import router as cross_dataset_router
 app.include_router(pjm_router)
 app.include_router(inflation_router)
 app.include_router(cross_dataset_router)
+
+# ── Phase 1 Enterprise Backend Integration ──────────────────────────────────
+from backend.api.app import mount_backend_routes
+mount_backend_routes(app)
+
 
 
 
