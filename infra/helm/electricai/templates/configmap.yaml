@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "electricai.fullname" . | default "electricai-api" }}-config
+  labels:
+    app.kubernetes.io/name: electricai
+data:
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  LOG_FORMAT: "json"
+  LOG_LEVEL: "INFO"
+  OTEL_SERVICE_NAME: "electricai-api"
+  LLM_FEATURE_STREAMING: "true"
+  LLM_FEATURE_RAG: "true"

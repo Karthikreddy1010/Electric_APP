@@ -336,6 +336,12 @@ app.add_middleware(StandardResponseMiddleware)
 app.add_middleware(PrometheusMetricsMiddleware)
 app.add_middleware(RateLimiterMiddleware, requests_limit=100, window_seconds=60)
 
+# Phase 3 Infrastructure Middlewares
+from infra.gateway.middleware import AIGatewayMiddleware
+from infra.tenancy.middleware import TenantContextMiddleware
+app.add_middleware(TenantContextMiddleware)
+app.add_middleware(AIGatewayMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -442,6 +448,21 @@ app.include_router(cross_dataset_router)
 # ── Phase 1 Enterprise Backend Integration ──────────────────────────────────
 from backend.api.app import mount_backend_routes
 mount_backend_routes(app)
+
+# ── Phase 3 Enterprise Observability & DR Health Endpoints ─────────────────
+from fastapi.responses import Response
+from infra.observability.prometheus import get_metrics
+from infra.dr.health_aggregator import health_aggregator
+
+@app.get("/metrics", tags=["Observability"])
+async def metrics_endpoint():
+    """Prometheus metrics scraping endpoint."""
+    return Response(content=get_metrics(), media_type="text/plain; version=0.0.4")
+
+@app.get("/health/v2", tags=["Disaster Recovery"])
+async def health_v2_endpoint():
+    """Composite health check aggregator monitoring all system subsystems."""
+    return await health_aggregator.check_all()
 
 
 

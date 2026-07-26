@@ -1,0 +1,123 @@
+# ============================================
+# Docker Compose -- Production Stack with Full Observability
+# ============================================
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: electric-postgres-prod
+    environment:
+      POSTGRES_USER: electric
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-electric_secure_prod}
+      POSTGRES_DB: electricity_dw
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U electric -d electricity_dw"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: electric-redis-prod
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru --appendonly yes
+    volumes:
+      - redisdata_prod:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: electric-api-prod
+    ports:
+      - "8000:8000"
+    environment:
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - LOG_FORMAT=json
+      - LOG_LEVEL=INFO
+      - OTEL_SERVICE_NAME=electricai-api
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+      - DATABASE_URL=postgresql+asyncpg://electric:${POSTGRES_PASSWORD:-electric_secure_prod}@postgres:5432/electricity_dw
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: always
+
+  # ── Prometheus (Metrics Scraper) ───────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: electric-prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: always
+
+  # ── Grafana (Observability Dashboards) ──────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: electric-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin_electric_prod
+    volumes:
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: always
+
+  # ── Jaeger (Distributed Tracing) ───────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: electric-jaeger
+    ports:
+      - "16686:16686"  # Web UI
+      - "4317:4317"    # OTLP gRPC
+    restart: always
+
+  # ── Local vLLM Inference Server (GPU Profile) ──────────────────────────
+  vllm:
+    image: vllm/vllm-openai:v0.6.0
+    container_name: electric-vllm-prod
+    ports:
+      - "8001:8000"
+    environment:
+      - MODEL=Qwen/Qwen2.5-1.5B-Instruct
+    command: --model Qwen/Qwen2.5-1.5B-Instruct --host 0.0.0.0 --port 8000
+    profiles:
+      - gpu
+    restart: unless-stopped
+
+  # ── Local SGLang Inference Server (GPU Profile) ────────────────────────
+  sglang:
+    image: lmsysorg/sglang:v0.3.0
+    container_name: electric-sglang-prod
+    ports:
+      - "30000:30000"
+    command: python3 -m sglang.launch_server --model-path Qwen/Qwen2.5-1.5B-Instruct --host 0.0.0.0 --port 30000
+    profiles:
+      - gpu
+    restart: unless-stopped
+
+volumes:
+  pgdata_prod:
+  redisdata_prod:
+  grafanadata:
+

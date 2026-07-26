@@ -1,0 +1,76 @@
+# Production default values for ElectricAI Helm Chart
+
+replicaCount: 3
+
+image:
+  repository: electricai/api
+  pullPolicy: IfNotPresent
+  tag: "3.0.0"
+
+serviceAccount:
+  create: true
+  name: "electricai-sa"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+  hosts:
+    - host: api.electric.ai
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: electricai-tls
+      hosts:
+        - api.electric.ai
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
+
+env:
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  LOG_FORMAT: "json"
+  LOG_LEVEL: "INFO"
+  OTEL_SERVICE_NAME: "electricai-api"
+
+postgresql:
+  enabled: true
+  auth:
+    database: electricity_dw
+    username: electric
+
+redis:
+  enabled: true
+  architecture: replication

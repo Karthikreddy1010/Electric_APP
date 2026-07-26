@@ -1,0 +1,9 @@
+{
+  "1_analytics_engine_ms": 5.675,
+  "2_prompt_builder_ms": 0.033,
+  "3_rag_retrieval_ms": 0.055,
+  "4_ai_inference_ms": 0.947,
+  "5_output_validator_ms": 0.193,
+  "6_pdf_report_render_ms": 97.39,
+  "7_full_e2e_pipeline_ms": 1.002
+}

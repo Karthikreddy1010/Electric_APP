@@ -122,3 +122,14 @@ async def list_models(tier: str = "free"):
             for m in models
         ]
     }
+
+
+@router.get("/rag/health")
+async def rag_health():
+    """
+    Check operational status and document count of the RAG engine.
+    """
+    from api.services.llm.rag import rag_service
+    return rag_service.check_health()
+
+

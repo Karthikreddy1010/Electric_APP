@@ -1,0 +1,9 @@
+apiVersion: v2
+name: electricai
+description: Helm chart for ElectricAI Enterprise Production Deployment
+type: application
+version: 3.0.0
+appVersion: "3.0.0"
+maintainers:
+  - name: ElectricAI Enterprise Architecture Team
+    email: devops@electric.ai

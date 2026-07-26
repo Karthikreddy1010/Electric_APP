@@ -267,7 +267,7 @@ class TestRAGService:
         invalid_doc = RAGDocument("id1", "customer_bills", "Title", "Content")
         rag.add_document(invalid_doc)
         # Invalid category rejected
-        assert not any(d.doc_id == "id1" for d in rag._documents)
+        assert not any(d["doc_id"] == "id1" for d in rag.query("Title"))
 
 
 # ── 9. Modular Report Generators ──────────────────────────────────────────

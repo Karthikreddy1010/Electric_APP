@@ -1,0 +1,38 @@
+groups:
+  - name: electricai_alerts
+    rules:
+      - alert: HighAPIErrorRate
+        expr: rate(electricai_api_requests_total{status_code=~"5.."}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High HTTP 5xx error rate detected on {{ $labels.endpoint }}"
+          description: "HTTP 5xx error rate is above 5% over 5 minutes."
+
+      - alert: HighAIFallbackActivation
+        expr: rate(electricai_ai_fallback_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High AI deterministic fallback rate"
+          description: "AI Orchestrator is falling back to deterministic template narration due to upstream provider failures."
+
+      - alert: CircuitBreakerOpen
+        expr: electricai_circuit_breaker_state == 1
+        for: 30s
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM Provider Circuit Breaker Tripped OPEN"
+          description: "Circuit breaker for provider {{ $labels.provider }} is OPEN. Traffic diverted to cloud or fallback."
+
+      - alert: SubsystemUnhealthy
+        expr: electricai_subsystem_healthy == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical Subsystem Unhealthy"
+          description: "Subsystem {{ $labels.subsystem }} reported unhealthy status via /health/v2."
