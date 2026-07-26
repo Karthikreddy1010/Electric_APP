@@ -83,7 +83,7 @@ class AIOrchestrator:
         # ── Step 3: Check cache ────────────────────────────────────────
         model_id = "auto"
         if not bypass_cache:
-            cached = semantic_cache.get(task, context_data, model_id, prompt_ver)
+            cached = semantic_cache.get(task, context_data, model_id, prompt_ver, user_message)
             if cached:
                 cached.setdefault("metadata", {})["cache_hit"] = True
                 return cached
@@ -226,7 +226,7 @@ class AIOrchestrator:
         legacy_dict = response.to_legacy_dict()
 
         # ── Step 8: Cache the result ───────────────────────────────────
-        semantic_cache.set(task, context_data, model_id, prompt_ver, legacy_dict)
+        semantic_cache.set(task, context_data, model_id, prompt_ver, legacy_dict, user_message)
 
         return legacy_dict
 

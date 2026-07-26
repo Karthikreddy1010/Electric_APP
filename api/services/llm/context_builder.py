@@ -181,7 +181,13 @@ class ContextBuilder:
                 "utility": uploaded_bill.get("utility"),
                 "total_bill": uploaded_bill.get("total_bill"),
                 "usage_kwh": uploaded_bill.get("usage_kwh"),
-                "effective_rate": uploaded_bill.get("effective_rate")
+                "effective_rate": uploaded_bill.get("effective_rate"),
+                "monthly_service_charge": uploaded_bill.get("monthly_service_charge") or uploaded_bill.get("fixed_charge"),
+                "delivery_charge": uploaded_bill.get("delivery_charge"),
+                "supply_charge": uploaded_bill.get("supply_charge"),
+                "tax": uploaded_bill.get("tax") or uploaded_bill.get("taxes_and_fees"),
+                "rate_schedule": uploaded_bill.get("rate_schedule"),
+                "billing_period": uploaded_bill.get("billing_period")
             }
         if simulation_results:
             ctx["simulation"] = {
@@ -192,5 +198,5 @@ class ContextBuilder:
         if forecast_results:
             ctx["forecast"] = forecast_results
         if conversation_history:
-            ctx["metadata"]["conversation_history"] = conversation_history[-5:] # Trim to last 5 messages
+            ctx["metadata"]["conversation_history"] = conversation_history[-5:]
         return ctx

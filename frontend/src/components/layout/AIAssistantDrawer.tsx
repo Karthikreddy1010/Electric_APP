@@ -1,16 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBill } from '../../context/BillContext.tsx';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Sparkles, X, Brain, ChevronRight, 
-  Send, Activity, TrendingUp 
+  Sparkles, X, Brain, 
+  Send, HelpCircle 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import apiClient from '../../lib/apiClient.ts';
 
 interface AIAssistantDrawerProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+const SUGGESTED_QUESTION_CHIPS = [
+  "Why is my bill higher this month?",
+  "Explain my bill",
+  "Why are delivery charges increasing?",
+  "What does customer charge mean?",
+  "How can I reduce my bill?",
+  "Explain my bill like I'm five",
+  "Which bill component increased the most?",
+  "Explain weather impact",
+  "Explain my tariff"
+];
 
 export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawerProps) {
   const navigate = useNavigate();
@@ -19,44 +32,67 @@ export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawer
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Generate welcome message when bill changes
+  // Auto-scroll chat history
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, isThinking]);
+
+  // Generate initial greeting message when bill changes
   useEffect(() => {
     if (uploadedBill) {
       setMessages([
         {
           role: 'assistant',
-          content: `Hi! I have analyzed your **${uploadedBill.utility}** bill for the period ending **${uploadedBill.bill_date || uploadedBill.billing_period}**.\n\nYour total cost is **$${uploadedBill.total_bill?.toFixed(2)}** with an effective rate of **$${uploadedBill.effective_rate?.toFixed(4)}/kWh**.\n\nHow can I help you optimize your energy consumption today?`
+          content: `Hi! I have analyzed your **${uploadedBill.utility}** bill for the period ending **${uploadedBill.bill_date || uploadedBill.billing_period}**.\n\nYour total cost is **$${uploadedBill.total_bill?.toFixed(2)}** (${uploadedBill.usage_kwh?.toFixed(1)} kWh) with an effective rate of **$${uploadedBill.effective_rate?.toFixed(4)}/kWh**.\n\nAsk me any question about your electricity bill, rates, or savings opportunities!`
         }
       ]);
     } else {
       setMessages([
         {
           role: 'assistant',
-          content: "Welcome to ElectricAI Assistant. Please upload or persist a utility bill so I can provide contextual energy recommendations."
+          content: "Welcome to ElectricAI Copilot! I am specialized in analyzing electricity bills, tariffs, and energy cost optimization. Upload or select a utility bill to get started, or ask any electricity-related question!"
         }
       ]);
     }
   }, [uploadedBill]);
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
-    const userMsg = inputValue;
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+  const handleSendMessage = async (textToSend?: string) => {
+    const question = (textToSend || inputValue).trim();
+    if (!question || isThinking) return;
+
+    // Append user message
+    const updatedHistory = [...messages, { role: 'user' as const, content: question }];
+    setMessages(updatedHistory);
     setInputValue('');
     setIsThinking(true);
 
-    // Simulate AI response stream
-    setTimeout(() => {
+    try {
+      // Execute true conversational backend AI pipeline call
+      const res = await apiClient.post('/llm/chat', {
+        message: question,
+        current_tab: activeTab,
+        history: updatedHistory.map(m => ({ role: m.role, content: m.content })),
+        context_data: uploadedBill ? { ...uploadedBill } : {}
+      });
+
+      const responseText = res.data?.answer || res.data?.text || res.data?.explanation || 
+        "I've processed your query. Let me know if you need further bill analysis!";
+
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+    } catch (err: any) {
+      console.error("AI Chat Assistant Error:", err);
+      // Fallback response if network or server encounters issue
+      const fallbackText = "I am specialized specifically for electricity bill analysis, utility tariffs, energy conservation, and cost optimization. Please ask me any question about your electricity bill!";
+      setMessages(prev => [...prev, { role: 'assistant', content: fallbackText }]);
+    } finally {
       setIsThinking(false);
-      let response = "I'm parsing your demand patterns. Can you clarify if you want to run a tariff Monte Carlo simulation or view peak demand timelines?";
-      if (userMsg.toLowerCase().includes('save') || userMsg.toLowerCase().includes('reduce')) {
-        response = `To reduce your cost, I recommend simulating a **Green Conservation** program in the **Impact Simulator** tab. A 10% usage shave cuts your volumetric delivery and generation costs by approx. **$${((uploadedBill?.total_bill || 100) * 0.1).toFixed(2)}** monthly.`;
-      } else if (userMsg.toLowerCase().includes('forecast') || userMsg.toLowerCase().includes('future')) {
-        response = "The demand forecasting engine projects a 7-day peak load load factor of 82%. You can drill down into confidence intervals on the Forecast tab.";
-      }
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-    }, 1200);
+    }
   };
 
   return (
@@ -78,7 +114,7 @@ export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawer
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="relative w-full max-w-[420px] h-full bg-bg-surface border-l border-border-hairline shadow-floating z-10 flex flex-col"
+            className="relative w-full max-w-[440px] h-full bg-bg-surface border-l border-border-hairline shadow-floating z-10 flex flex-col"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border-hairline bg-bg-primary/20">
@@ -91,7 +127,7 @@ export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawer
                     ElectricAI Assistant <Sparkles size={12} className="text-warning-amber" />
                   </h3>
                   <span className="text-[10px] text-text-secondary flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-savings-green" /> Contextual Ingestion Online
+                    <span className="w-1.5 h-1.5 rounded-full bg-savings-green" /> Conversational AI Active
                   </span>
                 </div>
               </div>
@@ -124,15 +160,15 @@ export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawer
                       : 'border-transparent text-text-secondary hover:text-text-primary'
                   }`}
                 >
-                  Causal Advisor
+                  AI Copilot Chat
                 </button>
               </div>
             )}
 
             {/* Content Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col justify-between">
               {activeTab === 'explanation' ? (
-                <>
+                <div className="space-y-4">
                   {/* OCR narrative output */}
                   {hasBill && billExplanation ? (
                     <div className="space-y-4">
@@ -170,17 +206,17 @@ export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawer
                       </button>
                     </div>
                   )}
-                </>
+                </div>
               ) : (
-                <div className="flex flex-col h-full">
-                  {/* Chat Assistant interface */}
-                  <div className="flex-1 space-y-4 overflow-y-auto mb-4 pr-1">
+                <div className="flex flex-col h-full justify-between space-y-3">
+                  {/* Chat Assistant Messages Window */}
+                  <div className="flex-1 space-y-3 overflow-y-auto pr-1">
                     {messages.map((msg, i) => (
                       <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-xs ${
+                        <div className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs ${
                           msg.role === 'user'
-                            ? 'bg-primary-blue text-white'
-                            : 'bg-bg-primary/60 border border-border-hairline text-text-primary/95'
+                            ? 'bg-primary-blue text-white shadow-sm'
+                            : 'bg-bg-primary/60 border border-border-hairline text-text-primary/95 shadow-sm'
                         }`}>
                           <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                         </div>
@@ -189,48 +225,53 @@ export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawer
                     {isThinking && (
                       <div className="flex justify-start">
                         <div className="bg-bg-primary/60 border border-border-hairline rounded-xl px-3.5 py-2.5 flex items-center gap-1.5">
+                          <span className="text-[11px] text-text-secondary mr-1">AI Copilot is thinking</span>
                           <span className="w-1.5 h-1.5 rounded-full bg-primary-blue animate-bounce" style={{ animationDelay: '0ms' }} />
                           <span className="w-1.5 h-1.5 rounded-full bg-primary-blue animate-bounce" style={{ animationDelay: '150ms' }} />
                           <span className="w-1.5 h-1.5 rounded-full bg-primary-blue animate-bounce" style={{ animationDelay: '300ms' }} />
                         </div>
                       </div>
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
 
-                  {/* Recommendations Actions Panel */}
-                  {hasBill && messages.length <= 2 && (
-                    <div className="border-t border-border-hairline pt-3 mb-3 space-y-2">
-                      <span className="text-[9px] uppercase font-bold text-text-secondary block">Suggested Actions</span>
-                      <button
-                        onClick={() => { navigate('/impact'); onClose(); }}
-                        className="w-full flex items-center justify-between p-2 rounded-lg bg-bg-primary/40 hover:bg-bg-primary border border-border-hairline text-left text-xs text-text-primary transition-all group"
-                      >
-                        <span className="flex items-center gap-2"><TrendingUp size={12} className="text-energy-teal" /> Simulate conservation scenario</span>
-                        <ChevronRight size={12} className="text-text-secondary group-hover:translate-x-0.5 transition-transform" />
-                      </button>
-                      <button
-                        onClick={() => { navigate('/forecast'); onClose(); }}
-                        className="w-full flex items-center justify-between p-2 rounded-lg bg-bg-primary/40 hover:bg-bg-primary border border-border-hairline text-left text-xs text-text-primary transition-all group"
-                      >
-                        <span className="flex items-center gap-2"><Activity size={12} className="text-primary-blue" /> Check peak demand cycles</span>
-                        <ChevronRight size={12} className="text-text-secondary group-hover:translate-x-0.5 transition-transform" />
-                      </button>
+                  {/* Suggested Question Chips Shortcuts */}
+                  <div className="border-t border-border-hairline pt-2.5 space-y-2">
+                    <span className="text-[10px] font-semibold text-text-secondary flex items-center gap-1">
+                      <HelpCircle size={11} className="text-primary-blue" /> Suggested Question Shortcuts
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                      {SUGGESTED_QUESTION_CHIPS.map((chip, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleSendMessage(chip)}
+                          className="text-[10px] px-2.5 py-1 rounded-full bg-primary-blue/10 hover:bg-primary-blue/20 text-primary-blue border border-primary-blue/20 transition-all text-left"
+                        >
+                          {chip}
+                        </button>
+                      ))}
                     </div>
-                  )}
+                  </div>
 
                   {/* Input area */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 pt-1">
                     <input
                       type="text"
-                      placeholder="Ask about rate simulation or BGS supply..."
+                      placeholder="Ask any question about your electricity bill..."
                       value={inputValue}
                       onChange={e => setInputValue(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
                       className="flex-1 bg-bg-primary border border-border-hairline rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-primary-blue"
                     />
                     <button 
-                      onClick={handleSendMessage}
-                      className="p-2 rounded-lg bg-primary-blue text-white hover:bg-primary-blue/90 active:scale-95 transition-all flex items-center justify-center shrink-0"
+                      onClick={() => handleSendMessage()}
+                      disabled={isThinking || !inputValue.trim()}
+                      className="p-2 rounded-lg bg-primary-blue text-white hover:bg-primary-blue/90 disabled:opacity-50 active:scale-95 transition-all flex items-center justify-center shrink-0"
                     >
                       <Send size={14} />
                     </button>

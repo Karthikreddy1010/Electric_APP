@@ -29,32 +29,28 @@ class SemanticCacheManager:
         task: str,
         context_data: Dict[str, Any],
         model_id: str,
-        prompt_version: str
+        prompt_version: str,
+        user_message: str = ""
     ) -> str:
         """
         Build a deterministic cache key:
-        SHA256(task + bill_hash + prompt_version + model_id)
-
-        Falls back to full context serialization if bill_hash is not present.
+        SHA256(task + user_message + bill_hash + prompt_version + model_id)
         """
-        # Prefer bill_hash if available for O(1) key stability
         bill_hash = ""
         if isinstance(context_data, dict):
             bill_hash = context_data.get("bill_hash", "")
             if not bill_hash:
-                # Check nested — AnalyticsResult may be flattened or nested
-                for sub_key in ("bill", "analytics_result"):
+                for sub_key in ("bill", "analytics_result", "uploadedBill"):
                     sub = context_data.get(sub_key, {})
                     if isinstance(sub, dict) and "bill_hash" in sub:
                         bill_hash = sub["bill_hash"]
                         break
 
         if bill_hash:
-            raw_key = f"{task}:{bill_hash}:{prompt_version}:{model_id}"
+            raw_key = f"{task}:{user_message}:{bill_hash}:{prompt_version}:{model_id}"
         else:
-            # Full deterministic serialization fallback
             serialized = json.dumps(context_data, sort_keys=True, default=str)
-            raw_key = f"{task}:{model_id}:{prompt_version}:{serialized}"
+            raw_key = f"{task}:{user_message}:{model_id}:{prompt_version}:{serialized}"
 
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
@@ -63,9 +59,10 @@ class SemanticCacheManager:
         task: str,
         context_data: Dict[str, Any],
         model_id: str,
-        prompt_version: str
+        prompt_version: str,
+        user_message: str = ""
     ) -> Optional[Dict[str, Any]]:
-        key = self._generate_key(task, context_data, model_id, prompt_version)
+        key = self._generate_key(task, context_data, model_id, prompt_version, user_message)
         if key in self._cache:
             logger.debug(f"SemanticCache HIT for key {key[:12]}")
             return self._cache[key]
@@ -77,14 +74,15 @@ class SemanticCacheManager:
         context_data: Dict[str, Any],
         model_id: str,
         prompt_version: str,
-        response_data: Dict[str, Any]
+        response_data: Dict[str, Any],
+        user_message: str = ""
     ) -> None:
         if len(self._cache) >= self._capacity:
             # Evict oldest entry (FIFO)
             first_key = next(iter(self._cache))
             del self._cache[first_key]
 
-        key = self._generate_key(task, context_data, model_id, prompt_version)
+        key = self._generate_key(task, context_data, model_id, prompt_version, user_message)
         self._cache[key] = response_data
 
     def clear(self) -> None:

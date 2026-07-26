@@ -20,6 +20,13 @@ class MockLLMProvider(BaseLLMProvider):
         max_tokens: int = 1500,
         **kwargs: Any
     ) -> str:
+        if "User Question:" in prompt or "Task: Act as an interactive AI Copilot" in (system_prompt or ""):
+            from api.services.llm.deterministic_fallback import DeterministicFallback
+            user_msg = ""
+            if "User Question:" in prompt:
+                user_msg = prompt.split("User Question:")[1].split("\n")[0].strip()
+            return DeterministicFallback.generate_chat_fallback({}, user_msg)
+
         return (
             "### Executive Summary\n"
             "This is a validated mock response generated for testing purposes. "

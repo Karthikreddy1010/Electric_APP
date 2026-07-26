@@ -15,6 +15,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
+import { apiClient } from '../lib/apiClient.ts';
 import { useBill } from '../context/BillContext.tsx';
 import EmptyBillState from '../components/shared/EmptyBillState.tsx';
 import {
@@ -258,24 +259,30 @@ const ImpactPage = () => {
     if (!text.trim() || isChatSending) return;
 
     const userMessage = { role: 'user', content: text };
-    setChatMessages(prev => [...prev, userMessage]);
+    const updatedHistory = [...chatMessages, userMessage];
+    setChatMessages(updatedHistory);
     if (!questionText) setChatInput('');
     setIsChatSending(true);
 
     try {
-      const res = await axios.post('/impact/chat', {
+      const res = await apiClient.post('/llm/chat', {
         message: text,
-        uploaded_bill: uploadedBill
+        current_tab: 'impact',
+        history: updatedHistory.map(m => ({ role: m.role, content: m.content })),
+        context_data: uploadedBill ? { ...uploadedBill } : {}
       });
-      setChatMessages(prev => [...prev, { role: 'assistant', content: res.data.answer }]);
-    } catch {
+
+      const responseText = res.data?.answer || res.data?.text || res.data?.explanation || 
+        "I've processed your query. Let me know if you need further bill analysis!";
+
+      setChatMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+    } catch (err) {
+      console.error("Impact Chat Assistant Error:", err);
       let fallbackText = "Based on your bill, your electricity supply rate is the largest driver. Shifting high-energy appliances to off-peak hours can save you around $15 to $25 per month.";
-      if (text.includes("save $20")) {
-        fallbackText = "To save $20 per month: 1) Set your thermostat 2°F higher in summer ($15/mo), and 2) Run washing machines and dishwashers after 8 PM ($8/mo).";
-      } else if (text.includes("higher this month")) {
-        fallbackText = `Your bill is $${billDiff.toFixed(2)} higher than last month primarily due to higher summer air conditioning usage (+28%) and a slight seasonal increase in electricity supply costs (+60%).`;
-      } else if (text.includes("uses the most")) {
-        fallbackText = "Air conditioning and heating use the most electricity (approx. 40-50%), followed by water heaters (18%), and major appliances (15%).";
+      if (text.toLowerCase().includes("save")) {
+        fallbackText = "To save money: 1) Set your thermostat 2°F higher in summer ($15/mo), and 2) Run washing machines and dishwashers after 8 PM ($8/mo).";
+      } else if (text.toLowerCase().includes("higher")) {
+        fallbackText = `Your bill is $${billDiff.toFixed(2)} higher than last month primarily due to higher summer air conditioning usage (+28%) and a slight seasonal increase in electricity supply costs.`;
       }
       setChatMessages(prev => [...prev, { role: 'assistant', content: fallbackText }]);
     } finally {

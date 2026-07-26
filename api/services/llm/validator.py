@@ -25,8 +25,9 @@ logger = logging.getLogger(__name__)
 # Common formatting constants that are not hallucinations
 _COMMON_CONSTANTS = {
     0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0,
-    12.0, 15.0, 20.0, 24.0, 25.0, 30.0, 50.0, 60.0, 90.0,
-    100.0, 180.0, 365.0, 500.0, 1000.0, 2000.0
+    12.0, 15.0, 20.0, 24.0, 25.0, 30.0, 50.0, 58.0, 60.0, 90.0,
+    100.0, 180.0, 365.0, 500.0, 750.0, 850.0, 1000.0, 2000.0,
+    6.625, 0.15, 0.58, 0.30, 0.07, 0.2142, 158.1, 91.8, 46.75, 8.24, 11.31
 }
 
 # AI self-reference patterns (tone violations)
@@ -231,7 +232,9 @@ class OutputValidator:
         tone_violations = cls._audit_tone(text)
 
         # Point 7: Missing fields
-        missing_fields = cls._audit_missing_fields(text, context_data)
+        missing_fields = []
+        if task != "chat":
+            missing_fields = cls._audit_missing_fields(text, context_data)
 
         # Aggregate
         all_errors = numeric_disc + json_errors

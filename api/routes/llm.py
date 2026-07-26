@@ -63,8 +63,10 @@ async def chat(req: UniversalLLMChatRequest):
     """
     try:
         tier = _parse_tier(req.user_tier)
+        uploaded_bill = req.context_data.get("uploadedBill") or req.context_data.get("bill") or req.context_data
         ctx = ContextBuilder.build_chat_context(
             current_tab=req.current_tab,
+            uploaded_bill=uploaded_bill if isinstance(uploaded_bill, dict) else None,
             conversation_history=[h.dict() for h in req.history]
         )
         ctx.update(req.context_data)
