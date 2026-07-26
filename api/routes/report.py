@@ -161,7 +161,7 @@ def _get_report_data_and_prompt():
 async def generate_report():
     from api.services.llm.llm_service import llm_service
     analysis = compute_bill_analysis()
-    
+
     top_driver = analysis['all_features'][0]
     share = top_driver['share_pct']
     fallback_text = f"Your electricity bill for {analysis['current_month']} is mainly driven by {top_driver['label']} costs, which account for about {share:.1f}% of the total."
@@ -189,8 +189,9 @@ async def generate_report():
 @router.post("/report/pdf")
 async def generate_pdf():
     from api.services.llm.llm_service import llm_service
+    from api.services.llm.report.pdf import PDFReportRenderer
     analysis = compute_bill_analysis()
-    
+
     top_driver = analysis['all_features'][0]
     share = top_driver['share_pct']
     fallback_text = f"Your electricity bill for {analysis['current_month']} is mainly driven by {top_driver['label']} costs, which account for about {share:.1f}% of the total."
@@ -211,26 +212,40 @@ async def generate_pdf():
     except Exception as e:
         logger.warning(f"Centralized PDF report LLM call failed: {e}. Using fallback.")
         text = f"[AI Engine Offline - Deterministic Summary Generated]\n{fallback_text}"
-    
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=LETTER)
-    styles = getSampleStyleSheet()
-    elements = []
-    
-    elements.append(Paragraph("Electricity Bill Analysis Report", styles['Title']))
-    elements.append(Spacer(1, 12))
-    
-    # Split text by newlines and add as paragraphs
-    for line in text.split('\n'):
-        if line.strip():
-            elements.append(Paragraph(line, styles['Normal']))
-            elements.append(Spacer(1, 6))
-            
-    doc.build(elements)
-    buffer.seek(0)
-    
+
+    buffer = PDFReportRenderer.render(text, context_data)
+
     return StreamingResponse(
-        buffer, 
+        buffer,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=bill_report_{analysis['current_month']}.pdf"}
     )
+
+
+@router.post("/report/html")
+async def generate_html():
+    from api.services.llm.llm_service import llm_service
+    from api.services.llm.report.html import HTMLReportRenderer
+    from fastapi.responses import HTMLResponse
+    analysis = compute_bill_analysis()
+
+    context_data = {
+        "total_bill": analysis["base_bill"],
+        "current_month": analysis["current_month"],
+        "top_features": analysis["all_features"][:3],
+        "insights": analysis["insights"]
+    }
+
+    try:
+        res = await llm_service.generate_explanation(
+            task="report",
+            context_data=context_data
+        )
+        text = res["explanation"]
+    except Exception as e:
+        top_driver = analysis['all_features'][0]
+        text = f"Your electricity bill for {analysis['current_month']} is mainly driven by {top_driver['label']} costs."
+
+    html_content = HTMLReportRenderer.render(text, context_data)
+    return HTMLResponse(content=html_content)
+

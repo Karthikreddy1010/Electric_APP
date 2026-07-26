@@ -97,10 +97,27 @@ class DataSourceSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
-    """LLM service configuration with production timeouts and retry policies."""
-    provider: str = "ollama"
-    model: str = "qwen3:4b"
+    """LLM service configuration supporting multi-provider routing and enterprise AI capabilities."""
+    provider: str = "mock"
+    model: str = "auto"
     base_url: str = "http://127.0.0.1:11434"
+    
+    # Provider endpoints & keys
+    vllm_base_url: str = "http://localhost:8000/v1"
+    sglang_base_url: str = "http://localhost:30000/v1"
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    gemini_api_key: str = ""
+    
+    # Model defaults per tier
+    free_tier_model: str = "qwen2.5-1.5b-instruct"
+    pro_tier_model: str = "gpt-4o-mini"
+    enterprise_tier_model: str = "claude-3-5-sonnet-20241022"
+    
+    # Vector store / RAG configuration
+    vector_db_provider: str = "in_memory" # pgvector | qdrant | in_memory
+    vector_db_url: str = "postgresql://electric:electric@localhost:5432/electricity_dw"
+    
     connect_timeout: float = 5.0
     read_timeout: float = 30.0
     write_timeout: float = 10.0
@@ -110,10 +127,21 @@ class LLMSettings(BaseSettings):
     keep_alive: str = "5m"
     stream: bool = False
 
+    # ── AI Feature Flags ───────────────────────────────────────────────
+    feature_streaming: bool = True
+    feature_rag: bool = True
+    feature_claude: bool = True
+    feature_gpt: bool = True
+    feature_gemini: bool = True
+    feature_vllm: bool = True
+    feature_sglang: bool = True
+    feature_reports: bool = True
+
     class Config:
         env_prefix = "LLM_"
         env_file = str(BASE_DIR / ".env")
         extra = "ignore"
+
 
 
 # Singleton instances

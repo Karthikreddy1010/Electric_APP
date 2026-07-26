@@ -249,6 +249,7 @@ class UniversalLLMExplainRequest(BaseModel):
     task: str = Field(..., description="Task identifier e.g. bill_analysis, impact, forecast, overview, recommendations, benchmark, geo")
     context_data: dict = Field(..., description="Structured JSON context matching task schema")
     bypass_cache: bool = Field(False, description="Whether to bypass cache")
+    user_tier: str = Field("free", description="User subscription tier (free, pro, enterprise)")
 
 class UniversalLLMExplainResponse(BaseModel):
     success: bool
@@ -262,6 +263,7 @@ class UniversalLLMChatRequest(BaseModel):
     history: list[ChatMessage] = Field(default_factory=list)
     context_data: dict = Field(..., description="Context data dictionary")
     current_tab: str = Field("Impact", description="Active frontend tab")
+    user_tier: str = Field("free", description="User subscription tier (free, pro, enterprise)")
 
 class UniversalLLMChatResponse(BaseModel):
     success: bool
