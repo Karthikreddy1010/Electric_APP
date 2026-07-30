@@ -7,8 +7,38 @@ from api.state import app_state
 from api.cache import cached
 from api.services.anomaly_detection_service import anomaly_detection_service
 
+from api.services.forecast_service import forecast_service
+from api.explainability import attach_explainability
+
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["forecast"])
+
+
+@router.get("/forecast/eia")
+@attach_explainability(
+    data_sources=["EIA Retail Monthly (2001-2026)", "NOAA Weather"],
+    calculation_method="Multi-model ensemble forecasting (Prophet, SARIMA, XGBoost, LightGBM, LSTM)",
+)
+async def get_eia_retail_forecast(
+    stateid: str = Query("NJ"),
+    sectorid: str = Query("RES"),
+    model: str = Query("XGBoost"),
+    horizon_months: int = Query(12, ge=6, le=24),
+):
+    """
+    Generates multi-sector EIA Retail electricity price and demand forecast across 6, 12, or 24 month horizons.
+    """
+    res = forecast_service.generate_forecast(
+        module_id="forecast",
+        stateid=stateid,
+        sectorid=sectorid,
+        model_name=model,
+        horizon_months=horizon_months,
+    )
+    if not res:
+        raise HTTPException(404, f"Forecast generation failed for state '{stateid}' and sector '{sectorid}'")
+    return res
+
 
 @router.get("/forecast")
 @cached(ttl=600)

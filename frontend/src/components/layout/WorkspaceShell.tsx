@@ -60,6 +60,7 @@ export default function WorkspaceShell() {
     { label: 'Impact Simulator', path: '/impact', icon: <TrendingUp size={16} /> },
     { label: 'Demand Forecast', path: '/forecast', icon: <Activity size={16} /> },
     { label: 'Regional Insights', path: '/regional-insights', icon: <Map size={16} /> },
+    { label: 'Benchmark & Ranks', path: '/advanced-analysis', icon: <Sparkles size={16} /> },
     { label: 'Settings', path: '/settings', icon: <Settings size={16} /> },
   ];
 

@@ -93,7 +93,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Data loading failed: {e}")
 
-    # ── Step 2b: Load state benchmark dataset ────────────────────────────────
+    # ── Step 2b: Load & Build EIA Retail Enterprise Feature Store ─────────────
+    try:
+        from feature_store.eia_retail.loader import load_and_merge_eia_raw
+        from feature_store.eia_retail.features import build_eia_retail_features
+        from feature_store.cross_dataset.cross_features import enrich_cross_dataset_features
+        from feature_store.base.feature_store import global_feature_store
+
+        raw_eia = load_and_merge_eia_raw()
+        features_eia = build_eia_retail_features(raw_eia)
+        enriched_eia = enrich_cross_dataset_features(features_eia)
+        
+        global_feature_store.register_dataframe("EIA Retail", enriched_eia)
+        app_state["eia_retail_df"] = enriched_eia
+        logger.info(f"EIA Retail Feature Store active: {len(enriched_eia)} rows x {len(enriched_eia.columns)} columns")
+    except Exception as e_eia:
+        logger.error(f"Failed to build EIA Retail Feature Store: {e_eia}")
+
+    # ── Step 2c: Load state benchmark dataset ────────────────────────────────
     try:
         processed_path = PROJECT_ROOT / "data" / "processed" / "state_benchmark.parquet"
         fallback_path = data_dir / "state_benchmark.parquet"
@@ -440,10 +457,16 @@ app.include_router(bill_impact_router, prefix="/api")
 from api.routes.pjm_router import router as pjm_router
 from api.routes.inflation_router import router as inflation_router
 from api.routes.cross_dataset import router as cross_dataset_router
+from api.routes.eia_retail import router as eia_retail_router
+from api.routes.recommendations import router as recommendations_router
+from api.routes.admin_analytics import router as admin_analytics_router
 
 app.include_router(pjm_router)
 app.include_router(inflation_router)
 app.include_router(cross_dataset_router)
+app.include_router(eia_retail_router)
+app.include_router(recommendations_router)
+app.include_router(admin_analytics_router)
 
 # ── Phase 1 Enterprise Backend Integration ──────────────────────────────────
 from backend.api.app import mount_backend_routes
