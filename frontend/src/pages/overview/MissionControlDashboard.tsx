@@ -24,6 +24,9 @@ import {
   AlertTriangle,
   RefreshCw,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Gauge,
   Info
 } from 'lucide-react';
 
@@ -34,6 +37,7 @@ interface SaaSExecutiveKpiCardProps {
   value: string;
   unit?: string;
   description: string;
+  secondaryInfo?: React.ReactNode;
   statusBadge?: { text: string; color: string };
   icon: React.ReactNode;
   iconBgColor?: string;
@@ -47,6 +51,7 @@ const SaaSExecutiveKpiCard = ({
   value,
   unit,
   description,
+  secondaryInfo,
   statusBadge,
   icon,
   iconBgColor = 'bg-blue-50 text-blue-600 border-blue-100',
@@ -91,12 +96,19 @@ const SaaSExecutiveKpiCard = ({
       </div>
 
       {/* Middle Section: Large Metric Value & Unit */}
-      <div className="flex items-baseline gap-1.5 mb-4">
-        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans">
-          {value}
-        </span>
-        {unit && (
-          <span className="text-sm font-medium text-slate-500">{unit}</span>
+      <div className="flex flex-col mb-4">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans">
+            {value}
+          </span>
+          {unit && (
+            <span className="text-sm font-medium text-slate-500">{unit}</span>
+          )}
+        </div>
+        {secondaryInfo && (
+          <div className="mt-1 text-xs text-slate-500 font-medium">
+            {secondaryInfo}
+          </div>
         )}
       </div>
 
@@ -801,6 +813,7 @@ const MissionControlDashboard = () => {
   const [smartMeterHourly, setSmartMeterHourly] = useState<any>(null);
   const [smartMeterDemand, setSmartMeterDemand] = useState<any>(null);
   const [loadingMeter, setLoadingMeter] = useState(false);
+  const [isAdvancedDiagnosticsOpen, setIsAdvancedDiagnosticsOpen] = useState(false);
 
   useEffect(() => {
     async function loadSmartMeter() {
@@ -848,13 +861,22 @@ const MissionControlDashboard = () => {
 
   // Helper values for Smart Meter dashboard representation
   const meterKpis = smartMeterData || {
-    current_demand_kw: 2.45,
+    current_demand_kw: 2.4,
     current_power_factor: 0.96,
     voltage: 121.2,
-    today_consumption_kwh: 38.60,
-    peak_demand_kw: 4.80,
+    today_consumption_kwh: 38.6,
+    peak_demand_kw: 4.8,
     peak_hour: "18:00",
     base_load_kw: 0.65,
+    current_amps: 19.8,
+    frequency_hz: 60.0,
+    reactive_kvar: 0.70,
+    power_quality_pct: 99.8,
+    phase_balance_pct: 99.2,
+    power_factor_trend: "Steady 0.96",
+    voltage_stability: "Nominal ±0.5%",
+    sensor_health: "100% Operational",
+    usage_vs_yesterday_pct: 5.0,
     status: "online",
     alerts: [
       {
@@ -898,6 +920,10 @@ const MissionControlDashboard = () => {
   }
   
   const heatmapData = smartMeterDemand?.heatmap || dummyHeatmap;
+
+  // Active alerts count for health card
+  const activeAlertsCount = meterKpis.alerts ? meterKpis.alerts.length : 0;
+  const isSystemHealthy = activeAlertsCount === 0;
 
   return (
     <div className="space-y-6 pb-16 font-sans bg-slate-50/50 min-h-screen p-4 md:p-6 lg:p-8 rounded-2xl border border-slate-200/60">
@@ -1033,69 +1059,82 @@ const MissionControlDashboard = () => {
         </>
       ) : (
         <>
-          {/* Smart Metering Sub-Dashboard */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+          {/* Smart Metering Executive Sub-Dashboard (Level 1: Executive 4 KPI Summary Cards) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Card 1 — Current Demand */}
             <SaaSExecutiveKpiCard
               id="sm-demand"
               label="Current Demand"
-              value={`${meterKpis.current_demand_kw}`}
+              value={`${meterKpis.current_demand_kw ?? 2.4}`}
               unit="kW"
-              description="Instantaneous active power demand."
+              description="Current real-time electricity demand."
               icon={<Zap className="w-5 h-5 text-blue-600" />}
               iconBgColor="bg-blue-50 border-blue-100"
-              statusBadge={{ text: "Live Telemetry", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
+              statusBadge={{
+                text: meterKpis.current_demand_kw > 4.5 ? "High" : meterKpis.current_demand_kw < 1.0 ? "Low" : "Live",
+                color: meterKpis.current_demand_kw > 4.5 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+              }}
             />
+
+            {/* Card 2 — Today's Usage */}
             <SaaSExecutiveKpiCard
-              id="sm-pf"
-              label="Power Factor"
-              value={`${meterKpis.current_power_factor}`}
-              description="Real-to-apparent power phase ratio."
-              icon={<Activity className="w-5 h-5 text-indigo-600" />}
-              iconBgColor="bg-indigo-50 border-indigo-100"
-              statusBadge={{ text: "Optimal (>0.95)", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
-            />
-            <SaaSExecutiveKpiCard
-              id="sm-voltage"
-              label="Line Voltage"
-              value={`${meterKpis.voltage}`}
-              unit="V"
-              description="Nominal service drop voltage."
-              icon={<Activity className="w-5 h-5 text-purple-600" />}
-              iconBgColor="bg-purple-50 border-purple-100"
-              statusBadge={{ text: "Steady Status", color: "bg-slate-100 text-slate-700 border-slate-200" }}
-            />
-            <SaaSExecutiveKpiCard
-              id="sm-cons"
-              label="Today's Total"
-              value={`${meterKpis.today_consumption_kwh.toFixed(1)}`}
+              id="sm-today-usage"
+              label="Today's Usage"
+              value={`${(meterKpis.today_consumption_kwh ?? 38.6).toFixed(1)}`}
               unit="kWh"
-              description="Cumulative energy consumption today."
+              description="Total electricity consumed today."
+              secondaryInfo={
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <span>Compared to yesterday</span>
+                  <span className="font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[11px]">
+                    {meterKpis.usage_vs_yesterday_pct ? `${meterKpis.usage_vs_yesterday_pct > 0 ? '+' : ''}${meterKpis.usage_vs_yesterday_pct}%` : '+5%'}
+                  </span>
+                </div>
+              }
               icon={<Zap className="w-5 h-5 text-cyan-600" />}
               iconBgColor="bg-cyan-50 border-cyan-100"
               statusBadge={{ text: "On Track", color: "bg-blue-50 text-blue-700 border-blue-200" }}
             />
+
+            {/* Card 3 — Peak Demand */}
             <SaaSExecutiveKpiCard
-              id="sm-peak"
+              id="sm-peak-demand"
               label="Peak Demand"
-              value={`${meterKpis.peak_demand_kw}`}
+              value={`${meterKpis.peak_demand_kw ?? 4.8}`}
               unit="kW"
-              description="Highest recorded demand interval."
+              description="Highest recorded demand today."
+              secondaryInfo={
+                <div className="flex items-center gap-1 text-xs text-slate-500">
+                  <span>Occurred at</span>
+                  <span className="font-bold text-slate-800">{meterKpis.peak_hour || '18:00'}</span>
+                </div>
+              }
               icon={<BarChart3 className="w-5 h-5 text-amber-600" />}
               iconBgColor="bg-amber-50 border-amber-100"
-              statusBadge={{ text: `Peak ${meterKpis.peak_hour}`, color: "bg-amber-50 text-amber-700 border-amber-200" }}
+              statusBadge={{ text: "Peak Recorded", color: "bg-amber-50 text-amber-700 border-amber-200" }}
             />
+
+            {/* Card 4 — System Health */}
             <SaaSExecutiveKpiCard
-              id="sm-base"
-              label="Base Load"
-              value={`${meterKpis.base_load_kw}`}
-              unit="kW"
-              description="Continuous overnight baseline load."
-              icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
-              iconBgColor="bg-emerald-50 border-emerald-100"
-              statusBadge={{ text: "Base fraction 26%", color: "bg-emerald-50 text-emerald-700 border-emerald-200" }}
+              id="sm-system-health"
+              label="System Health"
+              value={isSystemHealthy ? "Healthy" : "Warning"}
+              description="Overall electrical system condition based on meter telemetry."
+              secondaryInfo={
+                <div className="text-xs text-slate-500 font-medium">
+                  <span className="font-bold text-slate-800">{activeAlertsCount} Active Alert{activeAlertsCount === 1 ? '' : 's'}</span>
+                </div>
+              }
+              icon={isSystemHealthy ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 text-amber-600" />}
+              iconBgColor={isSystemHealthy ? "bg-emerald-50 border-emerald-100" : "bg-amber-50 border-amber-100"}
+              statusBadge={{
+                text: isSystemHealthy ? "Healthy" : "Warning",
+                color: isSystemHealthy ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+              }}
             />
           </div>
 
+          {/* Level 2: Interactive Telemetry & Analytical Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
             {/* 24-Hour Load Curve */}
             <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
@@ -1160,7 +1199,7 @@ const MissionControlDashboard = () => {
           </div>
 
           {/* 7-Day Demand Heatmap */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs mb-8">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
               <BarChart3 size={16} className="text-blue-600" /> Hourly Load Intensity Heatmap (kW)
             </h3>
@@ -1221,6 +1260,108 @@ const MissionControlDashboard = () => {
                 <span>Peak Load (&gt;3 kW)</span>
               </div>
             </div>
+          </div>
+
+          {/* Level 3: Advanced Meter Diagnostics (Collapsible Section) */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs mb-8 transition-all">
+            <div 
+              onClick={() => setIsAdvancedDiagnosticsOpen(!isAdvancedDiagnosticsOpen)}
+              className="flex items-center justify-between cursor-pointer select-none"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 shrink-0">
+                  <Gauge className="w-5 h-5 text-slate-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    Advanced Meter Diagnostics
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Engineering telemetry, power factor vector analytics, line stability, and sensor health
+                  </p>
+                </div>
+              </div>
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 transition-all cursor-pointer">
+                <span>{isAdvancedDiagnosticsOpen ? 'Hide Diagnostics' : 'Show Advanced Diagnostics'}</span>
+                {isAdvancedDiagnosticsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            </div>
+
+            {isAdvancedDiagnosticsOpen && (
+              <div className="mt-5 pt-5 border-t border-slate-100">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {/* Voltage */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Line Voltage</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.voltage ?? 121.2} V</div>
+                    <span className="inline-block text-[10px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Nominal Service Drop</span>
+                  </div>
+
+                  {/* Current */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.current_amps ?? 19.8} A</div>
+                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Balanced Phase Draw</span>
+                  </div>
+
+                  {/* Power Factor */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Power Factor</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.current_power_factor ?? 0.96}</div>
+                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Optimal (&gt;0.95)</span>
+                  </div>
+
+                  {/* Frequency */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Frequency</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.frequency_hz ?? 60.0} Hz</div>
+                    <span className="inline-block text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">Grid Synchronized</span>
+                  </div>
+
+                  {/* Reactive Power */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reactive Power</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.reactive_kvar ?? 0.70} kVAR</div>
+                    <span className="inline-block text-[10px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Inductive Baseline</span>
+                  </div>
+
+                  {/* Power Quality */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Power Quality</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.power_quality_pct ?? 99.8}%</div>
+                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Pure Sine Harmonic</span>
+                  </div>
+
+                  {/* Phase Balance */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phase Balance</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.phase_balance_pct ?? 99.2}%</div>
+                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Symmetrical Load</span>
+                  </div>
+
+                  {/* Power Factor Trend */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Power Factor Trend</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.power_factor_trend || 'Steady 0.96'}</div>
+                    <span className="inline-block text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">No Penalty Risk</span>
+                  </div>
+
+                  {/* Voltage Stability */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Voltage Stability</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.voltage_stability || 'Nominal ±0.5%'}</div>
+                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">ANSI C84.1 Compliant</span>
+                  </div>
+
+                  {/* Sensor Health */}
+                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Sensor Health</span>
+                    <div className="text-base font-extrabold text-slate-900">{meterKpis.sensor_health || '100% Operational'}</div>
+                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Calibrated CT/PT</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

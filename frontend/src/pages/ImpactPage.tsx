@@ -309,10 +309,10 @@ const ImpactPage = () => {
           </div>
 
           <a
-            href="/app/advanced-analysis"
+            href="/app/impact"
             className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
           >
-            Advanced Analysis Page →
+            Refresh Impact Simulation →
           </a>
         </div>
       </header>

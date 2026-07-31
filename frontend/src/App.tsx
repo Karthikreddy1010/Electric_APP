@@ -16,7 +16,6 @@ import ResetPasswordPage from './pages/ResetPasswordPage.tsx';
 import OverviewPage from './pages/OverviewPage.tsx';
 import BillPage from './pages/BillPage.tsx';
 import ImpactPage from './pages/ImpactPage.tsx';
-import AdvancedAnalysisPage from './pages/AdvancedAnalysisPage.tsx';
 import SettingsPage from './pages/SettingsPage.tsx';
 
 import WorkspaceShell from './components/layout/WorkspaceShell.tsx';
@@ -145,7 +144,7 @@ function App() {
                   <Route path="/overview" element={<OverviewPage />} />
                   <Route path="/bill-analysis" element={<BillPage />} />
                   <Route path="/impact" element={<ImpactPage />} />
-                  <Route path="/advanced-analysis" element={<AdvancedAnalysisPage />} />
+                  <Route path="/advanced-analysis" element={<Navigate to="/impact" replace />} />
                   <Route path="/regional-insights" element={<Suspense fallback={<LazyFallback />}><RegionalPage /></Suspense>} />
                   <Route path="/forecast" element={<Suspense fallback={<LazyFallback />}><ForecastPage /></Suspense>} />
 

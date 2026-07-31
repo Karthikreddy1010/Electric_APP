@@ -28,15 +28,8 @@ import {
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  ScatterChart, Scatter, Cell, Legend, LineChart, Line, AreaChart, Area
+  Cell, Legend, LineChart, Line, AreaChart, Area
 } from 'recharts';
-
-const REGION_COLORS: Record<string, string> = {
-  Northeast: '#2F6BFF',   // Primary blue
-  South: '#F5B041',       // Warning amber
-  Midwest: '#16A085',     // Energy teal
-  West: '#D64545',        // Alert red
-};
 
 const NJ_ZIPS = ['07101', '07201', '07301', '07401', '07501'];
 
@@ -338,14 +331,13 @@ const GridInterchangeSection = ({ ba }: { ba: string }) => {
 };
 
 const SUB_TABS = [
-  { id: 'summary',    label: 'Summary',    desc: 'Territory benchmarking parameters' },
-  { id: 'map',        label: 'Map',        desc: 'Spatial drilldown network' },
-  { id: 'comparison', label: 'Comparison', desc: 'Cheapest vs expensive states' },
-  { id: 'utility',    label: 'Utility',    desc: 'Local utility listings' },
-  { id: 'community',  label: 'Municipality', desc: 'NJ municipal comparisons' },
-  { id: 'grid',       label: 'Grid',       desc: 'Real-time grid dispatch' },
-  { id: 'trends',     label: 'Trends',     desc: 'EIA timeline volatility' },
-  { id: 'ai',         label: 'AI Summary',  desc: 'Spatial observations report' }
+  { id: 'summary',   label: 'Summary',      desc: 'Territory benchmarking parameters' },
+  { id: 'map',       label: 'Map',          desc: 'Spatial drilldown network' },
+  { id: 'utility',   label: 'Utility',      desc: 'Local utility listings' },
+  { id: 'community', label: 'Municipality', desc: 'NJ municipal analysis' },
+  { id: 'grid',      label: 'Grid',         desc: 'Real-time grid dispatch' },
+  { id: 'trends',    label: 'Trends',       desc: 'EIA timeline volatility' },
+  { id: 'ai',        label: 'AI Summary',   desc: 'Spatial observations report' }
 ];
 
 const RegionalPage = () => {
@@ -901,6 +893,9 @@ const RegionalPage = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* Census ACS Demographics & Energy Burden Section */}
+                  <CensusEnergyBurdenSection state={selectedState} />
                 </div>
               </div>
             )}
@@ -1091,85 +1086,7 @@ const RegionalPage = () => {
           </SectionWrapper>
         )}
 
-        {/* COMPARISON SUB-TAB */}
-        {subTab === 'comparison' && (
-          <SectionWrapper title="Regional Rankings" description="National comparison showing the highest and lowest average energy prices.">
-            {benchmarkData && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="panel-chart h-[380px] flex flex-col justify-between">
-                  <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
-                    <TrendingUp size={14} className="text-alert-red" /> Top 10 Most Expensive States
-                  </h4>
-                  <div className="flex-1 min-h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={benchmarkData.top_10_expensive} layout="vertical" margin={{ left: -10, right: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-hairline)" opacity={0.5} />
-                        <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} tickFormatter={(v: number) => `${(v * 100).toFixed(0)}¢`} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="state" tick={{ fontSize: 10, fill: 'var(--text-primary)', fontWeight: 'bold' }} width={30} axisLine={false} tickLine={false} />
-                        <Tooltip formatter={(v: any) => [`${(Number(v) * 100).toFixed(1)}¢/kWh`, 'Rate']} />
-                        <Bar dataKey="avg_rate" radius={[0, 2, 2, 0]}>
-                          {(benchmarkData.top_10_expensive || []).map((_: any, idx: number) => (
-                            <Cell key={idx} fill={idx === 0 ? 'var(--alert-red)' : idx < 3 ? 'var(--warning-amber)' : '#E6EAF0'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
 
-                <div className="panel-chart h-[380px] flex flex-col justify-between">
-                  <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
-                    <TrendingDown size={14} className="text-savings-green" /> 10 Cheapest U.S. States
-                  </h4>
-                  <div className="flex-1 min-h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={benchmarkData.cheapest_10} layout="vertical" margin={{ left: -10, right: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border-hairline)" opacity={0.5} />
-                        <XAxis type="number" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }} tickFormatter={(v: number) => `${(v * 100).toFixed(0)}¢`} axisLine={false} tickLine={false} />
-                        <YAxis type="category" dataKey="state" tick={{ fontSize: 10, fill: 'var(--text-primary)', fontWeight: 'bold' }} width={30} axisLine={false} tickLine={false} />
-                        <Tooltip formatter={(v: any) => [`${(Number(v) * 100).toFixed(1)}¢/kWh`, 'Rate']} />
-                        <Bar dataKey="avg_rate" radius={[0, 2, 2, 0]}>
-                          {(benchmarkData.cheapest_10 || []).map((_: any, idx: number) => (
-                            <Cell key={idx} fill={idx === 0 ? 'var(--savings-green)' : idx < 3 ? 'var(--energy-teal)' : '#E6EAF0'} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="panel-chart h-[380px] flex flex-col justify-between">
-                  <h4 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-border-hairline pb-2">
-                    <Activity size={14} className="text-primary-blue" /> Price vs. Bill (Efficiency Scatter)
-                  </h4>
-                  <div className="flex-1 min-h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <ScatterChart margin={{ bottom: 10, left: -20, right: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="var(--border-hairline)" opacity={0.5} />
-                        <XAxis type="number" dataKey="avg_rate" name="Rate" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }}
-                          tickFormatter={(v: number) => `${(v * 100).toFixed(0)}¢`}
-                          label={{ value: 'Rate (¢/kWh)', position: 'insideBottom', offset: -5, fontSize: 9, fill: 'var(--text-secondary)' }} axisLine={false} tickLine={false} />
-                        <YAxis type="number" dataKey="avg_bill" name="Bill" tick={{ fontSize: 9, fill: 'var(--text-secondary)' }}
-                          tickFormatter={(v: number) => `$${v.toFixed(0)}`} axisLine={false} tickLine={false} />
-                        <Tooltip formatter={(v: any, name: any) => [name === 'Rate' ? `${(Number(v) * 100).toFixed(1)}¢/kWh` : `$${Number(v).toFixed(0)}`, name]} labelFormatter={() => ''} />
-                        <Legend verticalAlign="top" height={30} wrapperStyle={{ fontSize: '9px' }} />
-                        {Object.entries(REGION_COLORS).map(([region, color]) => (
-                          <Scatter key={region} name={region} data={(benchmarkData.scatter_data || []).filter((d: any) => d.region === region)} fill={color}>
-                            {(benchmarkData.scatter_data || []).filter((d: any) => d.region === region).map((_: any, idx: number) => (
-                              <Cell key={idx} fill={color} opacity={0.7} />
-                            ))}
-                          </Scatter>
-                        ))}
-                      </ScatterChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                {/* Census ACS Demographics & Energy Burden Section */}
-                <CensusEnergyBurdenSection state={selectedState} />
-              </div>
-            )}
-          </SectionWrapper>
-        )}
 
         {/* UTILITY SUB-TAB */}
         {subTab === 'utility' && (
