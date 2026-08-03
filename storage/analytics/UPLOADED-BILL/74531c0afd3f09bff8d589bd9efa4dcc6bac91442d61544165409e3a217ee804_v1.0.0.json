@@ -10,21 +10,21 @@
   "tariff_version": "2026.07",
   "weather_version": "2026.07",
   "dataset_version": "2026.07",
-  "generated_at": "2026-07-26T13:45:18.525082+00:00",
+  "generated_at": "2026-08-03T15:25:59.147029+00:00",
   "processing_time_ms": {
-    "tariff_ms": 0.04,
-    "fixed_charges_ms": 0.01,
-    "variable_charges_ms": 0.03,
+    "tariff_ms": 0.05,
+    "fixed_charges_ms": 0.02,
+    "variable_charges_ms": 0.04,
     "taxes_ms": 0.02,
-    "breakdown_ms": 0.09,
+    "breakdown_ms": 0.08,
     "historical_ms": 0.05,
-    "weather_ms": 0.13,
+    "weather_ms": 0.23,
     "trends_ms": 0.02,
     "anomalies_ms": 0.02,
-    "savings_ms": 0.05,
-    "recommendations_ms": 0.1,
+    "savings_ms": 0.07,
+    "recommendations_ms": 0.08,
     "forecast_inputs_ms": 0.05,
-    "total_engine_ms": 0.65
+    "total_engine_ms": 0.78
   },
   "confidence_score": 0.98,
   "quality_checks": {
@@ -170,15 +170,15 @@
     "pct_change_cost": 11.1
   },
   "weather_normalization": {
-    "month": 7,
+    "month": 8,
     "hdd": 0.0,
-    "cdd": 310.0,
+    "cdd": 260.0,
     "base_temperature_f": 65.0,
     "temperature_sensitivity_kwh_per_degree": 0.85,
-    "weather_driven_kwh": 263.5,
-    "weather_driven_cost": 48.8,
-    "base_discretionary_kwh": 486.5,
-    "weather_normalized_kwh": 614.0
+    "weather_driven_kwh": 221.0,
+    "weather_driven_cost": 40.93,
+    "base_discretionary_kwh": 529.0,
+    "weather_normalized_kwh": 656.5
   },
   "trend_analysis": {
     "direction": "UPWARD",
@@ -259,9 +259,9 @@
   "forecast_inputs": {
     "baseline_daily_kwh": 25.0,
     "peak_demand_ratio": 1.15,
-    "seasonal_factor": 1.25,
+    "seasonal_factor": 1.2,
     "weather_sensitivity_factor": 0.85,
-    "base_annual_kwh_projection": 11406.2,
+    "base_annual_kwh_projection": 10950.0,
     "trend_coefficient": 0.01
   }
 }

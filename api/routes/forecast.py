@@ -87,6 +87,21 @@ async def forecast_costs(
         def safe_round(v):
             return round(v, 2) if (v is not None and pd.notna(v)) else 0.0
 
+        # Exogenous EIA-923 Wholesale Fuel Price & Generation Inputs
+        exogenous = None
+        try:
+            from api.services.eia923_service import get_eia923_fuel_cost_summary, get_eia923_generation_summary
+            fc_summary = get_eia923_fuel_cost_summary(state="NJ")
+            gen_summary = get_eia923_generation_summary(state="NJ")
+            exogenous = {
+                "delivered_fuel_cost_dollars_mmbtu": fc_summary.get("avg_cost_dollars_mmbtu"),
+                "fuel_cost_mom_change_pct": fc_summary.get("mom_change_pct"),
+                "grid_clean_share_pct": gen_summary.get("clean_share_pct"),
+                "fuel_cost_trend": fc_summary.get("trend_costs", [])[:6]
+            }
+        except Exception as e_exo:
+            logger.warning(f"Failed to attach EIA-923 exogenous forecast features: {e_exo}")
+
         output = {
             "forecast": mapped_forecast,
             "forecasts": mapped_forecast,
@@ -97,7 +112,8 @@ async def forecast_costs(
             },
             "model_weights": ensemble.weights if model == "ensemble" else None,
             "confidence_score": safe_round(ensemble.confidence_scores.get(model, ensemble.confidence_scores["ensemble"])),
-            "model_used": model
+            "model_used": model,
+            "exogenous_indicators": exogenous
         }
         
         return output
@@ -165,7 +181,7 @@ def get_historical_anomalies(
 
 @router.post("/forecast/anomalies/resolve")
 def resolve_anomalies(
-    payload: dict = Body(..., example={"resolutions": {"2025-06-01": "replace", "2025-12-01": "keep"}})
+    payload: dict = Body(..., examples=[{"resolutions": {"2025-06-01": "replace", "2025-12-01": "keep"}}])
 ):
     """
     Applies resolution actions to historical anomalies, updating the in-memory feature store.

@@ -199,4 +199,20 @@ class ContextBuilder:
             ctx["forecast"] = forecast_results
         if conversation_history:
             ctx["metadata"]["conversation_history"] = conversation_history[-5:]
+
+        # Attach EIA-923 Contextual Knowledge
+        try:
+            from api.services.eia923_service import get_eia923_fuel_cost_summary, get_eia923_generation_summary
+            fuel_cost = get_eia923_fuel_cost_summary("NJ")
+            gen_summary = get_eia923_generation_summary("NJ")
+            ctx["metadata"]["eia923_context"] = {
+                "delivered_gas_price_dollars_mmbtu": fuel_cost.get("avg_cost_dollars_mmbtu"),
+                "fuel_price_mom_change_pct": fuel_cost.get("mom_change_pct"),
+                "grid_clean_share_pct": gen_summary.get("clean_share_pct"),
+                "grid_carbon_intensity_lbs_mwh": gen_summary.get("grid_carbon_intensity_lbs_mwh"),
+                "state_fuel_mix": gen_summary.get("fuel_mix")
+            }
+        except Exception:
+            pass
+
         return ctx

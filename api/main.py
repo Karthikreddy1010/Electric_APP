@@ -210,7 +210,12 @@ async def lifespan(app: FastAPI):
         app_state["municipal_energy_df"] = pd.read_sql("SELECT * FROM municipal_energy", con=engine)
         app_state["state_monthly_prices_df"] = pd.read_sql("SELECT * FROM state_monthly_prices", con=engine)
         app_state["eia861_master_df"] = pd.read_sql("SELECT * FROM eia861_master", con=engine)
-        app_state["pseg_distribution_rates_df"] = pd.read_sql("SELECT * FROM pseg_distribution_rates", con=engine)
+        
+        try:
+            app_state["pseg_distribution_rates_df"] = pd.read_sql("SELECT * FROM pseg_distribution_rates", con=engine)
+        except Exception as e_pseg:
+            logger.debug(f"pseg_distribution_rates table note: {e_pseg}")
+            app_state["pseg_distribution_rates_df"] = pd.DataFrame()
         
         # Load EIA-861M monthly
         try:

@@ -415,6 +415,14 @@ async def upload_bill(
             logger.warning(f"Failed to calculate scaled forecast for guest: {fe}")
             scaled_forecast = []
 
+    # EIA-923 Page 5 Wholesale Fuel Adjustment Clause (FAC) Explanation
+    eia923_fac = None
+    try:
+        from api.services.eia923_service import get_eia923_fac_explanation
+        eia923_fac = get_eia923_fac_explanation(state="NJ")
+    except Exception as e_fac:
+        logger.warning(f"Failed to fetch EIA-923 FAC explanation: {e_fac}")
+
     return {
         "success": True,
         "bill_data": bill,
@@ -425,7 +433,8 @@ async def upload_bill(
         "ranking": ranking,
         "drivers": drivers,
         "insights": insights,
-        "forecast_results": {"forecast": scaled_forecast}
+        "forecast_results": {"forecast": scaled_forecast},
+        "eia923_fac_explanation": eia923_fac
     }
 
 

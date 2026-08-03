@@ -133,3 +133,12 @@ class ForecastService:
 
 
 forecast_service = ForecastService()
+
+
+async def recalculate_user_forecasts(user_id: str, db: Any = None, bill_id: int | None = None) -> Dict[str, Any]:
+    """
+    Recalculate or update forecast data for a user following a bill update or history change.
+    """
+    logger.info(f"Recalculating forecast for user {user_id} (bill_id: {bill_id})")
+    return ForecastService.generate_forecast()
+

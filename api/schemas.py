@@ -150,6 +150,14 @@ class EIA861MSummary(BaseModel):
     customer_count: int
     avg_price_cents_kwh: float
 
+class EIA923Summary(BaseModel):
+    state: Optional[str] = "NJ"
+    utility_fuel_cost_dollars_mmbtu: Optional[float] = None
+    fuel_cost_mom_change_pct: Optional[float] = None
+    grid_clean_share_pct: Optional[float] = None
+    grid_carbon_intensity_lbs_mwh: Optional[float] = None
+    battery_roundtrip_efficiency_pct: Optional[float] = None
+
 class OverviewResponse(BaseModel):
     kpis: OverviewKPI
     breakdown: list[BillComponent]
@@ -162,6 +170,7 @@ class OverviewResponse(BaseModel):
     insights: Optional[list[str]] = None
     alerts: Optional[list[str]] = None
     eia861m_summary: Optional[EIA861MSummary] = None
+    eia923_summary: Optional[EIA923Summary] = None
 
 
 

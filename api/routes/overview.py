@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from api.state import app_state
 from api.cache import cached
-from api.schemas import OverviewResponse, OverviewKPI, BillComponent, TrendResponse, EIA861MSummary
+from api.schemas import OverviewResponse, OverviewKPI, BillComponent, TrendResponse, EIA861MSummary, EIA923Summary
 from config.constants import STATE_AVG_MONTHLY_USAGE, NJ_TAX_RATE, DEFAULT_CUSTOMER_CHARGE
 import pandas as pd
 import logging
@@ -248,6 +248,25 @@ async def get_overview():
         except Exception as e_summary:
             logger.warning(f"Error computing eia861m_summary: {e_summary}")
 
+    # 5. EIA-923 Aggregated Analytics
+    eia923_summary = None
+    try:
+        from api.services.eia923_service import get_eia923_fuel_cost_summary, get_eia923_generation_summary, get_eia923_storage_summary
+        fuel_cost_data = get_eia923_fuel_cost_summary("NJ")
+        gen_data = get_eia923_generation_summary("NJ")
+        storage_data = get_eia923_storage_summary("NJ")
+        
+        eia923_summary = EIA923Summary(
+            state="NJ",
+            utility_fuel_cost_dollars_mmbtu=fuel_cost_data.get("avg_cost_dollars_mmbtu"),
+            fuel_cost_mom_change_pct=fuel_cost_data.get("mom_change_pct"),
+            grid_clean_share_pct=gen_data.get("clean_share_pct"),
+            grid_carbon_intensity_lbs_mwh=gen_data.get("grid_carbon_intensity_lbs_mwh"),
+            battery_roundtrip_efficiency_pct=storage_data.get("roundtrip_efficiency_pct")
+        )
+    except Exception as e_eia923:
+        logger.warning(f"Error attaching eia923_summary: {e_eia923}")
+
     return OverviewResponse(
         kpis=kpis, 
         breakdown=breakdown, 
@@ -259,5 +278,6 @@ async def get_overview():
         state_percentile=state_percentile,
         insights=insights,
         alerts=alerts,
-        eia861m_summary=eia861m_summary
+        eia861m_summary=eia861m_summary,
+        eia923_summary=eia923_summary
     )

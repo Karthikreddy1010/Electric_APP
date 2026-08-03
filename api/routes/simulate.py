@@ -80,12 +80,28 @@ async def run_plan_simulation(req: PlanSimulationRequest):
         # Create dummy historical usage based on input average
         hist_usage = np.full(12, req.monthly_usage_kwh)
         
-        # Define candidate plans
+        # Fetch empirical EIA-923 wholesale natural gas price volatility & battery efficiency parameters
+        gas_volatility = 0.08
+        storage_eff = 81.4
+        try:
+            from api.services.eia923_service import get_eia923_fuel_cost_summary, get_eia923_storage_summary
+            fc_info = get_eia923_fuel_cost_summary("NJ")
+            st_info = get_eia923_storage_summary("NJ")
+            if fc_info.get("trend_costs") and len(fc_info["trend_costs"]) > 1:
+                std_dev = np.std(fc_info["trend_costs"])
+                mean_val = np.mean(fc_info["trend_costs"])
+                if mean_val > 0:
+                    gas_volatility = float(round(std_dev / mean_val, 4))
+            storage_eff = float(st_info.get("roundtrip_efficiency_pct", 81.4))
+        except Exception as e_sim_eia:
+            logger.warning(f"Failed to load EIA-923 parameters for simulation: {e_sim_eia}")
+
+        # Define candidate plans calibrated with empirical EIA-923 parameters
         plans = [
             {"provider": "PSEG Standard Fixed", "type": "fixed", "rate": 0.125, "volatility": 0.0},
-            {"provider": "CleanGreen Variable", "type": "variable", "rate": 0.115, "volatility": 0.08},
+            {"provider": "CleanGreen Variable", "type": "variable", "rate": 0.115, "volatility": gas_volatility},
             {"provider": "Direct Energy Fixed", "type": "fixed", "rate": 0.132, "volatility": 0.0},
-            {"provider": "Voltaic Dynamic TOU", "type": "variable", "rate": 0.119, "volatility": 0.05}
+            {"provider": "Voltaic Storage Arbitrage", "type": "variable", "rate": 0.119 * (1.0 - (100.0 - storage_eff) / 100.0 * 0.1), "volatility": round(gas_volatility * 0.7, 4)}
         ]
         
         simulator = PlanSimulator(

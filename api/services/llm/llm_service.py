@@ -86,13 +86,18 @@ class _FacadeProviderProxy:
 
     def __init__(self):
         self.model = "auto"
+        self.base_url = "http://localhost:11434"
 
     def is_available(self) -> bool:
         """
-        For the facade, always return True — the Orchestrator's router
-        will handle individual provider availability checks internally.
+        For the facade, check whether local Ollama endpoint is reachable.
         """
-        return True
+        import httpx
+        try:
+            r = httpx.get(f"{self.base_url}/api/tags", timeout=1.5)
+            return r.status_code == 200
+        except Exception:
+            return False
 
 
 # Global singleton — matches the Phase 1 import: `from api.services.llm.llm_service import llm_service`

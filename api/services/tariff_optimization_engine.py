@@ -156,7 +156,19 @@ class TariffOptimizationEngine:
                 }
             ]
 
-        
+        # Identify best (lowest cost) and worst (highest cost) tariffs
+        sorted_tariffs = sorted(comparison, key=lambda x: x["simulated_annual_cost"])
+        best = sorted_tariffs[0]
+        worst = sorted_tariffs[-1]
+
+        # Calculate annual savings and payback period
+        if annual_cost > best["simulated_annual_cost"]:
+            annual_savings = annual_cost - best["simulated_annual_cost"]
+        else:
+            annual_savings = worst["simulated_annual_cost"] - best["simulated_annual_cost"]
+
+        payback_months = 0
+
         # Prepare recommendation report
         recommendation = {
             "best_tariff_id": best["id"],

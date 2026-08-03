@@ -1074,8 +1074,116 @@ class UtilityReliability(Base):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  EIA-923 AGGREGATED ANALYTICAL TABLES (MANDATORY AGGREGATED SUMMARIES)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class EIA923StateFuelMix(Base):
+    """
+    State and utility electricity generation and fuel mix aggregated from EIA-923 Schedule 1.
+    No raw plant-level records stored; aggregated at (year, month, state, utility_id, fuel_code).
+    """
+    __tablename__ = "eia923_state_fuel_mix"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    utility_id = Column(Integer, index=True)
+    nerc_region = Column(String(20))
+    fuel_code = Column(String(20), nullable=False, index=True)   # NG, SUB, NUC, SUN, WND, DFO, etc.
+    fuel_group = Column(String(50))                               # Gas, Coal, Nuclear, Solar, Wind, Hydro, Petroleum, Other
+    net_generation_mwh = Column(Float, default=0.0)
+    total_mmbtu = Column(Float, default=0.0)
+    clean_share_pct = Column(Float)                              # % renewable / zero carbon
+    fossil_share_pct = Column(Float)                             # % fossil generation
+    carbon_intensity_g_kwh = Column(Float)                       # Calculated Scope 2 gCO2e/kWh
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", "state", "utility_id", "fuel_code", name="uq_eia923_state_yr_mo_util_fuel"),
+        Index("ix_eia923_state_date", "state", "year", "month"),
+        Index("ix_eia923_util_date", "utility_id", "year", "month"),
+    )
+
+
+class EIA923FuelCostTrend(Base):
+    """
+    State and utility monthly delivered fuel purchase costs ($/MMBtu and cents/MMBtu) from EIA-923 Schedule 5.
+    No raw plant-level records stored; aggregated at (year, month, state, utility_id, fuel_group).
+    """
+    __tablename__ = "eia923_fuel_cost_trends"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    month = Column(Integer, nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    utility_id = Column(Integer, index=True)
+    fuel_group = Column(String(30), nullable=False, index=True)   # Natural Gas, Coal, Petroleum
+    avg_cost_cents_mmbtu = Column(Float)                          # Weighted average delivery cost (cents/MMBtu)
+    avg_cost_dollars_mmbtu = Column(Float)                        # Weighted average delivery cost ($/MMBtu)
+    total_quantity_delivered = Column(Float)                      # Total quantity purchased
+    avg_heat_content = Column(Float)                              # MMBtu/unit
+    mom_change_pct = Column(Float)                                # Month-over-Month price change %
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", "state", "utility_id", "fuel_group", name="uq_eia923_cost_yr_mo_util_fuel"),
+        Index("ix_eia923_cost_state_date", "state", "year", "month"),
+        Index("ix_eia923_cost_util_date", "utility_id", "year", "month"),
+    )
+
+
+class EIA923StorageSummary(Base):
+    """
+    State-level annual energy storage performance aggregated from EIA-923 Schedule 1 Energy Storage.
+    No raw plant-level records stored; aggregated at (year, state, technology).
+    """
+    __tablename__ = "eia923_storage_summary"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    year = Column(Integer, nullable=False, index=True)
+    state = Column(String(2), nullable=False, index=True)
+    technology = Column(String(50), nullable=False, default="Batteries")  # Batteries, Pumped Hydro, etc.
+    total_discharge_mwh = Column(Float, default=0.0)
+    total_charge_mwh = Column(Float, default=0.0)
+    roundtrip_efficiency_pct = Column(Float)                      # Discharge MWh / Charge MWh * 100
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("year", "state", "technology", name="uq_eia923_storage_yr_st_tech"),
+        Index("ix_eia923_storage_state_year", "state", "year"),
+    )
+
+
+class EIA923PlantFrame(Base):
+    """
+    Master plant metadata lookup table from EIA-923 Schedule 6.
+    Links Plant IDs to operating utilities, states, NERC regions, and NAICS codes.
+    """
+    __tablename__ = "eia923_plant_frame"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    plant_id = Column(Integer, nullable=False, unique=True, index=True)
+    plant_name = Column(String(200))
+    operator_id = Column(Integer, index=True)
+    operator_name = Column(String(200))
+    state = Column(String(2), nullable=False, index=True)
+    nerc_region = Column(String(20))
+    census_region = Column(String(50))
+    naics_code = Column(Integer)
+    sector_number = Column(Integer)
+    sector_name = Column(String(100))
+    ingested_at = Column(DateTime, server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_eia923_plant_operator", "operator_id", "state"),
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  AUTH MODELS — imported here so Base.metadata.create_all includes them
 # ─────────────────────────────────────────────────────────────────────────────
 # This import must remain at the bottom to avoid a circular import
 # (auth_models.py imports Base from this file).
 import database.auth_models as _auth_models  # noqa: E402, F401
+

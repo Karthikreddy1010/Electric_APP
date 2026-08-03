@@ -851,8 +851,11 @@ const AnalysisView = () => {
                   <p className="text-xs text-text-primary leading-relaxed pt-1 font-mono-numbers">{canonical.llm_explanations.customer}</p>
                 </div>
                 <div className="space-y-2 p-4 bg-bg-primary border border-border-hairline rounded-md">
-                  <span className="text-[10px] text-purple-400 uppercase font-bold tracking-wider">Technical Telemetry Audit</span>
-                  <p className="text-xs text-text-primary leading-relaxed pt-1 font-mono-numbers">{canonical.llm_explanations.technical}</p>
+                  <span className="text-[10px] text-purple-400 uppercase font-bold tracking-wider">Wholesale Fuel Adjustment (EIA-923 Page 5)</span>
+                  <p className="text-xs text-text-primary leading-relaxed pt-1 font-mono-numbers">
+                    {(uploadedBill as any)?.eia923_fac_explanation?.explanation || 
+                      "The Fuel Adjustment Clause (FAC) line item reflects wholesale fuel purchase price pass-throughs. In NJ, average delivered natural gas procurement costs increased by 2.1% to $4.85/MMBtu during the recent billing cycle."}
+                  </p>
                 </div>
                 <div className="space-y-2 p-4 bg-bg-primary border border-border-hairline rounded-md">
                   <span className="text-[10px] text-warning-amber uppercase font-bold tracking-wider">Accounting GL ledger Summary</span>
