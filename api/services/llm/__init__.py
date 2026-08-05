@@ -1,18 +1,20 @@
 """
-Phase 2 — Centralized LLM Package for ElectricAI.
+Phase 3 — Centralized LLM Package for ElectricAI.
 
 Exports the backward-compatible facade (LLMService, llm_service) alongside
-all new Phase 2 modules. Every Phase 1 import path is preserved.
+all Phase 2 and Phase 3 modules. Every Phase 1/2 import path is preserved.
 """
 # ── Phase 1 Backward Compatibility ─────────────────────────────────────────
 from api.services.llm.llm_service import LLMService, llm_service
 from api.services.llm.context_builder import ContextBuilder
-from api.services.llm.response_validator import ResponseValidator
+from api.services.llm.response_validator import (
+    ResponseValidator, StrictnessLevel, ValidationReport, NumberAuditEntry
+)
 from api.services.llm.deterministic_fallback import DeterministicFallback
 from api.services.llm.metadata import LLMResponseMetadata
 from api.services.llm.cache_manager import LLMCacheManager, llm_cache
 
-# ── Phase 2 New Modules ───────────────────────────────────────────────────
+# ── Phase 2 Modules ───────────────────────────────────────────────────────
 from api.services.llm.contracts import (
     UserTier, PromptRequest, ModelMetadata, InferenceResponse,
     ValidationResult, LLMResponse, ValidationStatus
@@ -27,11 +29,20 @@ from api.services.llm.streaming import StreamingService
 from api.services.llm.rag import RAGService, rag_service
 from api.services.llm.security import SecretProvider, PromptInjectionGuard
 
+# ── Phase 3 Brain Architecture ────────────────────────────────────────────
+from api.services.llm.orchestrator import (
+    Intent, ModelTier, SemanticIntentRouter, AssistantBrain,
+    ToolRegistry, SkillCatalog, CostController,
+    ConversationMemory, ConfidenceFusion, ResponseCritic,
+    IntentResult, ToolResult, FusedKnowledge, ObservabilityTrace
+)
+
 __all__ = [
     # Phase 1 backward compat
     "LLMService", "llm_service",
     "ContextBuilder", "ResponseValidator", "DeterministicFallback",
     "LLMResponseMetadata", "LLMCacheManager", "llm_cache",
+    "StrictnessLevel", "ValidationReport", "NumberAuditEntry",
     # Phase 2
     "UserTier", "PromptRequest", "ModelMetadata", "InferenceResponse",
     "ValidationResult", "LLMResponse", "ValidationStatus",
@@ -40,4 +51,10 @@ __all__ = [
     "SemanticCacheManager", "semantic_cache",
     "StreamingService", "RAGService", "rag_service",
     "SecretProvider", "PromptInjectionGuard",
+    # Phase 3 Brain
+    "Intent", "ModelTier", "SemanticIntentRouter", "AssistantBrain",
+    "ToolRegistry", "SkillCatalog", "CostController",
+    "ConversationMemory", "ConfidenceFusion", "ResponseCritic",
+    "IntentResult", "ToolResult", "FusedKnowledge", "ObservabilityTrace",
 ]
+

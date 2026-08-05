@@ -1,18 +1,82 @@
-"""
-Centralized Context Builder.
-Constructs minimal, clean, tab-tailored JSON contexts following a standard unified schema:
-{
-    "task": "...",
-    "customer": {...},
-    "bill": {...},
-    "simulation": {...},
-    "forecast": {...},
-    "recommendations": {...},
-    "statistics": {...},
-    "metadata": {...}
-}
-"""
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+from dataclasses import dataclass, field
+
+
+@dataclass
+class UserProfile:
+    """User preferences and equipment profile for personalization."""
+    user_id: str = "default_user"
+    utility: str = "PSE&G"
+    state: str = "NJ"
+    rate_schedule: str = "RS"
+    has_solar: bool = False
+    has_ev: bool = False
+    heating_type: str = "gas"  # gas | electric | heat_pump
+    cooling_type: str = "central_ac"
+    tone_preference: str = "concise"  # concise | detailed | simple
+    budget_target_monthly: Optional[float] = None
+
+
+class UserPersonalizationLayer:
+    """Injects user preferences and home profile into analytics contexts."""
+
+    @staticmethod
+    def build_profile(
+        user_id: str = "default_user",
+        utility: str = "PSE&G",
+        state: str = "NJ",
+        rate_schedule: str = "RS",
+        **kwargs: Any
+    ) -> UserProfile:
+        return UserProfile(
+            user_id=user_id, utility=utility, state=state,
+            rate_schedule=rate_schedule, **kwargs
+        )
+
+    @classmethod
+    def inject_personalization(
+        cls,
+        ctx: Dict[str, Any],
+        profile: Optional[UserProfile] = None
+    ) -> Dict[str, Any]:
+        if profile is None:
+            profile = cls.build_profile()
+
+        cust = ctx.setdefault("customer", {})
+        if not cust.get("utility"):
+            cust["utility"] = profile.utility
+        if not cust.get("rate_schedule"):
+            cust["rate_schedule"] = profile.rate_schedule
+
+        ctx.setdefault("metadata", {})["personalization"] = {
+            "state": profile.state,
+            "has_solar": profile.has_solar,
+            "has_ev": profile.has_ev,
+            "heating_type": profile.heating_type,
+            "cooling_type": profile.cooling_type,
+            "tone_preference": profile.tone_preference,
+            "budget_target_monthly": profile.budget_target_monthly
+        }
+        return ctx
+
+
+class MultiTurnMemoryManager:
+    """Manages chat conversation history windowing and context injection."""
+
+    def __init__(self, max_turns: int = 5):
+        self.max_turns = max_turns
+
+    def format_history(self, history: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+        formatted = []
+        for msg in history[-self.max_turns:]:
+            if isinstance(msg, dict):
+                role = msg.get("role", "user")
+                content = msg.get("content") or msg.get("text") or ""
+                formatted.append({"role": role, "content": content})
+            elif hasattr(msg, "role") and hasattr(msg, "content"):
+                formatted.append({"role": msg.role, "content": msg.content})
+        return formatted
+
 
 class ContextBuilder:
     @staticmethod

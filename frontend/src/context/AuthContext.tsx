@@ -106,7 +106,9 @@ export const AuthContextProvider = ({ children }: { children: React.ReactNode })
     const handleExpired = () => {
       setUser(null);
       setStatus('unauthenticated');
-      navigate('/login');
+      if (sessionStorage.getItem('is_demo_mode') !== 'true') {
+        navigate('/login');
+      }
     };
     window.addEventListener('auth:session-expired', handleExpired);
     return () => window.removeEventListener('auth:session-expired', handleExpired);

@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ── Data Contracts ─────────────────────────────────────────────────────────
 
 class RAGDocument:
-    """A knowledge base document or chunk with category and metadata."""
+    """A knowledge base document or chunk with category, versioning metadata, and provenance."""
 
     def __init__(
         self,
@@ -39,13 +39,35 @@ class RAGDocument:
         category: str,
         title: str,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        version: str = "v1.0",
+        effective_date: str = "2026-01-01",
+        expiration_date: str = "",
+        jurisdiction: str = "NJ",
+        source_url: str = "",
+        authoritative_rank: int = 1
     ):
         self.doc_id = doc_id
         self.category = category  # "tariff" | "policy" | "faq"
         self.title = title
         self.content = content
         self.metadata = metadata or {}
+        self.version = version
+        self.effective_date = effective_date
+        self.expiration_date = expiration_date
+        self.jurisdiction = jurisdiction
+        self.source_url = source_url
+        self.authoritative_rank = authoritative_rank  # 1=official tariff, 2=state agency, 3=educational FAQ
+
+        # Embed versioning metadata
+        self.metadata.update({
+            "version": version,
+            "effective_date": effective_date,
+            "expiration_date": expiration_date,
+            "jurisdiction": jurisdiction,
+            "source_url": source_url,
+            "authoritative_rank": authoritative_rank
+        })
 
 
 # ── Text Chunking & Document Processing ────────────────────────────────────

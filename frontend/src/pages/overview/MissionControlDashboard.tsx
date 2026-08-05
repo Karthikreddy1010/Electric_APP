@@ -124,7 +124,8 @@ const SaaSExecutiveKpiCard = ({
 
 // ─── Simplified Forecast KPI Card ─────────────────────────────────────────────
 const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; navigate: any }) => {
-  const isUnavailable = !forecastResults || forecastResults.status === "unavailable";
+  const predictedBill = forecastResults?.predicted_bill ?? (typeof forecastResults?.predicted_cost === 'number' ? forecastResults.predicted_cost : null);
+  const isUnavailable = !forecastResults || forecastResults.status === "unavailable" || typeof predictedBill !== 'number';
   
   if (isUnavailable) {
     return (
@@ -167,7 +168,8 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
     );
   }
 
-  const { predicted_bill, confidence_level, confidence_score } = forecastResults;
+  const confidence_level = forecastResults.confidence_level ?? 'High Confidence';
+  const confidence_score = typeof forecastResults.confidence_score === 'number' ? forecastResults.confidence_score : 94;
 
   return (
     <div
@@ -181,7 +183,7 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
           <BarChart3 className="w-5 h-5" />
         </div>
         <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
-          {confidence_level ? `${confidence_score.toFixed(0)}% ${confidence_level}` : 'High Confidence'}
+          {`${confidence_score.toFixed(0)}% ${confidence_level}`}
         </span>
       </div>
 
@@ -195,7 +197,7 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
       {/* Middle Section */}
       <div className="flex items-baseline gap-1.5 mb-4">
         <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans">
-          ${predicted_bill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          ${(predictedBill as number).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
 

@@ -20,6 +20,15 @@ class MockLLMProvider(BaseLLMProvider):
         max_tokens: int = 1500,
         **kwargs: Any
     ) -> str:
+        # Check if RAG context was retrieved and injected into prompt
+        if "Relevant Knowledge Base:" in prompt:
+            kb_part = prompt.split("Relevant Knowledge Base:")[1].split("\n\nData Source Notes:")[0].strip()
+            return f"Based on verified state energy documentation:\n\n{kb_part}"
+
+        user_lower = prompt.lower()
+        if "clean energy" in user_lower or "incentive" in user_lower or "policy" in user_lower:
+            return "Under the New Jersey Clean Energy Act, 50% renewable energy is mandated by 2030 and 100% clean energy by 2050. Key customer incentives include net metering for solar generation, community solar subscription credits, energy storage incentives, and utility rebates for ENERGY STAR efficiency upgrades."
+
         if "User Question:" in prompt or "Task: Act as an interactive AI Copilot" in (system_prompt or ""):
             from api.services.llm.deterministic_fallback import DeterministicFallback
             user_msg = ""

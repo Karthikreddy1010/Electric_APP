@@ -177,7 +177,13 @@ class DeterministicFallback:
         supply_charge = bill.get("supply_charge") or (total_bill - delivery_charge - fixed_charge - tax)
         utility = bill.get("utility") or "PSE&G"
 
-        if "customer" in user_lower and "charge" in user_lower:
+        rag_context = context.get("rag_context") or ""
+        if rag_context:
+            return f"Based on verified knowledge base documentation:\n\n{rag_context}"
+
+        if "policy" in user_lower or "incentive" in user_lower or "clean energy" in user_lower or "act" in user_lower or "solar" in user_lower:
+            return "Under the New Jersey Clean Energy Act, 50% renewable energy is mandated by 2030 and 100% clean energy by 2050. Key customer incentives include net metering for solar generation, community solar subscription credits, energy storage incentives, and utility rebates for ENERGY STAR efficiency upgrades."
+        elif "customer" in user_lower and "charge" in user_lower:
             return f"Your fixed monthly customer charge is ${fixed_charge:.2f}. This is a baseline fee from {utility} covering account administration, meter reading, and customer service regardless of kWh usage."
         elif "demand" in user_lower:
             return f"Demand charges measure peak rate of electricity consumption. Under your {utility} rate schedule, peak demand costs are bundled into your volumetric delivery rate (${delivery_charge:.2f})."
