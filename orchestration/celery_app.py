@@ -7,7 +7,30 @@ from __future__ import annotations
 
 import logging
 import os
-from celery import Celery
+import importlib
+
+try:
+    _celery_mod = importlib.import_module("celery")
+    Celery = getattr(_celery_mod, "Celery")
+    HAS_CELERY = True
+except Exception:
+    HAS_CELERY = False
+
+    class DummyCeleryConf(dict):
+        def update(self, *args, **kwargs):
+            super().update(*args, **kwargs)
+
+    class DummyCelery:
+        def __init__(self, *args, **kwargs):
+            self.conf = DummyCeleryConf()
+
+        def task(self, *args, **kwargs):
+            def decorator(f):
+                f.delay = f
+                return f
+            return decorator
+
+    Celery = DummyCelery
 
 logger = logging.getLogger(__name__)
 

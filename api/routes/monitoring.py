@@ -159,3 +159,83 @@ async def get_monitoring_health():
         health_status["data_drift"]["error"] = str(e)
         
     return health_status
+
+
+@router.get("/monitoring/weather-pipeline")
+async def get_weather_pipeline_status():
+    """
+    NREL weather pipeline monitoring metrics.
+    Tracks ingestion status, Parquet cache health, data coverage,
+    freshness, and missing value statistics.
+    """
+    metrics = {
+        "status": "unknown",
+        "timestamp": pd.Timestamp.now().isoformat(),
+        "nrel_parquet": {"available": False},
+        "nrel_database": {"daily_available": False, "monthly_available": False},
+        "coverage": {},
+        "data_quality": {},
+    }
+
+    try:
+        from data_pipeline.nrel_processor import get_nrel_processor
+        processor = get_nrel_processor()
+
+        # ── Parquet cache status ──
+        if processor.parquet_path.exists():
+            metrics["nrel_parquet"]["available"] = True
+            metrics["nrel_parquet"]["path"] = str(processor.parquet_path)
+            metrics["nrel_parquet"]["size_mb"] = round(
+                processor.parquet_path.stat().st_size / (1024 * 1024), 2
+            )
+            # Check modification time for freshness
+            import os
+            mtime = os.path.getmtime(processor.parquet_path)
+            metrics["nrel_parquet"]["last_modified"] = pd.Timestamp.fromtimestamp(mtime).isoformat()
+
+        # ── Database aggregate status ──
+        try:
+            from database.connection import get_sync_engine
+            engine = get_sync_engine()
+
+            daily_df = pd.read_sql("SELECT COUNT(*) as cnt FROM weather_nrel_daily", engine)
+            daily_count = int(daily_df["cnt"].iloc[0])
+            metrics["nrel_database"]["daily_available"] = daily_count > 0
+            metrics["nrel_database"]["daily_rows"] = daily_count
+
+            monthly_df = pd.read_sql("SELECT COUNT(*) as cnt FROM weather_nrel_monthly", engine)
+            monthly_count = int(monthly_df["cnt"].iloc[0])
+            metrics["nrel_database"]["monthly_available"] = monthly_count > 0
+            metrics["nrel_database"]["monthly_rows"] = monthly_count
+
+            # Coverage dates
+            if daily_count > 0:
+                coverage = pd.read_sql(
+                    "SELECT MIN(date) as min_date, MAX(date) as max_date, "
+                    "COUNT(DISTINCT location) as locations FROM weather_nrel_daily",
+                    engine,
+                )
+                metrics["coverage"] = {
+                    "start_date": str(coverage["min_date"].iloc[0]),
+                    "end_date": str(coverage["max_date"].iloc[0]),
+                    "locations": int(coverage["locations"].iloc[0]),
+                    "total_days": daily_count,
+                }
+
+        except Exception as e:
+            metrics["nrel_database"]["error"] = str(e)
+
+        # ── Determine overall status ──
+        if metrics["nrel_parquet"]["available"] and metrics["nrel_database"]["daily_available"]:
+            metrics["status"] = "healthy"
+        elif metrics["nrel_parquet"]["available"]:
+            metrics["status"] = "degraded_db"
+        else:
+            metrics["status"] = "not_ingested"
+
+    except Exception as e:
+        logger.error(f"Weather pipeline monitoring error: {e}")
+        metrics["status"] = "error"
+        metrics["error"] = str(e)
+
+    return metrics

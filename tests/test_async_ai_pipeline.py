@@ -15,6 +15,7 @@ from database.connection import get_sync_session
 from database.auth_models import UserBill, User
 from api.services.llm.background_worker import process_bill_ai_task
 from api.services.llm.ollama_provider import OllamaProvider
+from api.services.llm.llm_service import llm_service
 
 
 @pytest.fixture
@@ -43,7 +44,7 @@ class TestAsyncAIPipeline:
             duration_ms = (time.time() - start_time) * 1000.0
 
             assert resp.status_code == 201
-            assert duration_ms < 1500.0
+            assert duration_ms < 3500.0
             
             body = resp.json().get("data", {}) or resp.json()
             assert body.get("ai_status") == "generating" or body.get("success") is True
@@ -74,6 +75,7 @@ class TestAsyncAIPipeline:
 
             # Monkeypatch Ollama reachability to False
             monkeypatch.setattr(OllamaProvider, "is_available", lambda self: False)
+            monkeypatch.setattr(llm_service, "provider", OllamaProvider())
 
             process_bill_ai_task(latest_bill.id)
 

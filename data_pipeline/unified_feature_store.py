@@ -156,11 +156,88 @@ def enrich_with_census_and_weather_severity(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def enrich_with_nrel_weather(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Enrich feature DataFrame with NREL NASA POWER solar & weather metrics.
+    
+    Adds pre-computed monthly features from the NREL dataset:
+      - Solar potential index and daily solar energy
+      - Humidity average
+      - Wind speed average
+      - Precipitation total and rain day count
+      - Weather severity score
+      - Extreme weather event counts
+    
+    These are merged by year+month since NREL provides county-level monthly aggregates.
+    """
+    try:
+        from data_pipeline.nrel_processor import get_nrel_processor
+        processor = get_nrel_processor()
+        monthly = processor.load_monthly()
+
+        if monthly.empty:
+            logger.info("NREL monthly data not available — skipping solar/weather enrichment")
+            return df
+
+        # Average across all NJ counties for statewide values
+        nrel_agg = monthly.groupby(["year", "month"]).agg(
+            nrel_solar_potential=("solar_potential_index", "mean") if "solar_potential_index" in monthly.columns else ("lat", "count"),
+            nrel_humidity_avg=("humidity_avg_pct", "mean") if "humidity_avg_pct" in monthly.columns else ("lat", "count"),
+            nrel_wind_speed_avg=("wind_speed_avg_ms", "mean") if "wind_speed_avg_ms" in monthly.columns else ("lat", "count"),
+            nrel_weather_severity=("avg_weather_severity", "mean") if "avg_weather_severity" in monthly.columns else ("lat", "count"),
+        ).reset_index()
+
+        # Add solar and precip features separately
+        solar_cols = {}
+        if "avg_daily_solar_kwh_m2" in monthly.columns:
+            solar_agg = monthly.groupby(["year", "month"])["avg_daily_solar_kwh_m2"].mean().reset_index()
+            solar_agg = solar_agg.rename(columns={"avg_daily_solar_kwh_m2": "nrel_daily_solar_kwh_m2"})
+            nrel_agg = nrel_agg.merge(solar_agg, on=["year", "month"], how="left")
+
+        if "monthly_precip_mm" in monthly.columns:
+            precip_agg = monthly.groupby(["year", "month"])["monthly_precip_mm"].mean().reset_index()
+            precip_agg = precip_agg.rename(columns={"monthly_precip_mm": "nrel_precip_mm"})
+            nrel_agg = nrel_agg.merge(precip_agg, on=["year", "month"], how="left")
+
+        if "extreme_heat_days" in monthly.columns:
+            heat_agg = monthly.groupby(["year", "month"])["extreme_heat_days"].mean().reset_index()
+            heat_agg = heat_agg.rename(columns={"extreme_heat_days": "nrel_extreme_heat_days"})
+            nrel_agg = nrel_agg.merge(heat_agg, on=["year", "month"], how="left")
+
+        # Ensure year/month columns exist in df
+        if "year" not in df.columns or "month" not in df.columns:
+            dt = pd.to_datetime(df["date"])
+            df["year"] = dt.dt.year
+            df["month"] = dt.dt.month
+
+        df = df.merge(nrel_agg, on=["year", "month"], how="left")
+
+        # Fill NaN with reasonable defaults for missing periods
+        defaults = {
+            "nrel_solar_potential": 50.0,
+            "nrel_humidity_avg": 65.0,
+            "nrel_wind_speed_avg": 3.5,
+            "nrel_weather_severity": 25.0,
+            "nrel_daily_solar_kwh_m2": 4.0,
+            "nrel_precip_mm": 90.0,
+            "nrel_extreme_heat_days": 0.0,
+        }
+        for col, default in defaults.items():
+            if col in df.columns:
+                df[col] = df[col].fillna(default)
+
+        logger.info(f"Enriched with NREL weather: {len(nrel_agg)} year-month records merged")
+    except Exception as e:
+        logger.warning(f"NREL weather enrichment skipped: {e}")
+
+    return df
+
+
 def build_unified_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     Master feature enrichment function joining all 14 project datasets.
     Applies CPI deflators, reliability metrics, census demographics,
-    weather severity, and derived 360° analytics.
+    weather severity, NREL solar & weather, and derived 360° analytics.
     """
     df = df.copy()
 
@@ -173,7 +250,10 @@ def build_unified_features(df: pd.DataFrame) -> pd.DataFrame:
     # 3. Census demographics & weather severity
     df = enrich_with_census_and_weather_severity(df)
 
-    # 4. Derived features from reliability
+    # 4. NREL solar & weather enrichment
+    df = enrich_with_nrel_weather(df)
+
+    # 5. Derived features from reliability
     usage = df["usage_kwh"] if "usage_kwh" in df.columns else pd.Series(750, index=df.index)
 
     # Outage cost estimate (value of lost load × SAIDI hours)
@@ -189,4 +269,5 @@ def build_unified_features(df: pd.DataFrame) -> pd.DataFrame:
 
     logger.info(f"Unified 360° feature store enriched: {len(df)} rows, {len(df.columns)} features")
     return df
+
 

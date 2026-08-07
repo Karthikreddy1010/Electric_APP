@@ -198,6 +198,61 @@ class OutputValidator:
                     missing.append(f"Critical field '{key}' value ({value}) not found in output")
         return missing
 
+    # ── Audit Point 8 (Phase 4): Live Evidence Validation ─────────────────
+
+    @classmethod
+    def _validate_live_evidence(
+        cls,
+        text: str,
+        context_data: Dict[str, Any]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Phase 4 Extension: Audit evidence from LiveKnowledgeProvider for:
+          - Source credibility (trust rating & tier boundaries)
+          - Timestamp freshness
+          - Duplicate claims between RAG and Live sources
+          - Conflicting claims between Live Search and Tier 0/1 deterministic data
+        Returns (live_errors, live_warnings).
+        """
+        live_results = context_data.get("live_knowledge_results", [])
+        if not live_results and "live_knowledge_context" not in context_data:
+            return [], []
+
+        errors: List[str] = []
+        warnings: List[str] = []
+
+        for r in live_results:
+            source_tier = r.get("source_tier", 6)
+            confidence = r.get("confidence", 0.0)
+            provider = r.get("provider", "Unknown")
+
+            # 1. Source Credibility Check
+            if confidence < 0.35:
+                errors.append(f"Live source credibility check failed for '{provider}' (confidence={confidence:.2f} < 0.35)")
+            elif source_tier > 5:
+                warnings.append(f"Low-trust live source used: '{provider}' (Tier {source_tier})")
+
+            # 2. Timestamp Freshness Check
+            timestamp = r.get("timestamp", "")
+            if not timestamp:
+                warnings.append(f"Live source '{provider}' missing retrieval timestamp")
+
+            # 3. Conflicting Claims with Deterministic Data (Tier 0/1)
+            # Guarantee that web search figures NEVER override deterministic bill figures
+            bill = context_data.get("bill", {}) or context_data.get("uploadedBill", {})
+            if bill and isinstance(bill, dict) and bill.get("total_bill"):
+                det_total = float(bill["total_bill"])
+                # Extract any dollar amounts in the live result content
+                live_numbers = cls._extract_numbers_from_text(r.get("content", ""))
+                for num in live_numbers:
+                    if abs(num - det_total) > 5.0 and f"${num:.2f}" in text and f"${det_total:.2f}" not in text:
+                        errors.append(
+                            f"Live evidence conflict: text mentions ${num:.2f} from '{provider}' "
+                            f"which conflicts with deterministic total bill ${det_total:.2f}"
+                        )
+
+        return errors, warnings
+
     # ── Main Entry Point ──────────────────────────────────────────────
 
     @classmethod
@@ -208,7 +263,7 @@ class OutputValidator:
         task: str = "bill_analysis"
     ) -> ValidationResult:
         """
-        Execute the full 7-point audit and return a ValidationResult contract.
+        Execute the full 8-point audit and return a ValidationResult contract.
         """
         # Point 5: Non-empty
         empty_errors = cls._audit_nonempty(text)
@@ -236,9 +291,12 @@ class OutputValidator:
         if task != "chat":
             missing_fields = cls._audit_missing_fields(text, context_data)
 
+        # Point 8 (Phase 4): Live Evidence Validation
+        live_errors, live_warnings = cls._validate_live_evidence(text, context_data)
+
         # Aggregate
-        all_errors = numeric_disc + json_errors
-        all_warnings = missing_sections + tone_violations + missing_fields
+        all_errors = numeric_disc + json_errors + live_errors
+        all_warnings = missing_sections + tone_violations + missing_fields + live_warnings
 
         is_valid = len(all_errors) == 0
         retry_recommended = not is_valid
@@ -248,7 +306,7 @@ class OutputValidator:
 
         return ValidationResult(
             is_valid=is_valid,
-            numeric_discrepancies=numeric_disc,
+            numeric_discrepancies=numeric_disc + live_errors,
             missing_fields=missing_fields,
             json_errors=json_errors,
             tone_violations=tone_violations,

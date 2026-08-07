@@ -59,6 +59,52 @@ SCENARIO_PRESETS: Dict[str, Dict[str, Any]] = {
         "rate_changes": {},
         "usage_multiplier": 0.85,
     },
+    # ── Deterministic Weather Scenarios (NREL-backed) ────────────────
+    "temp_plus_5c": {
+        "description": "Temperature +5°C above normal — increased cooling demand",
+        "weather_override": {"cdd_multiplier": 1.50, "hdd_multiplier": 0.70},
+        "rate_changes": {},
+        "usage_multiplier": 1.18,
+        "weather_scenario": True,
+    },
+    "temp_minus_5c": {
+        "description": "Temperature -5°C below normal — increased heating demand",
+        "weather_override": {"hdd_multiplier": 1.50, "cdd_multiplier": 0.50},
+        "rate_changes": {},
+        "usage_multiplier": 1.12,
+        "weather_scenario": True,
+    },
+    "heavy_rainfall": {
+        "description": "Heavy rainfall week — reduced solar generation, stable demand",
+        "weather_override": {"cdd_multiplier": 0.90},
+        "rate_changes": {},
+        "usage_multiplier": 1.03,
+        "weather_scenario": True,
+        "solar_impact_pct": -25.0,
+    },
+    "cloudy_week": {
+        "description": "Overcast cloudy week — solar irradiance reduced by 50%",
+        "weather_override": {},
+        "rate_changes": {},
+        "usage_multiplier": 1.05,
+        "weather_scenario": True,
+        "solar_impact_pct": -50.0,
+    },
+    "sunny_week": {
+        "description": "Clear sunny week — solar irradiance increased by 30%",
+        "weather_override": {"cdd_multiplier": 1.15},
+        "rate_changes": {},
+        "usage_multiplier": 0.97,
+        "weather_scenario": True,
+        "solar_impact_pct": 30.0,
+    },
+    "high_wind": {
+        "description": "High wind week — wind chill reduces apparent temperature",
+        "weather_override": {"hdd_multiplier": 1.20},
+        "rate_changes": {},
+        "usage_multiplier": 1.06,
+        "weather_scenario": True,
+    },
 }
 
 

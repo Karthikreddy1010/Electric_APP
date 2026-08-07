@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 WEATHER_COLS = ["temp_avg", "hdd", "cdd"]
 EXOG_COLS = ["temp_avg", "hdd", "cdd", "demand_lag1", "demand_lag7"]
 
+# Extended NREL weather features (used when NREL data is available)
+NREL_WEATHER_COLS = ["temp_avg", "hdd", "cdd", "humidity_avg", "solar_kwh_m2", "wind_speed"]
+NREL_EXOG_COLS = ["temp_avg", "hdd", "cdd", "humidity_avg", "solar_kwh_m2", "wind_speed", "demand_lag1", "demand_lag7"]
+
 # Noise standard deviation for simulating forecast weather (°C)
 FORECAST_NOISE_STD = 1.5
 
@@ -229,7 +233,42 @@ class ElectricityDemandForecaster:
         daily["hours_recorded"] = daily["subbas_recorded"]
 
         # ── Step 8: Merge REAL weather data ───────────────────────────────
-        weather_df = self._load_weather_from_db()
+        # Priority: NREL daily aggregates > Open-Meteo DB > CSV fallback
+        weather_df = pd.DataFrame()
+        nrel_available = False
+
+        # Try NREL daily aggregates first (21 NJ counties, hourly → daily)
+        try:
+            from data_pipeline.nrel_processor import get_nrel_processor
+            processor = get_nrel_processor()
+            nrel_daily = processor.load_daily()
+
+            if not nrel_daily.empty:
+                # Average across all NJ counties for statewide daily values
+                nrel_agg = nrel_daily.groupby("date").agg(
+                    temp_avg=("temp_avg_c", "mean"),
+                    hdd=("hdd", "mean"),
+                    cdd=("cdd", "mean"),
+                ).reset_index()
+
+                # Add extended NREL features if available
+                for src, dst in [("humidity_avg_pct", "humidity_avg"),
+                                  ("daily_solar_kwh_m2", "solar_kwh_m2"),
+                                  ("wind_speed_avg_ms", "wind_speed")]:
+                    if src in nrel_daily.columns:
+                        extra = nrel_daily.groupby("date")[src].mean().reset_index()
+                        extra = extra.rename(columns={src: dst})
+                        nrel_agg = nrel_agg.merge(extra, on="date", how="left")
+
+                weather_df = nrel_agg
+                nrel_available = True
+                logger.info(f"Using NREL NASA POWER as primary weather source ({len(weather_df)} days)")
+        except Exception as e:
+            logger.debug(f"NREL weather not available for forecast: {e}")
+
+        # Fallback to Open-Meteo DB
+        if weather_df.empty:
+            weather_df = self._load_weather_from_db()
 
         if weather_df.empty:
             # Fallback to CSV

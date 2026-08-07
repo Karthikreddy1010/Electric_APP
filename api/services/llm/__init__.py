@@ -29,12 +29,11 @@ from api.services.llm.streaming import StreamingService
 from api.services.llm.rag import RAGService, rag_service
 from api.services.llm.security import SecretProvider, PromptInjectionGuard
 
-# ── Phase 3 Brain Architecture ────────────────────────────────────────────
+# ── Phase 4 Enterprise Hybrid Knowledge ───────────────────────────────────
+from api.services.llm.live_knowledge import LiveKnowledgeProvider, live_knowledge_provider
+from api.services.llm.freshness import ConnectorFreshnessManager, freshness_manager
 from api.services.llm.orchestrator import (
-    Intent, ModelTier, SemanticIntentRouter, AssistantBrain,
-    ToolRegistry, SkillCatalog, CostController,
-    ConversationMemory, ConfidenceFusion, ResponseCritic,
-    IntentResult, ToolResult, FusedKnowledge, ObservabilityTrace
+    RetrievalDecisionEngine, RetrievalExecutionPlan, RetrievalStep
 )
 
 __all__ = [
@@ -56,5 +55,9 @@ __all__ = [
     "ToolRegistry", "SkillCatalog", "CostController",
     "ConversationMemory", "ConfidenceFusion", "ResponseCritic",
     "IntentResult", "ToolResult", "FusedKnowledge", "ObservabilityTrace",
+    # Phase 4 Enterprise Hybrid Knowledge
+    "LiveKnowledgeProvider", "live_knowledge_provider",
+    "ConnectorFreshnessManager", "freshness_manager",
+    "RetrievalDecisionEngine", "RetrievalExecutionPlan", "RetrievalStep",
 ]
 

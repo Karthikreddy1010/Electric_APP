@@ -1,0 +1,145 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2026-08-07",
+  "datasets": [
+    {
+      "id": "nrel_nasa_power",
+      "name": "NREL NASA POWER Solar & Weather",
+      "owner": "NASA Langley Research Center / NREL",
+      "source": "NASA POWER Project — Prediction Of Worldwide Energy Resources",
+      "source_url": "https://power.larc.nasa.gov/",
+      "update_frequency": "Static archive (2015-2025)",
+      "temporal_coverage": {
+        "start": "2015-01-01",
+        "end": "2025-12-31",
+        "resolution": "Hourly"
+      },
+      "spatial_coverage": {
+        "region": "New Jersey, USA",
+        "granularity": "County-level (21 counties)",
+        "locations": [
+          "Atlantic", "Bergen", "Burlington", "Camden", "Cape_May",
+          "Cumberland", "Essex", "Gloucester", "Hudson", "Hunterdon",
+          "Mercer", "Middlesex", "Monmouth", "Morris", "Ocean",
+          "Passaic", "Salem", "Somerset", "Sussex", "Union", "Warren"
+        ]
+      },
+      "variables": {
+        "ALLSKY_SFC_SW_DWN": {
+          "description": "All Sky Surface Shortwave Downward Irradiance",
+          "units": "W/m²",
+          "type": "solar"
+        },
+        "ALLSKY_SFC_SW_DNI": {
+          "description": "All Sky Direct Normal Irradiance",
+          "units": "W/m²",
+          "type": "solar"
+        },
+        "ALLSKY_SFC_SW_DIFF": {
+          "description": "All Sky Diffuse Horizontal Irradiance",
+          "units": "W/m²",
+          "type": "solar"
+        },
+        "ALLSKY_KT": {
+          "description": "All Sky Insolation Clearness Index",
+          "units": "dimensionless (0-1)",
+          "type": "solar"
+        },
+        "T2M": {
+          "description": "Temperature at 2 Meters",
+          "units": "°C",
+          "type": "temperature"
+        },
+        "T2MDEW": {
+          "description": "Dew/Frost Point at 2 Meters",
+          "units": "°C",
+          "type": "temperature"
+        },
+        "RH2M": {
+          "description": "Relative Humidity at 2 Meters",
+          "units": "%",
+          "type": "humidity"
+        },
+        "WS2M": {
+          "description": "Wind Speed at 2 Meters",
+          "units": "m/s",
+          "type": "wind"
+        },
+        "WS10M": {
+          "description": "Wind Speed at 10 Meters",
+          "units": "m/s",
+          "type": "wind"
+        },
+        "WD10M": {
+          "description": "Wind Direction at 10 Meters",
+          "units": "degrees",
+          "type": "wind"
+        },
+        "PS": {
+          "description": "Surface Pressure",
+          "units": "kPa",
+          "type": "pressure"
+        },
+        "PRECTOTCORR": {
+          "description": "Precipitation Corrected",
+          "units": "mm/hour",
+          "type": "precipitation"
+        }
+      },
+      "excluded_variables": {
+        "ALLSKY_SFC_PAR_TOT": "Photosynthetically Active Radiation — agricultural use only, not relevant for electricity demand"
+      },
+      "storage": {
+        "raw_path": "data/raw/nrel data-20260730T125144Z-1-001/nrel data/nasa_power_nj_hourly.csv",
+        "parquet_path": "data/processed/nrel_weather_hourly.parquet",
+        "db_daily_table": "weather_nrel_daily",
+        "db_monthly_table": "weather_nrel_monthly"
+      },
+      "missing_value_sentinel": -999.0,
+      "total_records": 2025072,
+      "citation": "NASA POWER Project, NASA Langley Research Center. https://power.larc.nasa.gov/",
+      "license": "Open Data / Public Domain",
+      "processing_version": "v1.0"
+    },
+    {
+      "id": "noaa_weather",
+      "name": "NOAA Weather",
+      "owner": "NOAA NCEI",
+      "source": "NOAA Climate Data Online (GHCND stations)",
+      "update_frequency": "Monthly",
+      "temporal_coverage": {
+        "start": "2019-01-01",
+        "resolution": "Daily"
+      },
+      "spatial_coverage": {
+        "region": "US States / NJ Stations",
+        "granularity": "Station-level"
+      },
+      "storage": {
+        "raw_path": "data/raw/air_temp.csv",
+        "db_table": "raw_weather"
+      },
+      "processing_version": "v1.0"
+    },
+    {
+      "id": "openmeteo_weather",
+      "name": "Open-Meteo Weather",
+      "owner": "Open-Meteo",
+      "source": "Open-Meteo Archive & Forecast API",
+      "update_frequency": "Daily (incremental)",
+      "temporal_coverage": {
+        "start": "2019-01-01",
+        "resolution": "Daily"
+      },
+      "spatial_coverage": {
+        "region": "Central New Jersey",
+        "granularity": "Single point (40.0583, -74.4057)"
+      },
+      "storage": {
+        "raw_path": "data/raw/weather_openmeteo.csv",
+        "db_table": "weather_openmeteo"
+      },
+      "processing_version": "v1.0"
+    }
+  ]
+}

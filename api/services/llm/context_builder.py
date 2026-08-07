@@ -80,6 +80,46 @@ class MultiTurnMemoryManager:
 
 class ContextBuilder:
     @staticmethod
+    def prune_empty_fields(data: Any) -> Any:
+        """Recursively removes empty dictionaries, empty lists, and None values to minimize prompt payload."""
+        if isinstance(data, dict):
+            pruned = {}
+            for k, v in data.items():
+                if v is None:
+                    continue
+                pruned_v = ContextBuilder.prune_empty_fields(v)
+                if isinstance(pruned_v, (dict, list)) and len(pruned_v) == 0:
+                    continue
+                pruned[k] = pruned_v
+            return pruned
+        elif isinstance(data, list):
+            return [ContextBuilder.prune_empty_fields(item) for item in data if item is not None]
+    @staticmethod
+    def filter_by_intent(task: str, context_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Intent-aware context filtering. Filters out irrelevant context sections for specific tasks
+        to guarantee prompts fit well within the context window budget.
+        """
+        if not isinstance(context_data, dict):
+            return context_data
+
+        filtered = dict(context_data)
+
+        if task == "bill_analysis":
+            filtered.pop("forecast", None)
+            filtered.pop("simulation", None)
+        elif task == "forecast":
+            filtered.pop("simulation", None)
+            filtered.pop("ocr_runs", None)
+        elif task == "impact":
+            filtered.pop("forecast", None)
+        elif task in ("tariff", "faq", "chat"):
+            filtered.pop("simulation", None)
+            filtered.pop("forecast", None)
+
+        return filtered
+
+    @staticmethod
     def _base_schema(task: str) -> Dict[str, Any]:
         return {
             "task": task,
@@ -87,10 +127,52 @@ class ContextBuilder:
             "bill": {},
             "simulation": {},
             "forecast": {},
+            "weather": {},
             "recommendations": {},
             "statistics": {},
-            "metadata": {"schema_version": "v1.0"}
+            "metadata": {"schema_version": "v1.1"}
         }
+
+    @staticmethod
+    def _inject_weather_context(
+        ctx: Dict[str, Any],
+        year: Optional[int] = None,
+        month: Optional[int] = None,
+        location: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Inject pre-computed weather summary from WeatherService into context.
+        Provides aggregated metrics (NOT raw rows) for LLM consumption.
+        """
+        try:
+            from backend.analytics.weather import weather_service
+            summary = weather_service.get_weather_summary(
+                location=location, year=year, month=month
+            )
+            if summary.get("available"):
+                ctx["weather"] = summary
+
+                # Also load dataset catalog metadata for provenance
+                try:
+                    import json
+                    from pathlib import Path
+                    catalog_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "dataset_catalog.json"
+                    if catalog_path.exists():
+                        with open(catalog_path) as f:
+                            catalog = json.load(f)
+                        nrel_ds = next((d for d in catalog.get("datasets", []) if d["id"] == "nrel_nasa_power"), None)
+                        if nrel_ds:
+                            ctx["metadata"]["weather_dataset"] = {
+                                "name": nrel_ds["name"],
+                                "source": nrel_ds["source"],
+                                "coverage": nrel_ds["temporal_coverage"],
+                                "counties": nrel_ds["spatial_coverage"]["granularity"],
+                            }
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return ctx
 
     @classmethod
     def build_bill_analysis_context(
@@ -120,6 +202,17 @@ class ContextBuilder:
             ctx["bill"]["ocr_runs"] = ocr_runs
         if validation_flags:
             ctx["bill"]["validation_flags"] = validation_flags
+
+        # Inject weather context for the billing period
+        billing_period = uploaded_bill.get("billing_period", "")
+        if billing_period:
+            try:
+                from datetime import datetime as _dt
+                bp_date = _dt.strptime(billing_period[:10], "%Y-%m-%d")
+                ctx = cls._inject_weather_context(ctx, year=bp_date.year, month=bp_date.month)
+            except Exception:
+                pass
+
         return ctx
 
     @classmethod
@@ -173,6 +266,10 @@ class ContextBuilder:
         }
         if weather_factors:
             ctx["forecast"]["weather_factors"] = weather_factors
+
+        # Always inject weather context for forecast
+        ctx = cls._inject_weather_context(ctx)
+
         return ctx
 
     @classmethod
@@ -278,5 +375,8 @@ class ContextBuilder:
             }
         except Exception:
             pass
+
+        # Inject weather summary for chat context
+        ctx = cls._inject_weather_context(ctx)
 
         return ctx

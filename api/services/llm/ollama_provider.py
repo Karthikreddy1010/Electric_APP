@@ -17,17 +17,52 @@ import httpx
 from api.services.llm.base_provider import BaseLLMProvider
 from api.services.llm.metrics import llm_metrics
 from config.settings import llm_settings
+from api.services.llm.model_registry import model_registry
 
 logger = logging.getLogger(__name__)
 
+
+import os
 
 class OllamaProvider(BaseLLMProvider):
     _client_instance: Optional[httpx.AsyncClient] = None
 
     def __init__(self, model: Optional[str] = None, base_url: Optional[str] = None):
-        configured_model = model or getattr(llm_settings, "model", "qwen3:4b")
+        self.registry_key = "ollama-local"
+
+        # ── 4-Tier Model Resolution Precedence ────────────────────────────────
+        # 1. Explicit model override passed to OllamaProvider (if valid model tag)
+        # 2. OLLAMA_MODEL environment variable
+        # 3. Application configuration (llm_settings.ollama_model or llm_settings.model)
+        # 4. Safe default ("qwen3:4b")
+        resolved_model = None
+
+        # Check Tier 1: Explicit parameter (ignore internal registry keys / auto)
+        if model and model not in ("ollama-local", "auto", "mock-model"):
+            resolved_model = model
+
+        # Check Tier 2: OLLAMA_MODEL environment variable
+        if not resolved_model:
+            env_model = os.getenv("OLLAMA_MODEL")
+            if env_model and env_model.strip() and env_model.strip() not in ("ollama-local", "auto"):
+                resolved_model = env_model.strip()
+
+        # Check Tier 3: Application settings
+        if not resolved_model:
+            setting_ollama_model = getattr(llm_settings, "ollama_model", None)
+            if setting_ollama_model and setting_ollama_model not in ("auto", "ollama-local"):
+                resolved_model = setting_ollama_model
+            else:
+                setting_model = getattr(llm_settings, "model", None)
+                if setting_model and setting_model not in ("auto", "ollama-local"):
+                    resolved_model = setting_model
+
+        # Check Tier 4: Safe default
+        if not resolved_model:
+            resolved_model = "qwen3:4b"
+
         configured_url = base_url or getattr(llm_settings, "base_url", "http://127.0.0.1:11434")
-        super().__init__(model=configured_model, base_url=configured_url)
+        super().__init__(model=resolved_model, base_url=configured_url)
         
         self.connect_timeout = float(getattr(llm_settings, "connect_timeout", 5.0))
         self.read_timeout = float(getattr(llm_settings, "read_timeout", 30.0))
@@ -36,12 +71,21 @@ class OllamaProvider(BaseLLMProvider):
         self.max_retries = int(getattr(llm_settings, "max_retries", 2))
         self.backoff_factor = float(getattr(llm_settings, "backoff_factor", 1.5))
 
-    def _get_timeout_config(self) -> httpx.Timeout:
+    def _get_timeout_config(self, prompt_len: int = 0, num_predict: int = 500) -> httpx.Timeout:
+        """
+        Computes dynamic read timeout based on input prompt length and output token budget.
+        Formula: max(configured_read, connect + prompt_len*0.003s + num_predict*0.10s)
+        """
+        estimated_prompt_tokens = prompt_len // 4
+        calculated_read = self.connect_timeout + (estimated_prompt_tokens * 0.003) + (num_predict * 0.10)
+        adaptive_read = max(self.read_timeout, calculated_read)
+        adaptive_total = adaptive_read + 30.0
+
         return httpx.Timeout(
             connect=self.connect_timeout,
-            read=self.read_timeout,
+            read=adaptive_read,
             write=self.write_timeout,
-            pool=self.total_timeout
+            pool=adaptive_total
         )
 
     @classmethod
@@ -74,6 +118,19 @@ class OllamaProvider(BaseLLMProvider):
     def is_available(self) -> bool:
         return self._check_socket()
 
+    async def get_installed_models(self) -> List[str]:
+        """Queries GET /api/tags to retrieve list of installed Ollama models."""
+        url = f"{self.base_url.rstrip('/')}/api/tags"
+        try:
+            client = self.get_client()
+            resp = await client.get(url, timeout=httpx.Timeout(4.0))
+            if resp.status_code == 200:
+                data = resp.json()
+                return [m.get("name", "") for m in data.get("models", [])]
+        except Exception as e:
+            logger.warning(f"Pre-flight tags check failed for URL {url}: {e}")
+        return []
+
     async def is_model_available(self) -> bool:
         """
         Queries GET /api/tags to check if the configured model exists on Ollama server.
@@ -81,24 +138,50 @@ class OllamaProvider(BaseLLMProvider):
         if not self.is_available():
             return False
         
-        url = f"{self.base_url.rstrip('/')}/api/tags"
-        try:
-            client = self.get_client()
-            resp = await client.get(url, timeout=httpx.Timeout(4.0))
-            if resp.status_code == 200:
-                data = resp.json()
-                models = [m.get("name", "").lower() for m in data.get("models", [])]
-                target = self.model.lower()
-                target_base = target.split(":")[0]
-                for m in models:
-                    if m == target or target_base in m:
-                        return True
-                logger.warning(f"Ollama server is active, but model '{self.model}' was not found in tags: {models}")
-                return False
+        installed = await self.get_installed_models()
+        if not installed:
             return False
-        except Exception as e:
-            logger.warning(f"Pre-flight model check failed for URL {url}: {e}")
-            return False
+
+        target = self.model.lower()
+        target_base = target.split(":")[0]
+        for m in installed:
+            m_lower = m.lower()
+            if m_lower == target or target_base in m_lower or m_lower.split(":")[0] == target_base:
+                return True
+        logger.warning(f"Ollama server is active, but model '{self.model}' was not found in installed tags: {installed}")
+        return False
+
+    async def verify_model_installed(self) -> None:
+        """
+        Pre-flight check before generation. Validates target model against installed tags.
+        Raises a clear RuntimeError with pull instructions if missing.
+        """
+        if not self.is_available():
+            err_msg = f"Ollama server is unreachable at {self.base_url}"
+            llm_metrics.record_failure("ServerUnavailable", err_msg, f"{self.base_url}/api/generate", "")
+            raise RuntimeError(err_msg)
+
+        installed = await self.get_installed_models()
+        if not installed:
+            # If tags endpoint fails or returns empty, allow generation to proceed to HTTP call
+            return
+
+        target = self.model.lower()
+        target_base = target.split(":")[0]
+        matched = any(
+            m.lower() == target or target_base in m.lower() or m.lower().split(":")[0] == target_base
+            for m in installed
+        )
+        if not matched:
+            installed_str = ", ".join(installed) if installed else "None"
+            err_msg = (
+                f"Configured Ollama model '{self.model}' is not installed.\n"
+                f"Installed models: {installed_str}\n"
+                f"Run: ollama pull {self.model}"
+            )
+            logger.error(err_msg)
+            llm_metrics.record_failure("ModelNotFound", err_msg, f"{self.base_url}/api/generate", "")
+            raise RuntimeError(err_msg)
 
     async def generate(
         self,
@@ -118,37 +201,43 @@ class OllamaProvider(BaseLLMProvider):
 
         llm_metrics.record_request_start()
 
-        if not self.is_available():
-            err_msg = f"Ollama server is unreachable at {self.base_url}"
-            llm_metrics.record_failure("ServerUnavailable", err_msg, url, prompt_hash)
-            raise RuntimeError(err_msg)
+        await self.verify_model_installed()
+
+        meta = model_registry.get(self.registry_key)
+        num_ctx = meta.context_window if meta else 4096
 
         payload = {
             "model": self.model,
             "prompt": prompt,
             "system": system_prompt or "",
             "stream": False,
+            "keep_alive": getattr(llm_settings, "keep_alive", "30m"),
             "options": {
                 "temperature": temp_val,
-                "num_predict": num_predict
+                "num_predict": num_predict,
+                "num_ctx": num_ctx
             }
         }
         if kwargs.get("format") == "json":
             payload["format"] = "json"
 
-        timeout_cfg = self._get_timeout_config()
+        timeout_cfg = self._get_timeout_config(len(prompt), num_predict)
         attempt = 0
         start_time = time.time()
+        estimated_prompt_tokens = len(prompt) // 4
 
         while attempt <= self.max_retries:
             attempt += 1
             attempt_start = time.time()
 
             logger.info(
-                f"[Ollama Call] Attempt {attempt}/{self.max_retries + 1} | Model: {self.model} | "
-                f"Endpoint: {url} | Prompt Length: {len(prompt)} | Hash: {prompt_hash} | "
-                f"Timeout Config: connect={self.connect_timeout}s, read={self.read_timeout}s"
+                f"[Ollama Call] Attempt {attempt}/{self.max_retries + 1} | "
+                f"Registry Key: {self.registry_key} | Provider: OllamaProvider | "
+                f"Resolved Model: {self.model} | Est. Prompt Tokens: {estimated_prompt_tokens} | "
+                f"num_predict: {num_predict} | num_ctx: {num_ctx} | Endpoint: {self.base_url} | "
+                f"Prompt Length: {len(prompt)} | Hash: {prompt_hash}"
             )
+            logger.debug(f"[Ollama Payload Verification] Sending POST to {url} with payload model='{payload['model']}' num_ctx={num_ctx}")
 
             try:
                 client = self.get_client()
@@ -161,7 +250,13 @@ class OllamaProvider(BaseLLMProvider):
                 )
 
                 if resp.status_code == 404:
-                    err_msg = f"Ollama model '{self.model}' not found (HTTP 404): {resp.text[:200]}"
+                    installed = await self.get_installed_models()
+                    installed_str = ", ".join(installed) if installed else "None"
+                    err_msg = (
+                        f"Configured Ollama model '{self.model}' is not installed (HTTP 404).\n"
+                        f"Installed models: {installed_str}\n"
+                        f"Run: ollama pull {self.model}"
+                    )
                     llm_metrics.record_failure("ModelNotFound", err_msg, url, prompt_hash)
                     raise RuntimeError(err_msg)
 
@@ -208,11 +303,14 @@ class OllamaProvider(BaseLLMProvider):
                 logger.error(
                     "================================================================================\n"
                     f"❌ Ollama Generation Failure [Attempt {attempt}/{self.max_retries + 1}]\n"
+                    f"Registry Key     : {self.registry_key}\n"
+                    f"Provider         : OllamaProvider\n"
+                    f"Resolved Model   : {self.model}\n"
+                    f"Endpoint         : {self.base_url}\n"
                     f"Exception Type   : {type(e).__name__}\n"
                     f"Exception Message: {str(e)}\n"
                     f"URL              : {url}\n"
                     f"HTTP Method      : POST\n"
-                    f"Model            : {self.model}\n"
                     f"Prompt Hash      : {prompt_hash}\n"
                     f"Prompt Length    : {len(prompt)} chars\n"
                     f"Attempt Latency  : {elapsed_attempt:.3f}s\n"
@@ -262,6 +360,7 @@ class OllamaProvider(BaseLLMProvider):
             "prompt": prompt,
             "system": system_prompt or "",
             "stream": True,
+            "keep_alive": getattr(llm_settings, "keep_alive", "30m"),
             "options": {
                 "temperature": max(0.0, min(1.0, float(temperature))),
                 "num_predict": max(1, int(max_tokens))
@@ -272,7 +371,7 @@ class OllamaProvider(BaseLLMProvider):
 
         llm_metrics.record_request_start()
         start_time = time.time()
-        timeout_cfg = self._get_timeout_config()
+        timeout_cfg = self._get_timeout_config(len(prompt), max(1, int(max_tokens)))
 
         logger.info(f"[Ollama Streaming] Hash: {prompt_hash} | Model: {self.model} | Endpoint: {url}")
 

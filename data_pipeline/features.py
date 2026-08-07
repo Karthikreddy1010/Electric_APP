@@ -81,6 +81,51 @@ def merge_weather_monthly(billing_df: pd.DataFrame,
     billing["year_month"] = billing["date"].dt.to_period("M")
     billing_months = set(billing["year_month"].unique())
 
+    # --- 0. Try NREL NASA POWER (highest priority — 11 years, 21 NJ counties) ---
+    nrel_weather = None
+    try:
+        from data_pipeline.nrel_processor import get_nrel_processor
+        processor = get_nrel_processor()
+        nrel_monthly = processor.load_monthly()
+
+        if not nrel_monthly.empty:
+            # Average across all NJ counties for statewide monthly values
+            nrel_agg = nrel_monthly.groupby(["year", "month"]).agg(
+                monthly_CDD=("monthly_cdd", "mean"),
+                monthly_HDD=("monthly_hdd", "mean"),
+                avg_temp=("temp_avg_f", "mean"),
+                temp_std=("temp_avg_c", "std"),
+                max_temp=("temp_max_f", "max"),
+                min_temp=("temp_min_f", "min"),
+            ).reset_index()
+
+            # Add optional extended weather columns
+            for src_col, dst_col in [
+                ("humidity_avg_pct", "avg_humidity_pct"),
+                ("wind_speed_avg_ms", "avg_wind_speed_ms"),
+                ("monthly_solar_kwh_m2", "monthly_solar_kwh_m2"),
+                ("monthly_precip_mm", "monthly_precip_mm"),
+                ("solar_potential_index", "solar_potential_index"),
+                ("avg_weather_severity", "weather_severity_score"),
+            ]:
+                if src_col in nrel_monthly.columns:
+                    extra = nrel_monthly.groupby(["year", "month"])[src_col].mean().reset_index()
+                    extra = extra.rename(columns={src_col: dst_col})
+                    nrel_agg = nrel_agg.merge(extra, on=["year", "month"], how="left")
+
+            nrel_agg["year_month"] = pd.to_datetime(
+                nrel_agg["year"].astype(str) + "-" + nrel_agg["month"].astype(str).str.zfill(2) + "-01"
+            ).dt.to_period("M")
+
+            nrel_months = set(nrel_agg["year_month"].unique())
+            if billing_months.issubset(nrel_months):
+                logger.info("Using NREL NASA POWER as primary weather source (21 NJ counties)")
+                nrel_weather = nrel_agg
+            else:
+                logger.info("NREL data does not fully cover billing period. Trying other sources.")
+    except Exception as e:
+        logger.debug(f"NREL weather not available: {e}")
+
     # --- 1. Try Processed CSV ---
     project_root = Path(__file__).resolve().parent.parent
     processed_csv_path = project_root / "data" / "processed" / "weather_monthly.csv"
@@ -211,7 +256,9 @@ def merge_weather_monthly(billing_df: pd.DataFrame,
     ).reset_index()
 
     # --- Merge Logic ---
-    if csv_weather is not None:
+    if nrel_weather is not None:
+        merged = billing.merge(nrel_weather, on="year_month", how="left")
+    elif csv_weather is not None:
         merged = billing.merge(csv_weather, on="year_month", how="left")
     elif db_weather is not None:
         merged = billing.merge(db_weather, on="year_month", how="left")

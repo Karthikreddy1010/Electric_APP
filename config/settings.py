@@ -100,6 +100,7 @@ class LLMSettings(BaseSettings):
     """LLM service configuration supporting multi-provider routing and enterprise AI capabilities."""
     provider: str = "mock"
     model: str = "auto"
+    ollama_model: str = "qwen3:4b"
     base_url: str = "http://127.0.0.1:11434"
     
     # Provider endpoints & keys
@@ -119,12 +120,12 @@ class LLMSettings(BaseSettings):
     vector_db_url: str = "postgresql://electric:electric@localhost:5432/electricity_dw"
     
     connect_timeout: float = 5.0
-    read_timeout: float = 30.0
+    read_timeout: float = 60.0
     write_timeout: float = 10.0
-    total_timeout: float = 45.0
+    total_timeout: float = 90.0
     max_retries: int = 2
     backoff_factor: float = 1.5
-    keep_alive: str = "5m"
+    keep_alive: str = "30m"
     stream: bool = False
 
     # ── AI Feature Flags ───────────────────────────────────────────────

@@ -104,3 +104,21 @@ class TestGeoAISummary:
             assert "executive_summary" in body
             assert "recommendations" in body
             assert body["confidence_assessment"]["overall_confidence_score"] > 0
+
+    def test_contextual_request_with_supporting_evidence(self):
+        """Verifies request with active regional context returns cost breakdown and evidence provenance."""
+        req = GeoInsightsRequest(
+            state="NJ",
+            utility="PSE&G",
+            county="Essex",
+            zip_code="07101",
+            region="Mid-Atlantic",
+            time_period="2026"
+        )
+        res = _compute_deterministic_insights(req)
+        assert "executive_summary" in res
+        assert "cost_breakdown" in res
+        assert "supporting_evidence" in res
+        assert len(res["supporting_evidence"]) >= 4
+        assert res["cost_breakdown"]["generation_pct"] > 0
+

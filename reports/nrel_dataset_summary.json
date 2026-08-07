@@ -1,0 +1,229 @@
+{
+  "source": "NASA POWER / NREL",
+  "scan_timestamp": "2026-08-07T12:24:30.041841",
+  "raw_directory": "C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\raw\\nrel data-20260730T125144Z-1-001\\nrel data",
+  "files": [
+    {
+      "name": "nasa_power_nj_hourly.csv",
+      "size_mb": 219.84,
+      "type": "csv"
+    }
+  ],
+  "columns": [
+    "datetime",
+    "location",
+    "lat",
+    "lon",
+    "ALLSKY_SFC_SW_DWN",
+    "ALLSKY_SFC_SW_DNI",
+    "ALLSKY_SFC_SW_DIFF",
+    "ALLSKY_SFC_PAR_TOT",
+    "T2M",
+    "T2MDEW",
+    "RH2M",
+    "WS2M",
+    "WS10M",
+    "WD10M",
+    "PS",
+    "ALLSKY_KT",
+    "PRECTOTCORR"
+  ],
+  "dtypes": {
+    "datetime": "object",
+    "location": "object",
+    "lat": "float64",
+    "lon": "float64",
+    "ALLSKY_SFC_SW_DWN": "float64",
+    "ALLSKY_SFC_SW_DNI": "float64",
+    "ALLSKY_SFC_SW_DIFF": "float64",
+    "ALLSKY_SFC_PAR_TOT": "float64",
+    "T2M": "float64",
+    "T2MDEW": "float64",
+    "RH2M": "float64",
+    "WS2M": "float64",
+    "WS10M": "float64",
+    "WD10M": "float64",
+    "PS": "float64",
+    "ALLSKY_KT": "float64",
+    "PRECTOTCORR": "float64"
+  },
+  "total_columns": 17,
+  "total_rows": 2025072,
+  "load_time_seconds": 3.77,
+  "date_range": {
+    "start": "2015-01-01 00:00:00",
+    "end": "2025-12-31 23:00:00"
+  },
+  "temporal_resolution": "0 days 01:00:00",
+  "locations": [
+    {
+      "location": "Atlantic",
+      "lat": 39.4685,
+      "lon": -74.5501
+    },
+    {
+      "location": "Bergen",
+      "lat": 40.9598,
+      "lon": -74.0713
+    },
+    {
+      "location": "Burlington",
+      "lat": 39.8717,
+      "lon": -74.6685
+    },
+    {
+      "location": "Camden",
+      "lat": 39.8034,
+      "lon": -74.9637
+    },
+    {
+      "location": "Cape_May",
+      "lat": 39.0846,
+      "lon": -74.8557
+    },
+    {
+      "location": "Cumberland",
+      "lat": 39.3716,
+      "lon": -75.0677
+    },
+    {
+      "location": "Essex",
+      "lat": 40.7879,
+      "lon": -74.2467
+    },
+    {
+      "location": "Gloucester",
+      "lat": 39.7157,
+      "lon": -75.1366
+    },
+    {
+      "location": "Hudson",
+      "lat": 40.7345,
+      "lon": -74.0693
+    },
+    {
+      "location": "Hunterdon",
+      "lat": 40.5637,
+      "lon": -74.9126
+    },
+    {
+      "location": "Mercer",
+      "lat": 40.2834,
+      "lon": -74.7266
+    },
+    {
+      "location": "Middlesex",
+      "lat": 40.5019,
+      "lon": -74.3467
+    },
+    {
+      "location": "Monmouth",
+      "lat": 40.2884,
+      "lon": -74.1526
+    },
+    {
+      "location": "Morris",
+      "lat": 40.8597,
+      "lon": -74.5397
+    },
+    {
+      "location": "Ocean",
+      "lat": 39.8547,
+      "lon": -74.2799
+    },
+    {
+      "location": "Passaic",
+      "lat": 41.0341,
+      "lon": -74.3031
+    },
+    {
+      "location": "Salem",
+      "lat": 39.5769,
+      "lon": -75.3579
+    },
+    {
+      "location": "Somerset",
+      "lat": 40.5645,
+      "lon": -74.6197
+    },
+    {
+      "location": "Sussex",
+      "lat": 41.1389,
+      "lon": -74.6904
+    },
+    {
+      "location": "Union",
+      "lat": 40.6586,
+      "lon": -74.3013
+    },
+    {
+      "location": "Warren",
+      "lat": 40.8607,
+      "lon": -75.0305
+    }
+  ],
+  "num_locations": 21,
+  "weather_variables": [
+    "ALLSKY_SFC_SW_DWN",
+    "ALLSKY_SFC_SW_DNI",
+    "ALLSKY_SFC_SW_DIFF",
+    "ALLSKY_SFC_PAR_TOT",
+    "T2M",
+    "T2MDEW",
+    "RH2M",
+    "WS2M",
+    "WS10M",
+    "WD10M",
+    "PS",
+    "ALLSKY_KT",
+    "PRECTOTCORR"
+  ],
+  "missing_values": {
+    "ALLSKY_KT": {
+      "nasa_sentinel": 973163,
+      "nan": 0,
+      "total": 973163,
+      "pct": 48.056
+    }
+  },
+  "duplicate_timestamps": 0,
+  "invalid_records": {
+    "PRECTOTCORR": 797
+  },
+  "processing": {
+    "total_time_seconds": 32.29,
+    "parquet_path": "C:\\Users\\dukar\\OneDrive\\Desktop\\Electric\\data\\processed\\nrel_weather_hourly.parquet",
+    "parquet_size_mb": 107.31,
+    "daily_rows": 84378,
+    "monthly_rows": 2772,
+    "db_result": {
+      "daily": 84378,
+      "monthly": 2772
+    },
+    "hourly_features": [
+      "hour",
+      "day_of_week",
+      "day_of_year",
+      "month",
+      "quarter",
+      "is_weekend",
+      "season",
+      "hdd_hourly",
+      "cdd_hourly",
+      "heat_index_c",
+      "wind_chill_c",
+      "apparent_temp_c",
+      "humidity_category",
+      "solar_intensity_wm2",
+      "cloudiness_indicator",
+      "wind_category",
+      "wind_dir_sin",
+      "wind_dir_cos",
+      "rain_flag",
+      "heavy_rain_flag",
+      "temp_x_humidity",
+      "temp_x_solar",
+      "temp_x_rain"
+    ]
+  }
+}

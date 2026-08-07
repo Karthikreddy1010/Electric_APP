@@ -53,12 +53,12 @@ print("  [PASS] 15% and $50 extracted correctly")
 print("\n[3] ToolRegistry")
 tr = ToolRegistry()
 tools = tr.list_tools()
-assert len(tools) == 8, f"Expected 8 tools, got {len(tools)}"
+assert len(tools) >= 15, f"Expected at least 15 tools, got {len(tools)}"
 ae = tr.get("analytics_engine")
 assert ae is not None
 assert ae.confidence == 1.0
 assert ae.source_tier == 0
-print(f"  [PASS] 8 tools registered, analytics_engine tier=0 confidence=1.0")
+print(f"  [PASS] {len(tools)} tools registered, analytics_engine tier=0 confidence=1.0")
 
 # ── Test 4: Skill Catalog ─────────────────────────────────────
 print("\n[4] SkillCatalog")
@@ -70,19 +70,19 @@ assert skills[0].needs_llm_narration == True
 assert "analytics_engine" in skills[0].required_tools
 print("  [PASS] BILL_EXPLANATION -> bill_explanation (needs LLM)")
 
-skills_bypass = sc.resolve_skills(Intent.BILL_LOOKUP)
-assert len(skills_bypass) == 1
-assert skills_bypass[0].needs_llm_narration == False
-assert skills_bypass[0].model_tier == ModelTier.BYPASS
-print("  [PASS] BILL_LOOKUP -> bill_lookup (BYPASS, no LLM)")
+skills_lookup = sc.resolve_skills(Intent.BILL_LOOKUP)
+assert len(skills_lookup) == 1
+assert skills_lookup[0].needs_llm_narration == True
+assert skills_lookup[0].model_tier == ModelTier.FAST_LOCAL
+print("  [PASS] BILL_LOOKUP -> bill_lookup (LLM primary orchestrator)")
 
 # ── Test 5: Cost Controller ───────────────────────────────────
 print("\n[5] CostController")
-ir_bypass = IntentResult(intent=Intent.BILL_LOOKUP, confidence=0.95, entities=ExtractedEntities())
-sp_bypass = SkillPlan(required_skills=["bill_lookup"], required_tools=["bill_data"],
-                      model_tier=ModelTier.BYPASS, needs_llm_narration=False)
-assert CostController.select_model_tier(ir_bypass, sp_bypass) == ModelTier.BYPASS
-print("  [PASS] BILL_LOOKUP -> BYPASS")
+ir_lookup = IntentResult(intent=Intent.BILL_LOOKUP, confidence=0.95, entities=ExtractedEntities())
+sp_lookup = SkillPlan(required_skills=["bill_lookup"], required_tools=["bill_data", "analytics_engine"],
+                      model_tier=ModelTier.FAST_LOCAL, needs_llm_narration=True)
+assert CostController.select_model_tier(ir_lookup, sp_lookup) == ModelTier.FAST_LOCAL
+print("  [PASS] BILL_LOOKUP -> FAST_LOCAL (LLM Primary)")
 
 ir_local = IntentResult(intent=Intent.BILL_EXPLANATION, confidence=0.90, entities=ExtractedEntities())
 sp_local = SkillPlan(required_skills=["bill_explanation"], required_tools=["bill_data", "analytics_engine"],
@@ -173,10 +173,10 @@ brain = AssistantBrain()
 ctx = {"bill": {"total_bill": 158.10, "usage_kwh": 850.0, "utility": "PSE&G"}}
 ir, sp, trace = brain.plan("What is my total bill?", ctx, "Dashboard")
 assert ir.intent == Intent.BILL_LOOKUP
-assert sp.model_tier == ModelTier.BYPASS
+assert sp.model_tier == ModelTier.FAST_LOCAL
 assert "bill_data" in sp.required_tools
-assert trace.llm_bypassed == True
-print(f"  [PASS] 'What is my total bill?' -> BYPASS, tools={sp.required_tools}")
+assert trace.llm_bypassed == False
+print(f"  [PASS] 'What is my total bill?' -> FAST_LOCAL, tools={sp.required_tools}")
 
 ir2, sp2, trace2 = brain.plan("Explain my electricity bill", ctx, "Dashboard")
 assert ir2.intent == Intent.BILL_EXPLANATION

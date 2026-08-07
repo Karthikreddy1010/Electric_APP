@@ -165,6 +165,46 @@ class DataRegistry:
             )
         )
 
+        # 4. NREL NASA POWER Solar & Weather Dataset
+        self.register(
+            DatasetMetadata(
+                name="NREL NASA POWER",
+                owner="NASA Langley Research Center / NREL",
+                source="NASA POWER Project — Hourly Solar & Meteorological (2015-2025, 21 NJ Counties)",
+                update_frequency="Static Archive (2015-2025)",
+                coverage="21 New Jersey Counties",
+                granularity="County-Level Hourly (aggregated to Daily/Monthly)",
+                join_keys=["location", "date", "year", "month"],
+                primary_tabs=[
+                    "Forecast",
+                    "Bill Analysis",
+                    "AI Chat",
+                ],
+                supporting_tabs=[
+                    "Dashboard",
+                    "Impact Simulator",
+                    "Regional Insights",
+                ],
+                access_policies={
+                    "forecast": AccessPolicy.READ_FORECAST,
+                    "bill_analysis": AccessPolicy.READ_JOIN,
+                    "bill_breakdown": AccessPolicy.READ_ONLY,
+                    "bill_explanation": AccessPolicy.READ_JOIN,
+                    "dashboard": AccessPolicy.READ_ANALYZE,
+                    "impact_simulator": AccessPolicy.READ_ANALYZE,
+                    "regional_insights": AccessPolicy.READ_ANALYZE,
+                    "recommendations": AccessPolicy.READ_JOIN,
+                    "ai_chat": AccessPolicy.READ_ANALYZE,
+                    "benchmark": AccessPolicy.READ_ONLY,
+                    "maps": AccessPolicy.READ_ANALYZE,
+                    "admin_analytics": AccessPolicy.READ_ANALYZE,
+                },
+                version="v1",
+                last_updated="2026-08",
+                quality_score=99.5,
+            )
+        )
+
     def register(self, metadata: DatasetMetadata):
         self._datasets[metadata.name.lower()] = metadata
         logger.info(f"Registered dataset '{metadata.name}' (v{metadata.version}) in DataRegistry.")

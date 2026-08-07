@@ -69,7 +69,12 @@ async def chat(req: UniversalLLMChatRequest):
             uploaded_bill=uploaded_bill if isinstance(uploaded_bill, dict) else None,
             conversation_history=[h.dict() for h in req.history]
         )
-        ctx.update(req.context_data)
+        if isinstance(req.context_data, dict):
+            extra_ctx = ContextBuilder.filter_by_intent("chat", req.context_data)
+            pruned_extra = ContextBuilder.prune_empty_fields(extra_ctx)
+            for k, v in pruned_extra.items():
+                if k not in ctx or not ctx[k]:
+                    ctx[k] = v
 
         res = await llm_service.generate_explanation(
             task="chat",

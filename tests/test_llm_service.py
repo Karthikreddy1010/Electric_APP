@@ -247,6 +247,7 @@ class TestOllamaProviderResilienceAndMetrics:
     async def test_mocked_404_fast_fail(self, monkeypatch):
         provider = OllamaProvider(model="nonexistent-model")
         monkeypatch.setattr(provider, "is_available", lambda: True)
+        monkeypatch.setattr(provider, "verify_model_installed", lambda: asyncio.sleep(0))
 
         async def mock_post(*args, **kwargs):
             class Mock404Response:
@@ -258,7 +259,7 @@ class TestOllamaProviderResilienceAndMetrics:
         client = provider.get_client()
         monkeypatch.setattr(client, "post", mock_post)
 
-        with pytest.raises(RuntimeError, match="not found"):
+        with pytest.raises(RuntimeError, match="not installed|not found"):
             await provider.generate("Test prompt")
 
     def test_metrics_collector_recording(self):
@@ -276,4 +277,63 @@ class TestOllamaProviderResilienceAndMetrics:
         assert snapshot["fallback_count"] == 1
         assert snapshot["tokens"]["combined_tokens_total"] == 150
         assert snapshot["latency_ms"]["average"] == 120.5
+
+    def test_ollama_4_tier_model_precedence(self, monkeypatch):
+        # Tier 1: Explicit parameter
+        p1 = OllamaProvider(model="llama3:latest")
+        assert p1.model == "llama3:latest"
+        assert p1.registry_key == "ollama-local"
+
+        # Internal registry ID 'ollama-local' passed as model parameter must resolve to configured/default model tag
+        p_reg = OllamaProvider(model="ollama-local")
+        assert p_reg.model == "qwen3:4b"
+
+        # Tier 2: OLLAMA_MODEL env var
+        monkeypatch.setenv("OLLAMA_MODEL", "mistral:instruct")
+        p2 = OllamaProvider(model="ollama-local")
+        assert p2.model == "mistral:instruct"
+        monkeypatch.delenv("OLLAMA_MODEL")
+
+    @pytest.mark.anyio
+    async def test_ollama_payload_model_tag_verification(self, monkeypatch):
+        provider = OllamaProvider(model="ollama-local")
+        assert provider.model == "qwen3:4b"
+        assert provider.registry_key == "ollama-local"
+
+        monkeypatch.setattr(provider, "verify_model_installed", lambda: asyncio.sleep(0))
+        monkeypatch.setattr(provider, "is_available", lambda: True)
+
+        captured_payload = {}
+
+        async def mock_post(url, json=None, **kwargs):
+            nonlocal captured_payload
+            captured_payload = json
+            class MockResp:
+                status_code = 200
+                content = b'{"response": "Payload test OK"}'
+                def json(self):
+                    return {"response": "Payload test OK", "prompt_eval_count": 5, "eval_count": 5}
+            return MockResp()
+
+        client = provider.get_client()
+        monkeypatch.setattr(client, "post", mock_post)
+
+        res = await provider.generate("Testing payload model string")
+        assert res == "Payload test OK"
+        assert captured_payload["model"] == "qwen3:4b"
+        assert captured_payload["model"] != "ollama-local"
+
+    @pytest.mark.anyio
+    async def test_ollama_preflight_validation_missing_model(self, monkeypatch):
+        provider = OllamaProvider(model="nonexistent:tag")
+        monkeypatch.setattr(provider, "is_available", lambda: True)
+
+        async def mock_get_installed_models():
+            return ["qwen3:4b", "llama3:latest"]
+
+        monkeypatch.setattr(provider, "get_installed_models", mock_get_installed_models)
+
+        with pytest.raises(RuntimeError, match="Configured Ollama model 'nonexistent:tag' is not installed"):
+            await provider.verify_model_installed()
+
 
