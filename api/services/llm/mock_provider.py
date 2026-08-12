@@ -21,8 +21,10 @@ class MockLLMProvider(BaseLLMProvider):
         **kwargs: Any
     ) -> str:
         user_msg = prompt
-        if "User Question:" in prompt:
-            user_msg = prompt.split("User Question:")[1].split("\n")[0].strip()
+        prompt_lower = prompt.lower()
+        if "user question:" in prompt_lower:
+            parts = prompt_lower.split("user question:")
+            user_msg = parts[1].split("\n")[0].strip()
         q_lower = user_msg.lower()
 
         # Check for RAG context

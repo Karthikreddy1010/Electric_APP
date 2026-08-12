@@ -104,7 +104,7 @@ class LLMSettings(BaseSettings):
     base_url: str = "http://127.0.0.1:11434"
     
     # Provider endpoints & keys
-    vllm_base_url: str = "http://localhost:8000/v1"
+    vllm_base_url: str = "http://localhost:8001/v1"
     sglang_base_url: str = "http://localhost:30000/v1"
     anthropic_api_key: str = ""
     openai_api_key: str = ""

@@ -78,7 +78,7 @@ class ModelRouter:
         chain = []
         for position, meta in enumerate(candidates):
             provider = self._instantiate(meta)
-            if provider is not None:
+            if provider is not None and provider.is_available():
                 selection = ModelSelection(
                     model_id=meta.model_id,
                     provider_name=meta.provider_name,

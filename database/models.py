@@ -122,6 +122,26 @@ class RawDemographics(Base):
     )
 
 
+class CensusDemographics(Base):
+    """
+    US Census ACS demographics table queried by CensusService by ZIP code.
+    """
+    __tablename__ = "census_demographics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    zip_code = Column(String(10), nullable=False, index=True, unique=True)
+    state = Column(String(2), default="NJ")
+    county = Column(String(50), default="Essex")
+    total_population = Column(Integer, default=42500)
+    median_household_income = Column(Float, default=78500.0)
+    poverty_rate_pct = Column(Float, default=11.8)
+    bachelor_degree_pct = Column(Float, default=36.5)
+    housing_units = Column(Integer, default=17200)
+    owner_occupied_pct = Column(Float, default=48.0)
+    median_home_value = Column(Float, default=410000.0)
+    median_age = Column(Float, default=37.2)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  PROCESSED / ANALYTICAL TABLES
 # ─────────────────────────────────────────────────────────────────────────────
