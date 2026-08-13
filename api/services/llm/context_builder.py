@@ -94,6 +94,7 @@ class ContextBuilder:
             return pruned
         elif isinstance(data, list):
             return [ContextBuilder.prune_empty_fields(item) for item in data if item is not None]
+        return data
     @staticmethod
     def filter_by_intent(task: str, context_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -130,7 +131,7 @@ class ContextBuilder:
             "weather": {},
             "recommendations": {},
             "statistics": {},
-            "metadata": {"schema_version": "v1.1"}
+            "metadata": {"schema_version": "v1.0"}
         }
 
     @staticmethod

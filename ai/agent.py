@@ -62,6 +62,7 @@ class GroundedAgent:
                 "text": answer,
                 "explanation": answer,
                 "metadata": {
+                    "provider": final_state.get("provider_name", "MockLLMProvider"),
                     "latency_sec": elapsed,
                     "grounded": grounded,
                     "unverified_claims_blocked": blocked,

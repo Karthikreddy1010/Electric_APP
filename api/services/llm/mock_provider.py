@@ -22,9 +22,14 @@ class MockLLMProvider(BaseLLMProvider):
     ) -> str:
         user_msg = prompt
         prompt_lower = prompt.lower()
+        # Extract user question from grounded prompt format ("USER QUESTION:\n...") or legacy format
         if "user question:" in prompt_lower:
-            parts = prompt_lower.split("user question:")
-            user_msg = parts[1].split("\n")[0].strip()
+            parts = prompt.split("USER QUESTION:")
+            if len(parts) < 2:
+                parts = prompt_lower.split("user question:")
+            raw_q = parts[1].strip().split("\n")[0].strip()
+            if raw_q:
+                user_msg = raw_q
         q_lower = user_msg.lower()
 
         # Check for RAG context
@@ -89,7 +94,119 @@ class MockLLMProvider(BaseLLMProvider):
             usage_kwh = 850.0
 
         # Distinct tailored responses for specific user questions
-        if "delivery" in q_lower or "transmission" in q_lower or "distribution" in q_lower:
+        # IMPORTANT: Ordered from most-specific to least-specific to avoid broad patterns swallowing specific questions
+
+        # --- ELI5 / Simple explanation ---
+        if any(w in q_lower for w in ["like i'm five", "eli5", "simple terms", "layman", "simplify", "in simple"]):
+            supply_pct = round((supply_charge / total_bill) * 100) if total_bill > 0 else 56
+            delivery_pct = round((delivery_charge / total_bill) * 100) if total_bill > 0 else 29
+            return (
+                f"### 💡 Your Bill in Simple Terms\n"
+                f"Think of your electricity bill like a pizza order:\n\n"
+                f"1. **The Pizza (Supply: ${supply_charge:.2f})** — This is the actual electricity you used ({usage_kwh:.1f} kWh). It's about **{supply_pct}%** of your total.\n"
+                f"2. **The Delivery Fee (${delivery_charge:.2f})** — This pays for the wires, poles, and transformers that bring power to your home. About **{delivery_pct}%** of your total.\n"
+                f"3. **The Tip & Extras** — Fixed service charge (${fixed_charge:.2f}), taxes (${tax:.2f}), and small regulatory fees.\n\n"
+                f"**Bottom line**: You paid **${total_bill:.2f}** total. Most of that cost ({supply_pct}%) is for the electricity itself."
+            )
+
+        # --- Component / breakdown ranking ---
+        elif any(w in q_lower for w in ["component", "breakdown", "break down", "which charge", "biggest charge",
+                                         "largest charge", "most expensive", "highest charge", "what makes up",
+                                         "increased the most", "biggest increase"]):
+            components = [
+                ("Supply (BGS)", supply_charge),
+                ("Delivery", delivery_charge),
+                ("Tax", tax),
+                ("Fixed Customer Charge", fixed_charge),
+            ]
+            components.sort(key=lambda x: x[1], reverse=True)
+            lines = [f"### 📊 Bill Component Ranking ({utility}, {period})\n"]
+            lines.append(f"Your total bill of **${total_bill:.2f}** breaks down as follows (largest to smallest):\n")
+            for rank, (name, amt) in enumerate(components, 1):
+                pct = round((amt / total_bill) * 100, 1) if total_bill > 0 else 0
+                bar = "█" * max(1, int(pct / 5))
+                lines.append(f"{rank}. **{name}**: ${amt:.2f} ({pct}%) {bar}")
+            lines.append(f"\n**Largest charge**: {components[0][0]} at ${components[0][1]:.2f} ({round((components[0][1]/total_bill)*100,1)}% of total).")
+            return "\n".join(lines)
+
+        # --- Tariff / rate schedule / specific charge explanations ---
+        elif any(w in q_lower for w in ["tariff", "rate schedule", "sbc", "bgs", "rggi",
+                                         "societal benefits", "charge mean"]):
+            if "sbc" in q_lower or "societal" in q_lower:
+                return (
+                    f"### 📜 Societal Benefits Charge (SBC) Explained\n"
+                    f"The SBC on your {utility} bill is a NJ BPU-mandated surcharge that funds:\n\n"
+                    f"- **Clean Energy Programs**: Solar incentives, energy efficiency rebates, and renewable energy certificates.\n"
+                    f"- **Low-Income Assistance**: Universal Service Fund (USF) and LIHEAP heating assistance.\n"
+                    f"- **Environmental Remediation**: Nuclear decommissioning and contaminated site cleanup.\n\n"
+                    f"**On your bill**: This charge is currently **$4.12** per month. It is set by the NJ Board of Public Utilities under N.J.S.A. 48:3-60."
+                )
+            elif "bgs" in q_lower:
+                return (
+                    f"### ⚡ Basic Generation Service (BGS) Explained\n"
+                    f"BGS is the default electricity supply rate for {utility} customers who have not chosen a third-party supplier.\n\n"
+                    f"- **How it's set**: Through an annual statewide auction administered by the NJ BPU.\n"
+                    f"- **What drives it**: PJM wholesale market prices, natural gas costs, and capacity auction results.\n"
+                    f"- **Your supply charge**: **${supply_charge:.2f}** for {usage_kwh:.1f} kWh this period."
+                )
+            elif "rggi" in q_lower:
+                return (
+                    f"### 🌍 Regional Greenhouse Gas Initiative (RGGI) Rider\n"
+                    f"The RGGI rider recovers costs from NJ's participation in the multi-state carbon cap-and-trade program.\n\n"
+                    f"- **Purpose**: Funds clean energy investments and greenhouse gas emission reduction programs.\n"
+                    f"- **Your charge**: Approximately **$1.25** per month on your {utility} bill.\n"
+                    f"- **Jurisdiction**: NJ Department of Environmental Protection and BPU."
+                )
+            else:
+                return (
+                    f"### 📋 {utility} Rate Schedule & Tariff Overview\n"
+                    f"Your tariff is the official rate structure governing how {utility} calculates your bill.\n\n"
+                    f"**Key tariff components on your bill:**\n"
+                    f"- **Customer Charge**: ${fixed_charge:.2f}/month (fixed, usage-independent)\n"
+                    f"- **Delivery Rate**: Volumetric charge for grid infrastructure → ${delivery_charge:.2f}\n"
+                    f"- **BGS Supply Rate**: Electricity generation cost per kWh → ${supply_charge:.2f}\n"
+                    f"- **Regulatory Riders**: SBC, RGGI, and other NJ BPU-mandated surcharges\n"
+                    f"- **Tax**: NJ Sales & Use Tax at 6.625% → ${tax:.2f}"
+                )
+
+        # --- General bill explanation ---
+        elif any(w in q_lower for w in ["explain my bill", "explain bill", "explain my electricity",
+                                         "understand my bill", "tell me about my bill",
+                                         "how is my bill", "what does my bill"]):
+            supply_pct = round((supply_charge / total_bill) * 100, 1) if total_bill > 0 else 56
+            delivery_pct = round((delivery_charge / total_bill) * 100, 1) if total_bill > 0 else 29
+            return (
+                f"### 📋 Complete Bill Explanation ({utility}, {period})\n"
+                f"Your total bill is **${total_bill:.2f}** for **{usage_kwh:.1f} kWh** of electricity consumed.\n\n"
+                f"**Charge Breakdown:**\n"
+                f"| Component | Amount | % of Total |\n"
+                f"|-----------|--------|------------|\n"
+                f"| BGS Supply | ${supply_charge:.2f} | {supply_pct}% |\n"
+                f"| Delivery | ${delivery_charge:.2f} | {delivery_pct}% |\n"
+                f"| Customer Charge | ${fixed_charge:.2f} | {round((fixed_charge/total_bill)*100,1) if total_bill > 0 else 5}% |\n"
+                f"| Tax | ${tax:.2f} | {round((tax/total_bill)*100,1) if total_bill > 0 else 6}% |\n\n"
+                f"**Effective Rate**: ${effective_rate:.4f}/kWh — your all-in cost including delivery, supply, and fees."
+            )
+
+        # --- History / trend ---
+        elif any(w in q_lower for w in ["history", "trend", "over time", "past months", "historical",
+                                         "last few months", "previous months"]):
+            return (
+                f"### 📈 Billing History & Trend Analysis ({utility})\n"
+                f"Your 6-month billing trajectory shows seasonal variation:\n\n"
+                f"| Month | Usage (kWh) | Total Bill | Avg Temp (°F) |\n"
+                f"|-------|-------------|------------|---------------|\n"
+                f"| Jan 2026 | 820.0 | $156.40 | 32.4 |\n"
+                f"| Feb 2026 | 790.0 | $150.70 | 34.1 |\n"
+                f"| Mar 2026 | 680.0 | $131.20 | 45.2 |\n"
+                f"| Apr 2026 | 610.0 | $118.50 | 54.8 |\n"
+                f"| May 2026 | 650.0 | $126.14 | 63.5 |\n"
+                f"| **Jun 2026** | **{usage_kwh:.1f}** | **${total_bill:.2f}** | **74.2** |\n\n"
+                f"**Trend**: Your usage bottomed out in April (610 kWh) and has been rising as temperatures increase. The June bill is up **$18.13** from May, driven by summer cooling loads."
+            )
+
+        # --- Delivery / transmission / distribution ---
+        elif any(w in q_lower for w in ["delivery", "transmission", "distribution"]):
             return (
                 f"### 🚚 Grid Delivery & Transmission Component Breakdown\n"
                 f"Your delivery charges total **${delivery_charge:.2f}** under your active {utility} rate schedule.\n\n"
@@ -98,7 +215,9 @@ class MockLLMProvider(BaseLLMProvider):
                 f"- **Transmission Network**: High-voltage grid transmission regulated by FERC and PJM Interconnection.\n"
                 f"- **Fixed Customer Charge**: Base monthly service fee of **${fixed_charge:.2f}** for account administration and metering."
             )
-        elif "supply" in q_lower or "driver" in q_lower or "commodity" in q_lower:
+
+        # --- Supply / driver / commodity ---
+        elif any(w in q_lower for w in ["supply", "driver", "commodity"]):
             return (
                 f"### ⚡ Supply Generation & Commodity Cost Analysis ({utility})\n"
                 f"Your supply charge for {period} is **${supply_charge:.2f}**, representing approximately **58%** of your total **${total_bill:.2f}** bill.\n\n"
@@ -107,7 +226,9 @@ class MockLLMProvider(BaseLLMProvider):
                 f"2. **Fuel Commodity Prices**: Generation commodity rates track natural gas pipeline pricing and capacity auction clearing prices.\n"
                 f"3. **Volumetric Consumption**: You consumed **{usage_kwh:.1f} kWh** at an effective rate of **${effective_rate:.4f}/kWh**."
             )
-        elif "weather" in q_lower or "temp" in q_lower or "heat" in q_lower or "degree" in q_lower or "climate" in q_lower:
+
+        # --- Weather / temperature / climate ---
+        elif any(w in q_lower for w in ["weather", "temp", "heat", "degree", "climate"]):
             return (
                 f"### 🌤️ Weather & Climate Impact Analysis ({utility})\n"
                 f"Meteorological telemetry shows cooling degree-days (CDD: {cdd}) directly impacted your usage of **{usage_kwh:.1f} kWh**.\n\n"
@@ -115,13 +236,17 @@ class MockLLMProvider(BaseLLMProvider):
                 f"- **HVAC Thermal Load**: Summer cooling degree-days increased air conditioning compressor run-times during peak afternoon hours.\n"
                 f"- **Bill Financial Impact**: Seasonal temperature spikes accounted for an estimated **15% to 25%** of your monthly volumetric usage."
             )
+
+        # --- Customer charge ---
         elif "customer" in q_lower and "charge" in q_lower:
             return (
                 f"### 🏢 Fixed Monthly Customer Charge Analysis\n"
                 f"Your fixed customer charge is **${fixed_charge:.2f}** per month on your {utility} statement.\n\n"
                 f"This is a non-volumetric fixed baseline fee that covers account administration, meter maintenance, billing infrastructure, and 24/7 customer support regardless of how many kWh of electricity you consume."
             )
-        elif "forecast" in q_lower or "predict" in q_lower or "next month" in q_lower or "projected" in q_lower:
+
+        # --- Forecast / predict ---
+        elif any(w in q_lower for w in ["forecast", "predict", "next month", "projected"]):
             pred_kwh = usage_kwh * 1.03
             pred_cost = total_bill * 1.04
             return (
@@ -131,7 +256,9 @@ class MockLLMProvider(BaseLLMProvider):
                 f"- **Estimated Monthly Bill**: **${pred_cost:.2f}**\n"
                 f"- **Demand Stressors**: Seasonal HVAC cooling loads during upcoming mid-afternoon peak hours."
             )
-        elif "benchmark" in q_lower or "compare" in q_lower or "average" in q_lower or "rank" in q_lower:
+
+        # --- Benchmark / compare / average / rank ---
+        elif any(w in q_lower for w in ["benchmark", "compare", "average", "rank"]):
             return (
                 f"### 🏙️ Utility & Regional Rate Benchmarking\n"
                 f"Comparative analysis for **{utility}** (effective rate: **${effective_rate:.4f}/kWh**):\n\n"
@@ -139,7 +266,10 @@ class MockLLMProvider(BaseLLMProvider):
                 f"- **National Average**: $0.1680/kWh — NJ regional rates reflect higher PJM capacity auction costs and transmission congestion surcharges.\n"
                 f"- **Peer Utility Comparison**: Rates track closely with regional peers (JCP&L and Atlantic City Electric)."
             )
-        elif "15%" in q_lower or "reduce" in q_lower or "save" in q_lower or "cut" in q_lower or "tip" in q_lower:
+
+        # --- Save / reduce / optimize / tips ---
+        elif any(w in q_lower for w in ["15%", "reduce", "save", "cut", "tip", "optimize",
+                                         "lower my bill", "decrease", "how can i", "recommendations"]):
             savings = total_bill * 0.15
             kwh_saved = usage_kwh * 0.15
             return (
@@ -150,7 +280,11 @@ class MockLLMProvider(BaseLLMProvider):
                 f"2. **Thermostat Pre-Cooling**: Pre-cool your space prior to peak afternoon cooling hours (2 PM to 6 PM).\n"
                 f"3. **Phantom Load Control**: Use smart power strips to eliminate standby power draw from electronics."
             )
-        elif "why" in q_lower or "high" in q_lower or "increase" in q_lower or "more" in q_lower or "different" in q_lower:
+
+        # --- Why is bill high (NARROWED: requires bill-related context) ---
+        elif ("why" in q_lower and any(w in q_lower for w in ["bill", "cost", "charge", "expensive", "usage"])) or \
+             ("high" in q_lower and any(w in q_lower for w in ["bill", "cost", "charge", "usage"])) or \
+             ("increase" in q_lower and any(w in q_lower for w in ["bill", "cost", "charge", "rate"])):
             return (
                 f"### ⚡ Multi-Factor Bill Variance Analysis ({utility})\n"
                 f"Your bill of **${total_bill:.2f}** for **{usage_kwh:.1f} kWh** is driven by three primary factors:\n\n"
@@ -164,8 +298,11 @@ class MockLLMProvider(BaseLLMProvider):
             return f"Based on verified state energy documentation:\n\n{rag_section}"
 
         return (
-            "### Executive Summary\n"
-            "This is a validated mock response and synthesized multi-source analysis based on active utility tariffs, PJM market benchmarks, and NOAA weather indices."
+            f"### 📊 Bill Summary ({utility}, {period})\n"
+            f"This is a validated mock response and bill summary. Your electricity bill totals **${total_bill:.2f}** for **{usage_kwh:.1f} kWh** at an effective rate of **${effective_rate:.4f}/kWh**.\n\n"
+            f"Supply charges (${supply_charge:.2f}) make up the largest portion, followed by delivery (${delivery_charge:.2f}), "
+            f"taxes (${tax:.2f}), and the fixed customer charge (${fixed_charge:.2f}).\n\n"
+            f"Ask me about specific charges, savings strategies, forecasts, or comparisons for a detailed analysis!"
         )
 
     async def generate_stream(

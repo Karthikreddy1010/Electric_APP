@@ -70,27 +70,65 @@ class DataRequirementRouter:
 
         if has_average_or_state_bill or (is_state_level_query and "bill" in q_lower):
             intent = "price_query"
-        elif any(w in q_lower for w in ["my bill", "last bill", "bill details", "my usage", "this month"]):
-            intent = "bill_lookup"
-        elif any(w in q_lower for w in ["why was my bill", "why higher", "bill increase", "component", "breakdown"]):
+        elif any(w in q_lower for w in [
+            "why was my bill", "why higher", "bill increase",
+            "why is my bill", "why did my bill", "bill went up",
+            "bill more", "bill higher", "bill so high",
+            "increased the most", "biggest increase", "what changed"
+        ]):
+            intent = "bill_explanation"
+        elif any(w in q_lower for w in [
+            "component", "breakdown", "break down",
+            "which charge", "biggest charge", "largest charge",
+            "most expensive", "highest charge", "what makes up"
+        ]):
+            intent = "component_detail"
+        elif any(w in q_lower for w in [
+            "explain my bill", "explain bill", "explain my electricity",
+            "understand my bill", "tell me about my bill",
+            "what does my bill", "how is my bill",
+            "like i'm five", "eli5", "simple terms", "layman",
+            "in simple", "simplify"
+        ]):
+            intent = "bill_explanation"
+        elif any(w in q_lower for w in [
+            "explain my tariff", "explain tariff", "what is tariff",
+            "rate schedule", "how does tariff",
+            "sbc", "bgs", "rggi", "rider",
+            "charge mean", "what does customer charge",
+            "what is delivery charge", "what is supply charge",
+            "what does sbc mean", "societal benefits"
+        ]):
+            intent = "tariff_query"
+        elif any(w in q_lower for w in [
+            "history", "trend", "over time", "past months",
+            "historical", "last few months", "previous months",
+            "month over month", "month-over-month"
+        ]):
             intent = "bill_explanation"
         elif any(w in q_lower for w in ["compare", "vs", "versus", "cheaper", "more expensive"]):
             intent = "comparison"
-        elif any(w in q_lower for w in ["price", "cents", "kwh rate", "average price", "electricity cost"]):
-            intent = "price_query"
-        elif any(w in q_lower for w in ["forecast", "project", "next month", "future"]):
+        elif any(w in q_lower for w in ["forecast", "project", "next month", "future", "predict", "projected"]):
             intent = "forecast_query"
-        elif any(w in q_lower for w in ["reduce", "if i use", "scenario", "solar", "battery", "kwh to"]):
+        elif any(w in q_lower for w in [
+            "reduce", "if i use", "scenario", "solar", "battery", "kwh to",
+            "save", "cut", "lower my bill", "decrease", "optimize",
+            "how can i", "tips", "recommendations"
+        ]):
             intent = "simulation_query"
         elif any(w in q_lower for w in ["weather", "temperature", "cdd", "hdd", "cold", "hot"]):
             intent = "weather_query"
-        elif any(w in q_lower for w in ["sbc", "bgs", "rggi", "rider", "tariff", "charge mean"]):
-            intent = "tariff_query"
+        elif any(w in q_lower for w in ["benchmark", "rank", "percentile"]):
+            intent = "benchmark_query"
+        elif any(w in q_lower for w in ["price", "cents", "kwh rate", "average price", "electricity cost"]):
+            intent = "price_query"
         elif any(w in q_lower for w in ["data sources", "datasets", "catalog", "what data"]):
             intent = "dataset_metadata"
+        elif any(w in q_lower for w in ["my bill", "last bill", "bill details", "my usage", "this month"]):
+            intent = "bill_lookup"
 
         # 4. Calculation & External Flags
-        is_calc = intent in ["simulation_query", "bill_explanation", "comparison"] or any(char in query for char in ["+", "-", "*", "%"]) or "reduce" in q_lower
+        is_calc = intent in ["simulation_query", "bill_explanation", "comparison", "component_detail"] or any(char in query for char in ["+", "-", "*", "%"]) or "reduce" in q_lower
         is_ext = scope in [GeographicScope.STATE, GeographicScope.NATIONAL] and detected_state != "NJ"
 
         return StructuredQueryRequirement(
@@ -160,9 +198,18 @@ class DataRequirementRouter:
             tools_to_run.append({"tool_name": "explain_bill_component", "args": {"component_name": query}})
             tools_to_run.append({"tool_name": "query_vector_store", "args": {"query": query}})
 
+        elif intent == "component_detail":
+            tools_to_run.append({"tool_name": "get_bill_details", "args": {}})
+            tools_to_run.append({"tool_name": "get_bill_components", "args": {}})
+            tools_to_run.append({"tool_name": "calculate_component_change", "args": {}})
+
         elif intent == "weather_query":
             tools_to_run.append({"tool_name": "get_historical_weather", "args": {"period": "2026-06"}})
             tools_to_run.append({"tool_name": "get_weather_normalization_data", "args": {"period": "2026-06"}})
+
+        elif intent == "benchmark_query":
+            tools_to_run.append({"tool_name": "get_bill_details", "args": {}})
+            tools_to_run.append({"tool_name": "get_state_electricity_price", "args": {"state": st, "year": req.year}})
 
         else:
             # General energy fallback — only include customer bill data for NJ/local scope
