@@ -11,15 +11,36 @@ export const NavigationProvider = ({
   const navigate = useNavigate();
 
   const navigateTab = (tab: string) => {
+    if (!tab) return;
+    if (tab.startsWith('/')) {
+      navigate(tab);
+      return;
+    }
+    const cleanTab = tab.trim().toLowerCase();
     const routeMap: Record<string, string> = {
-      'Overview': '/overview',
-      'Bill Analysis': '/bill-analysis',
-      'Impact & Simulation': '/impact',
-      'Regional Insights': '/regional-insights',
-      'Forecast': '/forecast',
-      'Settings': '/settings',
+      'overview': '/overview',
+      'dashboard': '/overview',
+      'bill analysis': '/bill-analysis',
+      'bill': '/bill-analysis',
+      'bill-analysis': '/bill-analysis',
+      'billing': '/bill-analysis',
+      'impact & simulation': '/impact',
+      'impact simulator': '/impact',
+      'impact': '/impact',
+      'simulation': '/impact',
+      'simulator': '/impact',
+      'regional insights': '/regional-insights',
+      'regional': '/regional-insights',
+      'regional-insights': '/regional-insights',
+      'forecast': '/forecast',
+      'forecaste': '/forecast',
+      'demand forecast': '/forecast',
+      'demand forecasting': '/forecast',
+      'load forecasting': '/forecast',
+      'forecasting': '/forecast',
+      'settings': '/settings',
     };
-    const target = routeMap[tab] ?? '/overview';
+    const target = routeMap[cleanTab] ?? '/overview';
     navigate(target);
   };
 

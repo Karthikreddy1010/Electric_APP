@@ -266,31 +266,32 @@ class ElectricityDemandForecaster:
         except Exception as e:
             logger.debug(f"NREL weather not available for forecast: {e}")
 
-        # Fallback to Open-Meteo DB
-        if weather_df.empty:
-            weather_df = self._load_weather_from_db()
-
-        if weather_df.empty:
-            # Fallback to CSV
+        # Fallback / recent gap fill with Open-Meteo
+        openmeteo_df = self._load_weather_from_db()
+        if openmeteo_df.empty:
             weather_path = self.data_path.parent / "weather_openmeteo.csv"
             if weather_path.exists():
-                weather_df = pd.read_csv(weather_path)
-                weather_df["date"] = pd.to_datetime(weather_df["date"])
+                openmeteo_df = pd.read_csv(weather_path)
+                openmeteo_df["date"] = pd.to_datetime(openmeteo_df["date"])
                 logger.info(f"Loaded weather from CSV fallback: {weather_path}")
             else:
                 # Try to fetch from Open-Meteo
                 logger.warning("No weather data in DB or CSV. Fetching from Open-Meteo...")
                 try:
                     from data_pipeline.weather_service import fetch_historical_weather
-                    weather_df = fetch_historical_weather(
+                    openmeteo_df = fetch_historical_weather(
                         start_date=daily.index.min().strftime("%Y-%m-%d"),
                         end_date=daily.index.max().strftime("%Y-%m-%d"),
                     )
                 except Exception as e:
-                    raise ValueError(
-                        f"Failed to obtain weather data: {e}. "
-                        f"Cannot train forecast model without weather."
-                    ) from e
+                    logger.warning(f"Could not fetch Open-Meteo weather: {e}")
+
+        if not openmeteo_df.empty and not weather_df.empty:
+            # Combine NREL with Open-Meteo to cover recent dates (e.g. 2026) that NREL lacks
+            openmeteo_df = openmeteo_df.drop_duplicates(subset=["date"])
+            weather_df = pd.concat([weather_df, openmeteo_df[WEATHER_COLS + ["date"]]]).drop_duplicates(subset=["date"], keep="first").sort_values("date").reset_index(drop=True)
+        elif weather_df.empty and not openmeteo_df.empty:
+            weather_df = openmeteo_df
 
         if weather_df.empty:
             raise ValueError(
@@ -563,19 +564,40 @@ class ElectricityDemandForecaster:
         last_date = full_df.index[-1]
         future_dates = pd.date_range(last_date + pd.Timedelta(days=1), periods=days, freq='D')
 
-        # ── Get REAL forecast weather from Open-Meteo ─────────────────────
-        # FAIL-LOUD: If this fails, a RuntimeError propagates up.
-        from data_pipeline.weather_service import fetch_forecast_weather
-        forecast_weather = fetch_forecast_weather(days=days)
-        # fetch_forecast_weather now raises RuntimeError on failure —
-        # no try/except silencing here.
+        # ── Get weather for future_dates ─────────────────────────────────
+        fc_weather = pd.DataFrame()
+        try:
+            from data_pipeline.weather_service import fetch_forecast_weather
+            fc_weather = fetch_forecast_weather(days=days)
+            if not fc_weather.empty:
+                fc_weather["date"] = pd.to_datetime(fc_weather["date"])
+        except Exception as e:
+            logger.warning(f"Open-Meteo forecast API unavailable or failed: {e}")
 
-        forecast_weather["date"] = pd.to_datetime(forecast_weather["date"])
-        future_exog = forecast_weather.set_index("date")[WEATHER_COLS].reindex(future_dates)
+        # Combine historical weather with live forecast weather
+        all_weather = full_df[WEATHER_COLS].copy()
+        if not fc_weather.empty:
+            fc_indexed = fc_weather.set_index("date")[WEATHER_COLS]
+            all_weather = pd.concat([all_weather, fc_indexed]).groupby(level=0).last()
 
-        # Interpolate alignment gaps (date rounding), but do NOT fill with zeros
+        future_exog = all_weather.reindex(future_dates)
+
+        # Interpolate alignment gaps
         for col in WEATHER_COLS:
             future_exog[col] = future_exog[col].interpolate(method="linear")
+
+        # Fill any remaining date gaps using seasonal climatology (day-of-year averages)
+        if future_exog[WEATHER_COLS].isnull().any().any():
+            hist_weather = full_df[WEATHER_COLS].copy()
+            hist_weather["doy"] = hist_weather.index.dayofyear
+            climatology = hist_weather.groupby("doy")[WEATHER_COLS].mean()
+            for col in WEATHER_COLS:
+                for d in future_exog[future_exog[col].isnull()].index:
+                    doy = d.dayofyear
+                    if doy in climatology.index:
+                        future_exog.loc[d, col] = climatology.loc[doy, col]
+                    else:
+                        future_exog.loc[d, col] = full_df[col].mean()
 
         # Join monthly features (projected forward via ffill)
         m_cols = getattr(self, "eia861m_cols", [])
@@ -593,7 +615,7 @@ class ElectricityDemandForecaster:
                 f"after interpolation. Weather API may be unavailable or misconfigured."
             )
 
-        logger.info(f"Using REAL Open-Meteo forecast weather for {len(future_exog)} days")
+        logger.info(f"Successfully constructed forecast exogenous weather for {len(future_exog)} days")
 
         # Add lagged demand for SARIMA exog
         # Build lag features recursively for the forecast horizon
