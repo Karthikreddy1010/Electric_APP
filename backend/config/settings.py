@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Optional
 
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +57,11 @@ class RedisSettings(BaseSettings):
         description="Maximum Redis connection pool size",
     )
 
-    class Config:
-        env_prefix = "REDIS_"
-        env_file = str(PROJECT_ROOT / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="REDIS_",
+        env_file=str(PROJECT_ROOT / ".env"),
+        extra="ignore"
+    )
 
 
 class StorageSettings(BaseSettings):
@@ -80,10 +81,11 @@ class StorageSettings(BaseSettings):
         default="", description="S3 endpoint URL (for MinIO)"
     )
 
-    class Config:
-        env_prefix = "STORAGE_"
-        env_file = str(PROJECT_ROOT / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="STORAGE_",
+        env_file=str(PROJECT_ROOT / ".env"),
+        extra="ignore"
+    )
 
 
 class AnalyticsSettings(BaseSettings):
@@ -121,10 +123,11 @@ class AnalyticsSettings(BaseSettings):
         description="Base temperature (°F) for HDD/CDD calculations",
     )
 
-    class Config:
-        env_prefix = "ANALYTICS_"
-        env_file = str(PROJECT_ROOT / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="ANALYTICS_",
+        env_file=str(PROJECT_ROOT / ".env"),
+        extra="ignore"
+    )
 
 
 class CelerySettings(BaseSettings):
@@ -145,10 +148,11 @@ class CelerySettings(BaseSettings):
         default=4, ge=1, description="Number of concurrent worker processes"
     )
 
-    class Config:
-        env_prefix = "CELERY_"
-        env_file = str(PROJECT_ROOT / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="CELERY_",
+        env_file=str(PROJECT_ROOT / ".env"),
+        extra="ignore"
+    )
 
 
 # ── Singleton instances ──────────────────────────────────────────────────────

@@ -54,6 +54,24 @@ def mock_openmeteo_forecast(monkeypatch):
 
     monkeypatch.setattr(requests, "get", mock_get)
 
+# 1b. Mock LLM calls by default to prevent slow local CPU generation during unit tests
+@pytest.fixture(autouse=True)
+def mock_llm_provider_for_tests(monkeypatch):
+    try:
+        from api.services.llm.llm_service import llm_service
+        from api.services.llm.providers.mock_provider import MockLLMProvider
+        from api.services.llm.ollama_provider import OllamaProvider
+
+        monkeypatch.setattr(OllamaProvider, "is_available", lambda self: False)
+
+        orig_provider = getattr(llm_service.orchestrator, "_default_provider", None)
+        llm_service.orchestrator._default_provider = MockLLMProvider()
+        yield
+        if orig_provider is not None:
+            llm_service.orchestrator._default_provider = orig_provider
+    except Exception:
+        yield
+
 # 2. Automatically unwrap standard response envelopes in TestClient for existing tests
 original_request = TestClient.request
 

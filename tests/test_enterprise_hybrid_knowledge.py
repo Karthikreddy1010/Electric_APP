@@ -20,6 +20,7 @@ import sys
 import os
 import asyncio
 import time
+import pytest
 
 # Ensure project root is in path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -248,6 +249,7 @@ def test_7_output_validator_live_evidence():
 from api.services.llm.mock_provider import MockLLMProvider
 
 
+@pytest.mark.asyncio
 async def test_8_end_to_end_four_scenarios():
     print_header("Test 8: End-to-End Execution of 4 Canonical Query Scenarios")
     orchestrator = AIOrchestrator(default_provider=MockLLMProvider())

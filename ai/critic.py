@@ -24,16 +24,22 @@ class ProgrammaticClaimValidator:
 
     @staticmethod
     def extract_numbers(text: str) -> List[float]:
-        """Layer 1: Numeric Extractor. Extracts meaningful numeric claims, filtering out years and reference IDs."""
+        """Layer 1: Numeric Extractor. Extracts meaningful numeric claims, filtering out years, list indexes, and reference IDs."""
+        # Strip out numbered list prefixes like "1. ", "2. ", "1) ", "2) "
+        cleaned_text = re.sub(r'(?:^|\n|\s)\d+[\.\)]\s+', ' ', text)
+        # Strip out times like "10 PM", "8 AM", "2:00"
+        cleaned_text = re.sub(r'\b\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)\b', ' ', cleaned_text)
+
         # Find currency amounts, percentages, kWh, cents/kWh, and raw numbers
-        raw_matches = re.findall(r'[\$\s]?(\d+(?:\.\d+)?)\s*(?:%|kWh|cents\/kWh|\b)?', text)
+        raw_matches = re.findall(r'[\$\s]?(\d+(?:\.\d+)?)\s*(?:%|kWh|cents\/kWh|\b)?', cleaned_text)
         numbers = []
         for m in raw_matches:
             try:
                 val = float(m)
-                # Ignore trivial small integers like 1, 2 (often bullet points or formatting)
-                if val in [1.0, 2.0, 3.0, 4.0, 5.0] and not ("$" in text or "%" in text or "kWh" in text):
-                    continue
+                # Ignore small formatting integers (1 to 10) unless preceded by $ or followed by % / kWh in original
+                if val.is_integer() and 1 <= val <= 10:
+                    if not re.search(r'[\$]\s*' + re.escape(m) + r'\b|\b' + re.escape(m) + r'\s*(?:%|kWh|cents)', text):
+                        continue
                 # Filter out year numbers (2020-2030) and EIA form reference numbers
                 if (2020 <= val <= 2030) or val in [861.0, 923.0, 930.0]:
                     continue
@@ -90,9 +96,15 @@ class ProgrammaticClaimValidator:
                     if isinstance(v, (int, float)):
                         approved_numbers.add(round(float(v), 2))
 
-        # Generate allowed arithmetic derivations (differences, ratios)
+        # Generate allowed arithmetic derivations (differences, ratios, and cent/dollar unit scaling)
         derived_numbers: Set[float] = set()
         num_list = list(approved_numbers)
+        for x in num_list:
+            derived_numbers.add(round(x * 100.0, 4))
+            derived_numbers.add(round(x / 100.0, 4))
+            derived_numbers.add(round(x * 12.0, 2))  # Annualized (12 months)
+            derived_numbers.add(round(x / 12.0, 2))  # Monthly from annual
+
         for i in range(len(num_list)):
             for j in range(i + 1, len(num_list)):
                 a, b = num_list[i], num_list[j]

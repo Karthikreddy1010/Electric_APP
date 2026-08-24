@@ -145,14 +145,16 @@ class TestForecastModel:
         demand_df = pd.DataFrame(demand_rows)
 
         # Mock DB to return demand but NO weather, and block API fetch fallback
-        with patch.object(forecaster, "_load_demand_from_db", return_value=demand_df):
-            with patch.object(forecaster, "_load_weather_from_db", return_value=pd.DataFrame()):
-                with patch(
-                    "data_pipeline.weather_service.fetch_historical_weather",
-                    side_effect=ConnectionError("Mocked: no API available"),
-                ):
-                    with pytest.raises(ValueError, match="[Ww]eather"):
-                        forecaster.prepare_data()
+        with patch("data_pipeline.nrel_processor.get_nrel_processor") as mock_nrel:
+            mock_nrel.return_value.load_daily.return_value = pd.DataFrame()
+            with patch.object(forecaster, "_load_demand_from_db", return_value=demand_df):
+                with patch.object(forecaster, "_load_weather_from_db", return_value=pd.DataFrame()):
+                    with patch(
+                        "data_pipeline.weather_service.fetch_historical_weather",
+                        side_effect=ConnectionError("Mocked: no API available"),
+                    ):
+                        with pytest.raises(ValueError, match="[Ww]eather"):
+                            forecaster.prepare_data()
 
     def test_weather_gaps_are_dropped(self):
         """Gaps in weather > 3 days (not interpolated) should be dropped, not zero-filled."""
@@ -191,13 +193,15 @@ class TestForecastModel:
             })
         weather_df = pd.DataFrame(weather_rows)
 
-        with patch.object(forecaster, "_load_demand_from_db", return_value=demand_df):
-            with patch.object(forecaster, "_load_weather_from_db", return_value=weather_df):
-                with patch(
-                    "data_pipeline.weather_service.fetch_historical_weather",
-                    side_effect=ConnectionError("Mocked: no API available")
-                ):
-                    clean_df = forecaster.prepare_data()
+        with patch("data_pipeline.nrel_processor.get_nrel_processor") as mock_nrel:
+            mock_nrel.return_value.load_daily.return_value = pd.DataFrame()
+            with patch.object(forecaster, "_load_demand_from_db", return_value=demand_df):
+                with patch.object(forecaster, "_load_weather_from_db", return_value=weather_df):
+                    with patch(
+                        "data_pipeline.weather_service.fetch_historical_weather",
+                        side_effect=ConnectionError("Mocked: no API available")
+                    ):
+                        clean_df = forecaster.prepare_data()
 
         # 1 day dropped (2023-02-04)
         assert len(clean_df) == 99

@@ -1,7 +1,7 @@
 import time
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
@@ -26,21 +26,22 @@ class StandardResponseMiddleware(BaseHTTPMiddleware):
     Format for error:
     {
         "success": false,
-        "error_code": "BAD_REQUEST",
-        "message": "Error details",
-        "details": {}
+        "message": "Validation Error / Internal Server Error",
+        "errors": [...],
+        "execution_time_ms": 5.67,
+        "timestamp": "2026-07-07T09:44:00Z",
+        "version": "1.0.0"
     }
     """
 
+    def __init__(self, app, version: str = "1.0.0"):
+        super().__init__(app)
+        self.version = version
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        # Exclude system endpoints, static files, and metric scrapers from wrapping
+        # Pass-through documentation and health/metrics endpoints directly
         path = request.url.path
-        if (
-            path == "/health"
-            or path == "/metrics"
-            or path.startswith("/static")
-            or path.startswith("/app")
-        ):
+        if path in ["/docs", "/redoc", "/openapi.json", "/health", "/metrics"] or path.startswith("/static"):
             return await call_next(request)
 
         start_time = time.perf_counter()
@@ -59,7 +60,7 @@ class StandardResponseMiddleware(BaseHTTPMiddleware):
                 response_body += chunk
 
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 2)
-            timestamp = datetime.utcnow().isoformat() + "Z"
+            timestamp = datetime.now(timezone.utc).isoformat()
 
             try:
                 data = json.loads(response_body.decode("utf-8"))

@@ -92,13 +92,7 @@ def process_bill_ai_task(bill_id: Union[str, int]):
 
         try:
             import asyncio
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            res = loop.run_until_complete(
+            res = asyncio.run(
                 llm_service.generate_explanation(
                     task="bill_analysis",
                     context_data=ctx,

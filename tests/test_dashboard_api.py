@@ -3,8 +3,6 @@ from fastapi.testclient import TestClient
 from api.main import app
 import numpy as np
 
-client = TestClient(app)
-
 def test_overview_schema():
     with TestClient(app) as client:
         # First call (Cache Miss)

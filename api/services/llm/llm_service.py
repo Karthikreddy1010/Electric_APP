@@ -40,20 +40,28 @@ class LLMService:
         **kwargs: Any
     ) -> Dict[str, Any]:
         """
-        Executes the full grounded AI pipeline and returns the legacy-format dict:
+        Executes the AI orchestration pipeline and returns the structured dict:
             {success, text, explanation, answer, metadata}
         """
-        from ai.agent import grounded_agent
-        query = user_message or context_data.get("user_message") or context_data.get("prompt") or task or "Explain bill details"
-        tier_str = user_tier.value if hasattr(user_tier, "value") else str(user_tier)
+        if task == "grounded_chat":
+            from ai.agent import grounded_agent
+            query = user_message or context_data.get("user_message") or context_data.get("prompt") or task or "Explain bill details"
+            tier_str = user_tier.value if hasattr(user_tier, "value") else str(user_tier)
+            return await grounded_agent.execute(
+                user_query=query,
+                context_data=context_data,
+                current_tab=context_data.get("current_tab"),
+                user_tier=tier_str
+            )
 
-        res = await grounded_agent.execute(
-            user_query=query,
+        return await self.orchestrator.execute(
+            task=task,
             context_data=context_data,
-            current_tab=context_data.get("current_tab"),
-            user_tier=tier_str
+            user_message=user_message,
+            bypass_cache=bypass_cache,
+            user_tier=user_tier,
+            **kwargs
         )
-        return res
 
     async def stream_explanation(
         self,
@@ -63,11 +71,22 @@ class LLMService:
         user_tier: UserTier = UserTier.FREE,
         **kwargs: Any
     ) -> AsyncGenerator[str, None]:
-        """Stream LLM response tokens from GroundedAgent."""
-        from ai.agent import grounded_agent
-        query = user_message or context_data.get("user_message") or task or "Explain bill details"
-        tier_str = user_tier.value if hasattr(user_tier, "value") else str(user_tier)
-        async for token in grounded_agent.stream(user_query=query, user_tier=tier_str):
+        """Stream LLM response tokens from AIOrchestrator."""
+        if task == "grounded_chat":
+            from ai.agent import grounded_agent
+            query = user_message or context_data.get("user_message") or task or "Explain bill details"
+            tier_str = user_tier.value if hasattr(user_tier, "value") else str(user_tier)
+            async for token in grounded_agent.stream(user_query=query, user_tier=tier_str):
+                yield token
+            return
+
+        async for token in self.orchestrator.stream(
+            task=task,
+            context_data=context_data,
+            user_message=user_message,
+            user_tier=user_tier,
+            **kwargs
+        ):
             yield token
 
 

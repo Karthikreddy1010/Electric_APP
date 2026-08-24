@@ -2,7 +2,7 @@
 Central configuration for the Electricity Cost AI platform.
 Uses pydantic-settings for validation and .env file support.
 """
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional
 from pathlib import Path
@@ -28,10 +28,11 @@ class DatabaseSettings(BaseSettings):
     # Fallback: local SQLite for dev
     sqlite_path: str = str(BASE_DIR / "data" / "electricity.db")
 
-    class Config:
-        env_prefix = "DB_"
-        env_file = str(BASE_DIR / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="DB_",
+        env_file=str(BASE_DIR / ".env"),
+        extra="ignore"
+    )
 
 
 class APISettings(BaseSettings):
@@ -43,10 +44,11 @@ class APISettings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     cache_ttl_seconds: int = 300  # 5 min default cache
 
-    class Config:
-        env_prefix = "API_"
-        env_file = str(BASE_DIR / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="API_",
+        env_file=str(BASE_DIR / ".env"),
+        extra="ignore"
+    )
 
 
 class ModelSettings(BaseSettings):
@@ -71,10 +73,11 @@ class ModelSettings(BaseSettings):
     # Monte Carlo
     mc_simulations: int = 10_000
 
-    class Config:
-        env_prefix = "MODEL_"
-        env_file = str(BASE_DIR / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="MODEL_",
+        env_file=str(BASE_DIR / ".env"),
+        extra="ignore"
+    )
 
 
 class DataSourceSettings(BaseSettings):
@@ -90,10 +93,11 @@ class DataSourceSettings(BaseSettings):
     processed_data_dir: str = str(BASE_DIR / "data" / "processed")
     parquet_dir: str = str(BASE_DIR / "data" / "parquet")
 
-    class Config:
-        env_prefix = "DATA_"
-        env_file = str(BASE_DIR / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="DATA_",
+        env_file=str(BASE_DIR / ".env"),
+        extra="ignore"
+    )
 
 
 class LLMSettings(BaseSettings):
@@ -138,10 +142,11 @@ class LLMSettings(BaseSettings):
     feature_sglang: bool = True
     feature_reports: bool = True
 
-    class Config:
-        env_prefix = "LLM_"
-        env_file = str(BASE_DIR / ".env")
-        extra = "ignore"
+    model_config = SettingsConfigDict(
+        env_prefix="LLM_",
+        env_file=str(BASE_DIR / ".env"),
+        extra="ignore"
+    )
 
 
 

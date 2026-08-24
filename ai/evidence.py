@@ -58,41 +58,33 @@ class EvidenceValidationEngine:
 
             # 1. Process get_bill_details / components
             if t_name in ["get_bill_details", "get_bill_components"]:
-                if "usage_kwh" in data:
-                    claims.append(ClaimItem(
-                        claim_id=f"claim_{claim_counter}",
-                        claim_text=f"Customer electricity usage is {data['usage_kwh']} kWh",
-                        numeric_value=float(data["usage_kwh"]),
-                        unit="kWh",
-                        tool_name=t_name,
-                        raw_output_key="usage_kwh",
-                        source_provenance=src_meta
-                    ))
-                    claim_counter += 1
-
-                if "total_bill" in data:
-                    claims.append(ClaimItem(
-                        claim_id=f"claim_{claim_counter}",
-                        claim_text=f"Customer total electricity bill is ${data['total_bill']}",
-                        numeric_value=float(data["total_bill"]),
-                        unit="$",
-                        tool_name=t_name,
-                        raw_output_key="total_bill",
-                        source_provenance=src_meta
-                    ))
-                    claim_counter += 1
-
-                if "effective_rate_cents_per_kwh" in data:
-                    claims.append(ClaimItem(
-                        claim_id=f"claim_{claim_counter}",
-                        claim_text=f"Effective electricity rate is {data['effective_rate_cents_per_kwh']} cents/kWh",
-                        numeric_value=float(data["effective_rate_cents_per_kwh"]),
-                        unit="cents/kWh",
-                        tool_name=t_name,
-                        raw_output_key="effective_rate_cents_per_kwh",
-                        source_provenance=src_meta
-                    ))
-                    claim_counter += 1
+                for k, v in data.items():
+                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                        claims.append(ClaimItem(
+                            claim_id=f"claim_{claim_counter}",
+                            claim_text=f"Bill metric {k} is {v}",
+                            numeric_value=float(v),
+                            unit="$" if "charge" in k or "bill" in k or "tax" in k or "cost" in k else ("kWh" if "kwh" in k else None),
+                            tool_name=t_name,
+                            raw_output_key=k,
+                            source_provenance=src_meta
+                        ))
+                        claim_counter += 1
+                if isinstance(data.get("components"), list):
+                    for comp in data["components"]:
+                        if isinstance(comp, dict):
+                            for ck, cv in comp.items():
+                                if isinstance(cv, (int, float)) and not isinstance(cv, bool):
+                                    claims.append(ClaimItem(
+                                        claim_id=f"claim_{claim_counter}",
+                                        claim_text=f"Component {comp.get('name', 'item')} {ck} is {cv}",
+                                        numeric_value=float(cv),
+                                        unit="$" if "amount" in ck or "cost" in ck else None,
+                                        tool_name=t_name,
+                                        raw_output_key=f"component_{ck}",
+                                        source_provenance=src_meta
+                                    ))
+                                    claim_counter += 1
 
             # 2. Process get_state_electricity_price, eia_api_tool, & authoritative_web_search_tool (if it contains price data)
             elif t_name in ["get_state_electricity_price", "eia_api_tool"] or (t_name == "authoritative_web_search_tool" and "price_cents_per_kwh" in data):
@@ -131,16 +123,18 @@ class EvidenceValidationEngine:
                         unit="$",
                         deterministic_engine=out.get("deterministic_engine", "calculate_kwh_scenario")
                     ))
-                    claims.append(ClaimItem(
-                        claim_id=f"claim_{claim_counter}",
-                        claim_text=f"Reducing usage by {kwh_red} kWh saves ${savings} per month ({pct_red}% reduction)",
-                        numeric_value=float(savings),
-                        unit="$",
-                        tool_name=t_name,
-                        raw_output_key="monthly_savings_dollars",
-                        source_provenance=src_meta
-                    ))
-                    claim_counter += 1
+                    for k, v in data.items():
+                        if isinstance(v, (int, float)) and not isinstance(v, bool):
+                            claims.append(ClaimItem(
+                                claim_id=f"claim_{claim_counter}",
+                                claim_text=f"Scenario {k} is {v}",
+                                numeric_value=float(v),
+                                unit="$" if "dollar" in k or "cost" in k or "savings" in k else ("%" if "pct" in k or "percentage" in k else ("kWh" if "kwh" in k else None)),
+                                tool_name=t_name,
+                                raw_output_key=k,
+                                source_provenance=src_meta
+                            ))
+                            claim_counter += 1
 
             # 4. Process calculate_component_change
             elif t_name == "calculate_component_change":
