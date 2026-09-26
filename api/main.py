@@ -423,6 +423,7 @@ async def add_security_headers(request: Request, call_next):
 # ── Register modular routers ────────────────────────────────────────────────
 from api.routes.health import router as health_router
 from api.routes.auth_router import router as auth_router
+from api.routes.oauth_router import router as google_oauth_router
 from api.routes.dashboard import router as dashboard_router
 from api.routes.billing import router as billing_router
 from api.routes.geo_insights import router as geo_insights_router
@@ -455,6 +456,7 @@ from api.routes.tariff_optimization import router as tariff_optimization_router
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(google_oauth_router)
 app.include_router(users_router)
 app.include_router(dashboard_router)
 app.include_router(billing_router, prefix="/billing")

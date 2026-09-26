@@ -87,6 +87,20 @@ class AuthConfig:
     SMTP_USE_TLS: bool = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
     EMAIL_CONSOLE_ONLY: bool = os.environ.get("EMAIL_CONSOLE_ONLY", "true").lower() == "true"
 
+    # ── Google OAuth ─────────────────────────────────────────────────────────
+    # Created in Google Cloud Console → APIs & Services → Credentials →
+    # OAuth client ID (type: Web application). The redirect URI registered
+    # there must match GOOGLE_REDIRECT_URI exactly, including scheme and port.
+    GOOGLE_CLIENT_ID: str = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+    GOOGLE_CLIENT_SECRET: str = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
+    GOOGLE_REDIRECT_URI: str = os.environ.get(
+        "GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/google/callback"
+    ).strip()
+
+    @property
+    def google_oauth_configured(self) -> bool:
+        return bool(self.GOOGLE_CLIENT_ID and self.GOOGLE_CLIENT_SECRET)
+
     # ── CSRF ─────────────────────────────────────────────────────────────────
     CSRF_COOKIE_NAME: str = "csrf_token"
     CSRF_HEADER_NAME: str = "X-CSRF-Token"
