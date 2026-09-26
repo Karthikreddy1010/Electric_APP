@@ -5,13 +5,15 @@
  * Architecture rule: Overview summarizes.
  * Preserves all underlying data hooks, calculations, routing, and interactions.
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { useBill } from '../../context/BillContext.tsx';
 import { useNavigation } from '../../context/NavigationContext.tsx';
 import { useUserDashboard, useInvalidateDashboard } from '../../hooks/useUserDashboard.ts';
 import apiClient from '../../lib/apiClient.ts';
 import RecentBillsCard from '../../components/shared/RecentBillsCard.tsx';
+import { LoadingState, ErrorState, EmptyState } from '../../components/shared/DataStates.tsx';
 import {
   ShieldAlert,
   Zap,
@@ -29,6 +31,27 @@ import {
   Gauge,
   Info
 } from 'lucide-react';
+
+/** Weekday labels for the demand heatmap rows. */
+const HEATMAP_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const;
+
+/** Shape of GET /billing/trends (api/schemas.py :: TrendResponse). */
+interface TrendResponse {
+  months: string[];
+  total_bills: number[];
+  usage: number[];
+  rates: number[];
+  yoy_changes: (number | null)[];
+  mom_changes?: (number | null)[] | null;
+}
+
+/** "2024-10" → "Oct". Falls back to the raw value if it is not YYYY-MM. */
+function formatMonthLabel(month: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!m) return month;
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+  return date.toLocaleString(undefined, { month: 'short' });
+}
 
 // ─── Reusable Enterprise SaaS KPI Card Component ─────────────────────────────
 interface SaaSExecutiveKpiCardProps {
@@ -54,7 +77,7 @@ const SaaSExecutiveKpiCard = ({
   secondaryInfo,
   statusBadge,
   icon,
-  iconBgColor = 'bg-blue-50 text-blue-600 border-blue-100',
+  iconBgColor = 'bg-primary-blue/10 text-primary-blue border-primary-blue/20',
   targetTab,
   onClick,
 }: SaaSExecutiveKpiCardProps) => {
@@ -71,7 +94,7 @@ const SaaSExecutiveKpiCard = ({
     <div
       id={id}
       onClick={handleClick}
-      className={`h-full bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between group ${
+      className={`h-full bg-bg-surface rounded-2xl border border-border-hairline p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between group ${
         targetTab || onClick ? 'cursor-pointer' : 'cursor-default'
       }`}
       aria-label={`${label}: ${value}${unit ? ' ' + unit : ''}`}
@@ -90,7 +113,7 @@ const SaaSExecutiveKpiCard = ({
 
       {/* KPI Title Row (Full-width for maximum clarity) */}
       <div className="mb-2">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+        <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">
           {label}
         </span>
       </div>
@@ -98,15 +121,15 @@ const SaaSExecutiveKpiCard = ({
       {/* Middle Section: Large Metric Value & Unit */}
       <div className="flex flex-col mb-4">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans">
+          <span className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight font-sans">
             {value}
           </span>
           {unit && (
-            <span className="text-sm font-medium text-slate-500">{unit}</span>
+            <span className="text-sm font-medium text-text-secondary">{unit}</span>
           )}
         </div>
         {secondaryInfo && (
-          <div className="mt-1 text-xs text-slate-500 font-medium">
+          <div className="mt-1 text-xs text-text-secondary font-medium">
             {secondaryInfo}
           </div>
         )}
@@ -114,7 +137,7 @@ const SaaSExecutiveKpiCard = ({
 
       {/* Bottom Section: Short Description */}
       <div className="mt-auto pt-2">
-        <p className="text-xs text-slate-500 font-normal leading-relaxed">
+        <p className="text-xs text-text-secondary font-normal leading-relaxed">
           {description}
         </p>
       </div>
@@ -132,35 +155,35 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
       <div
         id="kpi-forecast"
         onClick={() => navigate('Forecast')}
-        className="h-full bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer group"
+        className="h-full bg-bg-surface rounded-2xl border border-border-hairline p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer group"
       >
         {/* Top Row: Icon & Status Badge */}
         <div className="flex items-center justify-between mb-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-50 text-amber-600 border border-amber-100 shrink-0">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-warning-amber/10 text-warning-amber border border-warning-amber/20 shrink-0">
             <BarChart3 className="w-5 h-5" />
           </div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 shrink-0">
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-bg-secondary text-text-secondary border border-border-hairline shrink-0">
             Unavailable
           </span>
         </div>
 
         {/* KPI Title Row */}
         <div className="mb-2">
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+          <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">
             Next Month Forecast
           </span>
         </div>
 
         {/* Middle Section */}
         <div className="flex items-baseline gap-1.5 mb-4">
-          <span className="text-2xl sm:text-3xl font-extrabold text-slate-400 tracking-tight font-sans">
+          <span className="text-2xl sm:text-3xl font-extrabold text-text-secondary tracking-tight font-sans">
             Unavailable
           </span>
         </div>
 
         {/* Bottom Section */}
         <div className="mt-auto pt-2">
-          <p className="text-xs text-slate-500 font-normal leading-relaxed">
+          <p className="text-xs text-text-secondary font-normal leading-relaxed">
             Upload consecutive monthly bills to enable AI forecasting.
           </p>
         </div>
@@ -175,35 +198,35 @@ const ForecastKpiCard = ({ forecastResults, navigate }: { forecastResults: any; 
     <div
       id="kpi-forecast"
       onClick={() => navigate('Forecast')}
-      className="h-full bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer group"
+      className="h-full bg-bg-surface rounded-2xl border border-border-hairline p-6 shadow-xs hover:shadow-md hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between cursor-pointer group"
     >
       {/* Top Row: Icon & Status Badge */}
       <div className="flex items-center justify-between mb-3">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-amber-50 text-amber-600 border border-amber-100 shrink-0">
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-warning-amber/10 text-warning-amber border border-warning-amber/20 shrink-0">
           <BarChart3 className="w-5 h-5" />
         </div>
-        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 shrink-0">
+        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-warning-amber/10 text-warning-amber border border-warning-amber/20 shrink-0">
           {`${confidence_score.toFixed(0)}% ${confidence_level}`}
         </span>
       </div>
 
       {/* KPI Title Row */}
       <div className="mb-2">
-        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+        <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">
           Next Month Forecast
         </span>
       </div>
 
       {/* Middle Section */}
       <div className="flex items-baseline gap-1.5 mb-4">
-        <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight font-sans">
+        <span className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight font-sans">
           ${(predictedBill as number).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
 
       {/* Bottom Section */}
       <div className="mt-auto pt-2">
-        <p className="text-xs text-slate-500 font-normal leading-relaxed">
+        <p className="text-xs text-text-secondary font-normal leading-relaxed">
           Predicted next billing cycle expenditure based on historical degree days & load curves.
         </p>
       </div>
@@ -219,41 +242,44 @@ const ExecutiveHeader = ({
   dashboardMode,
   setDashboardMode,
   loadingMeter,
+  lastSyncedAt,
 }: {
   utilityName: string;
   billingCycle: string;
   tariff: string;
+  /** When the dashboard payload actually arrived; null before the first load. */
+  lastSyncedAt: Date | null;
   dashboardMode: 'billing' | 'metering';
   setDashboardMode: (mode: 'billing' | 'metering') => void;
   loadingMeter?: boolean;
 }) => {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/80 p-5 md:p-6 mb-6 shadow-xs">
+    <div className="bg-bg-surface rounded-2xl border border-border-hairline p-5 md:p-6 mb-6 shadow-xs">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
         {/* Title & Organization */}
         <div className="space-y-1">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-xl md:text-2xl font-bold text-text-primary tracking-tight">
               Executive Energy Intelligence
             </h1>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-              <Sparkles size={12} className="text-blue-600" /> ElectricAI Enterprise
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary-blue/10 text-primary-blue border border-primary-blue/20">
+              <Sparkles size={12} className="text-primary-blue" /> ElectricAI Enterprise
             </span>
           </div>
-          <p className="text-xs md:text-sm text-slate-500 font-medium leading-relaxed">
+          <p className="text-xs md:text-sm text-text-secondary font-medium leading-relaxed">
             Operational telemetry and high-precision financial analysis for enterprise facilities
           </p>
         </div>
  
         {/* Active Context Indicators & Mode Selector */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200">
+          <div className="flex items-center gap-1 bg-bg-secondary p-0.5 rounded-xl border border-border-hairline">
             <button
               onClick={() => setDashboardMode('billing')}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold ${
                 dashboardMode === 'billing'
-                  ? 'bg-white text-slate-900 border border-slate-200 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs font-bold'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               Billing
@@ -262,38 +288,45 @@ const ExecutiveHeader = ({
               onClick={() => setDashboardMode('metering')}
               className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer font-semibold flex items-center gap-1.5 ${
                 dashboardMode === 'metering'
-                  ? 'bg-white text-slate-900 border border-slate-200 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs font-bold'
+                  : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               Smart Meter
               {loadingMeter && (
-                <RefreshCw size={10} className="animate-spin text-blue-600" />
+                <RefreshCw size={10} className="animate-spin text-primary-blue" />
               )}
             </button>
           </div>
 
-          <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col">
-            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Utility Provider</span>
-            <span className="font-semibold text-slate-800 truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
+          <div className="px-3 py-1.5 rounded-xl bg-bg-secondary border border-border-hairline flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-text-secondary tracking-wider">Utility Provider</span>
+            <span className="font-semibold text-text-primary truncate max-w-[180px]" title={utilityName}>{utilityName}</span>
           </div>
-          <div className="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col">
-            <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Rate Schedule</span>
-            <span className="font-semibold text-slate-800 truncate max-w-[200px]" title={tariff}>{tariff}</span>
+          <div className="px-3 py-1.5 rounded-xl bg-bg-secondary border border-border-hairline flex flex-col">
+            <span className="text-[9px] uppercase font-bold text-text-secondary tracking-wider">Rate Schedule</span>
+            <span className="font-semibold text-text-primary truncate max-w-[200px]" title={tariff}>{tariff}</span>
           </div>
         </div>
       </div>
 
       {/* Sync Status Sub-bar */}
-      <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+      <div className="mt-3.5 pt-3 border-t border-border-hairline flex items-center justify-between text-xs text-text-secondary">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-          <span>Last synchronized: <strong>5 mins ago</strong></span>
-          <span className="text-slate-300">•</span>
-          <span>Data confidence: 99.4%</span>
+          <span
+            className={`inline-block w-2 h-2 rounded-full shrink-0 ${
+              lastSyncedAt ? 'bg-savings-green' : 'bg-text-secondary'
+            }`}
+            aria-hidden="true"
+          />
+          <span>
+            {lastSyncedAt
+              ? <>Last synchronized: <strong>{lastSyncedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong></>
+              : 'Not yet synchronized'}
+          </span>
         </div>
-        <div className="text-slate-400 text-[11px] hidden sm:block font-medium">
-          Grid Model API v2.4 • Period: <strong className="text-slate-700 font-semibold">{billingCycle}</strong>
+        <div className="text-text-secondary text-[11px] hidden sm:block font-medium">
+          Period: <strong className="text-text-primary font-semibold">{billingCycle}</strong>
         </div>
       </div>
     </div>
@@ -310,9 +343,9 @@ const ExecutiveAiSummary = ({
   aiExplanation,
   activeBillId,
 }: {
-  currentBill: number;
-  billChangePct: number;
-  savingsOpportunity: number;
+  currentBill: number | null;
+  billChangePct: number | null;
+  savingsOpportunity: number | null;
   forecastBill: number;
   aiStatus?: string;
   aiExplanation?: string;
@@ -348,7 +381,7 @@ const ExecutiveAiSummary = ({
     if (aiStatus === 'offline' || aiStatus === 'fallback') {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
-          <Info size={11} className="text-amber-400" />
+          <Info size={11} className="text-warning-amber" />
           AI Offline (Deterministic Active)
         </span>
       );
@@ -356,14 +389,14 @@ const ExecutiveAiSummary = ({
     if (aiStatus === 'failed') {
       return (
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-400/30">
-          <AlertTriangle size={11} className="text-rose-400" />
+          <AlertTriangle size={11} className="text-alert-red" />
           AI Temporarily Delayed
         </span>
       );
     }
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-        <CheckCircle2 size={11} className="text-emerald-400" />
+        <CheckCircle2 size={11} className="text-savings-green" />
         AI Insights Ready
       </span>
     );
@@ -378,7 +411,7 @@ const ExecutiveAiSummary = ({
         {/* Header Row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-primary-blue">
               <Sparkles size={20} />
             </div>
             <div>
@@ -386,7 +419,7 @@ const ExecutiveAiSummary = ({
                 <h2 className="text-lg font-bold text-white tracking-tight">Executive AI Summary</h2>
                 {statusBadge}
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">Automated synthesis across billing telemetry and load curves</p>
+              <p className="text-xs text-text-secondary mt-0.5">Automated synthesis across billing telemetry and load curves</p>
             </div>
           </div>
 
@@ -398,7 +431,7 @@ const ExecutiveAiSummary = ({
                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-xs font-semibold border border-slate-700 transition-all shrink-0"
                 title="Regenerate AI insights without re-running deterministic bill math"
               >
-                <Sparkles size={13} className={isRegenerating ? 'animate-spin text-blue-400' : 'text-slate-400'} />
+                <Sparkles size={13} className={isRegenerating ? 'animate-spin text-primary-blue' : 'text-text-secondary'} />
                 <span>{isRegenerating ? 'Queuing...' : 'Regenerate AI'}</span>
               </button>
             )}
@@ -414,37 +447,53 @@ const ExecutiveAiSummary = ({
         {/* 4 Summary Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-5">
           <div className="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">Why Bill Changed</div>
+            <div className="text-[11px] font-medium text-text-secondary uppercase tracking-wider mb-1">Why Bill Changed</div>
             <div className="text-sm font-semibold text-slate-100">
-              +{billChangePct.toFixed(1)}% demand surge
+              {billChangePct === null
+                ? 'Unavailable'
+                : `${billChangePct >= 0 ? '+' : ''}${billChangePct.toFixed(1)}% vs last period`}
             </div>
             <div className="text-xs text-slate-300 mt-1 leading-relaxed">
               {aiExplanation
                 ? aiExplanation.slice(0, 120) + '...'
-                : 'Peak demand charges increased due to weekday afternoon HVAC cooling cycles.'}
+                : 'Upload two consecutive bills to see what moved your charges.'}
             </div>
           </div>
 
           <div className="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">Largest Component</div>
-            <div className="text-sm font-semibold text-slate-100">Distribution Charges</div>
-            <div className="text-xs text-slate-300 mt-1 leading-relaxed">
-              Distribution & demand surcharges constitute <strong className="text-blue-300">42%</strong> of current bill (${(currentBill * 0.42).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).
-            </div>
-          </div>
-
-          <div className="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">Estimated Savings</div>
-            <div className="text-sm font-semibold text-emerald-400 font-mono">
-              ${savingsOpportunity > 0 ? savingsOpportunity.toLocaleString('en-US', { minimumFractionDigits: 2 }) : '4,350.00'} / mo
+            <div className="text-[11px] font-medium text-text-secondary uppercase tracking-wider mb-1">Largest Component</div>
+            <div className="text-sm font-semibold text-slate-100">
+              {currentBill === null ? 'Unavailable' : 'Distribution Charges'}
             </div>
             <div className="text-xs text-slate-300 mt-1 leading-relaxed">
-              Identified via TOU rate switching and automated peak-demand load curtailment.
+              {currentBill === null ? (
+                'Upload a utility bill to see which component dominates your charges.'
+              ) : (
+                <>
+                  Distribution &amp; demand surcharges constitute{' '}
+                  <strong className="text-blue-300">42%</strong> of current bill ($
+                  {(currentBill * 0.42).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).
+                </>
+              )}
             </div>
           </div>
 
           <div className="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
-            <div className="text-[11px] font-medium text-slate-400 uppercase tracking-wider mb-1">Forecast Trend</div>
+            <div className="text-[11px] font-medium text-text-secondary uppercase tracking-wider mb-1">Estimated Savings</div>
+            <div className="text-sm font-semibold text-savings-green font-mono">
+              {savingsOpportunity !== null && savingsOpportunity > 0
+                ? `$${savingsOpportunity.toLocaleString('en-US', { minimumFractionDigits: 2 })} / mo`
+                : 'Unavailable'}
+            </div>
+            <div className="text-xs text-slate-300 mt-1 leading-relaxed">
+              {savingsOpportunity !== null && savingsOpportunity > 0
+                ? 'Identified via TOU rate switching and automated peak-demand load curtailment.'
+                : 'Upload a utility bill to see modelled savings opportunities.'}
+            </div>
+          </div>
+
+          <div className="bg-slate-800/60 rounded-xl p-3.5 border border-slate-700/60">
+            <div className="text-[11px] font-medium text-text-secondary uppercase tracking-wider mb-1">Forecast Trend</div>
             <div className="text-sm font-semibold text-amber-300 font-mono">
               {forecastBill > 0 ? `$${forecastBill.toLocaleString('en-US', { minimumFractionDigits: 2 })}` : 'Unavailable'}
             </div>
@@ -459,11 +508,11 @@ const ExecutiveAiSummary = ({
         {/* Recommended Action Highlight Banner */}
         <div className="bg-blue-950/60 rounded-xl p-3.5 border border-blue-500/30 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-savings-green flex items-center justify-center shrink-0">
               <CheckCircle2 size={16} />
             </div>
             <div>
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block">Recommended Action</span>
+              <span className="text-xs font-bold text-savings-green uppercase tracking-wider block">Recommended Action</span>
               <p className="text-xs md:text-sm text-slate-200 font-medium mt-0.5">
                 Shift heavy chiller and HVAC pre-cooling cycles past 7 PM to capture secondary off-peak rates.
               </p>
@@ -500,32 +549,32 @@ const SmartAlertCard = ({
   const isMedium = severity === 'medium';
 
   const severityColor = isHigh
-    ? 'border-l-rose-500 bg-rose-50/50 text-rose-900'
+    ? 'border-l-rose-500 bg-alert-red/10 text-alert-red'
     : isMedium
-    ? 'border-l-amber-500 bg-amber-50/50 text-amber-900'
-    : 'border-l-blue-500 bg-blue-50/50 text-blue-900';
+    ? 'border-l-amber-500 bg-warning-amber/10 text-warning-amber'
+    : 'border-l-blue-500 bg-primary-blue/10 text-primary-blue';
 
   const badgeColor = isHigh
-    ? 'bg-rose-100 text-rose-700'
+    ? 'bg-alert-red/10 text-alert-red'
     : isMedium
-    ? 'bg-amber-100 text-amber-700'
-    : 'bg-blue-100 text-blue-700';
+    ? 'bg-warning-amber/10 text-warning-amber'
+    : 'bg-primary-blue/10 text-primary-blue';
 
   return (
-    <div className={`p-4 rounded-xl border border-slate-200 border-l-4 ${severityColor} transition-all`}>
+    <div className={`p-4 rounded-xl border border-border-hairline border-l-4 ${severityColor} transition-all`}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full ${badgeColor}`}>
               {severity} Priority
             </span>
-            <h4 className="text-xs font-bold text-slate-900">{title}</h4>
+            <h4 className="text-xs font-bold text-text-primary">{title}</h4>
           </div>
-          <p className="text-xs text-slate-600 font-normal leading-relaxed">{description}</p>
+          <p className="text-xs text-text-secondary font-normal leading-relaxed">{description}</p>
         </div>
         <button
           onClick={onAction}
-          className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
+          className="text-xs font-bold text-primary-blue hover:text-primary-blue transition-colors shrink-0 flex items-center gap-1 cursor-pointer"
         >
           <span>{actionText}</span>
           <ChevronRight size={12} />
@@ -537,52 +586,102 @@ const SmartAlertCard = ({
 
 // ─── 5. Charts Section ────────────────────────────────────────────────────────
 const ChartsSection = () => {
-  const dummyChartData = [
-    { month: 'May', bill: 38200, usage: 132000 },
-    { month: 'Jun', bill: 41500, usage: 141000 },
-    { month: 'Jul', bill: 45800, usage: 154000 },
-    { month: 'Aug', bill: 44200, usage: 149000 },
-    { month: 'Sep', bill: 41200, usage: 138000 },
-    { month: 'Oct', bill: 42850, usage: 145200 },
-  ];
+  // Real historical billing + consumption, straight from the billing service.
+  // Previously this panel rendered six months of hardcoded figures under an
+  // "audited" heading; it now reflects whatever the backend actually holds.
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['billing-trends', 6],
+    queryFn: async () => (await apiClient.get<TrendResponse>('/billing/trends?months=6')).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const chartData = useMemo(() => {
+    if (!data?.months?.length) return [];
+    return data.months.map((month, i) => ({
+      month: formatMonthLabel(month),
+      bill: data.total_bills?.[i] ?? 0,
+      usage: data.usage?.[i] ?? 0,
+    }));
+  }, [data]);
+
+  const monthsCovered = chartData.length;
 
   return (
-    <div className="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs mb-8">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+    <div className="bg-bg-surface rounded-2xl p-6 border border-border-hairline shadow-sm mb-8">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-border-hairline">
         <div>
-          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Activity size={18} className="text-blue-600" /> Historical Billing & Consumption Trend
+          <h3 className="text-base font-bold text-text-primary flex items-center gap-2">
+            <Activity size={18} className="text-primary-blue" aria-hidden="true" /> Historical Billing &amp; Consumption Trend
           </h3>
-          <p className="text-xs text-slate-500 mt-0.5">Six-month audited utility expenditure vs volume load</p>
+          <p className="text-xs text-text-secondary mt-0.5">
+            {monthsCovered > 0
+              ? `Last ${monthsCovered} billing period${monthsCovered === 1 ? '' : 's'} of recorded expenditure vs volume load`
+              : 'Recorded utility expenditure vs volume load'}
+          </p>
         </div>
         <div className="flex items-center gap-4 text-xs font-semibold">
           <div className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-sm bg-blue-600" />
-            <span className="text-slate-600">Total Bill ($)</span>
+            <span className="w-3 h-3 rounded-sm bg-primary-blue" aria-hidden="true" />
+            <span className="text-text-secondary">Total Bill ($)</span>
           </div>
         </div>
       </div>
 
-      <div className="h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={dummyChartData}>
-            <defs>
-              <linearGradient id="billTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
-                <stop offset="95%" stopColor="#2563eb" stopOpacity={0.0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} />
-            <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`} />
-            <Tooltip formatter={(value: any) => [`$${Number(value).toLocaleString()}`, 'Total Bill']} />
-            <Area type="monotone" dataKey="bill" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#billTrendGrad)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {isLoading ? (
+        <LoadingState label="Loading billing history…" />
+      ) : isError ? (
+        <ErrorState
+          title="Could not load billing history"
+          message={(error as Error)?.message}
+          onRetry={() => void refetch()}
+        />
+      ) : chartData.length === 0 ? (
+        <EmptyState
+          title="No billing history yet"
+          message="Upload a utility bill and your month-over-month expenditure trend will appear here."
+        />
+      ) : (
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="billTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="var(--primary-blue)" stopOpacity={0.25} />
+                  <stop offset="95%" stopColor="var(--primary-blue)" stopOpacity={0.0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-hairline)" />
+              <XAxis dataKey="month" stroke="var(--text-secondary)" fontSize={11} />
+              <YAxis
+                stroke="var(--text-secondary)"
+                fontSize={11}
+                tickFormatter={(val: number) => `$${(val / 1000).toFixed(val >= 1000 ? 0 : 1)}k`}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-hairline)',
+                  borderRadius: 8,
+                  color: 'var(--text-primary)',
+                }}
+                formatter={(value) => [`$${Number(value ?? 0).toLocaleString()}`, 'Total Bill']}
+              />
+              <Area
+                type="monotone"
+                dataKey="bill"
+                stroke="var(--primary-blue)"
+                strokeWidth={2.5}
+                fillOpacity={1}
+                fill="url(#billTrendGrad)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 };
+
 
 // ─── 6. Executive Quick Actions ───────────────────────────────────────────────
 const QuickActions = () => {
@@ -593,7 +692,7 @@ const QuickActions = () => {
       id: 'qa-upload',
       title: 'Upload Utility Bill',
       desc: 'Ingest PDF statements or CSV intervals for instant AI parsing',
-      icon: <DollarSign className="w-5 h-5 text-blue-600" />,
+      icon: <DollarSign className="w-5 h-5 text-primary-blue" />,
       buttonText: 'Upload File',
       tab: 'Bill Analysis',
     },
@@ -601,7 +700,7 @@ const QuickActions = () => {
       id: 'qa-rate',
       title: 'Rate Schedule Match',
       desc: 'Simulate alternative commercial rate structures to optimize costs',
-      icon: <Activity className="w-5 h-5 text-indigo-600" />,
+      icon: <Activity className="w-5 h-5 text-primary-blue" />,
       buttonText: 'Compare Rates',
       tab: 'Impact & Simulation',
     },
@@ -609,7 +708,7 @@ const QuickActions = () => {
       id: 'qa-forecast',
       title: 'Load Forecasting',
       desc: 'Project future demand spikes and peak charges using ML models',
-      icon: <BarChart3 className="w-5 h-5 text-amber-600" />,
+      icon: <BarChart3 className="w-5 h-5 text-warning-amber" />,
       buttonText: 'View Forecast',
       tab: 'Forecast',
     },
@@ -625,7 +724,7 @@ const QuickActions = () => {
       id: 'qa-[#ai]',
       title: 'AI Tariff Copilot',
       desc: 'Interactive chat assistant for tariff rules, Peak Demand, and TOU',
-      icon: <ShieldAlert className="w-5 h-5 text-cyan-600" />,
+      icon: <ShieldAlert className="w-5 h-5 text-electric-cyan" />,
       buttonText: 'Open Copilot',
       tab: 'Impact & Simulation',
     },
@@ -635,8 +734,8 @@ const QuickActions = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-bold text-slate-900">Executive Quick Actions</h3>
-          <p className="text-xs text-slate-500 mt-0.5">High-frequency workflows and operational tools</p>
+          <h3 className="text-sm font-bold text-text-primary">Executive Quick Actions</h3>
+          <p className="text-xs text-text-secondary mt-0.5">High-frequency workflows and operational tools</p>
         </div>
       </div>
 
@@ -645,17 +744,17 @@ const QuickActions = () => {
           <div
             key={act.id}
             id={act.id}
-            className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer hover:-translate-y-0.5"
+            className="bg-bg-surface rounded-2xl border border-border-hairline p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between group cursor-pointer hover:-translate-y-0.5"
           >
             <div className="space-y-2.5">
-              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-bg-secondary border border-border-hairline flex items-center justify-center">
                 {act.icon}
               </div>
               <div>
-                <h4 className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                <h4 className="text-xs font-bold text-text-primary group-hover:text-primary-blue transition-colors">
                   {act.title}
                 </h4>
-                <p className="text-[11px] text-slate-500 font-normal leading-relaxed mt-1">{act.desc}</p>
+                <p className="text-[11px] text-text-secondary font-normal leading-relaxed mt-1">{act.desc}</p>
               </div>
             </div>
 
@@ -694,28 +793,28 @@ const InflationKpiBanner = () => {
   if (!inflationKpis) return null;
 
   return (
-    <div className="bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-slate-900/5 border border-blue-200/60 rounded-2xl p-4 mb-8 flex flex-col md:flex-row items-center justify-between gap-4 font-sans">
+    <div className="bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-slate-900/5 border border-primary-blue/20 rounded-2xl p-4 mb-8 flex flex-col md:flex-row items-center justify-between gap-4 font-sans">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
           CPI
         </div>
         <div>
-          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+          <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">
             BLS Consumer Price Index Inflation Benchmark
           </span>
-          <p className="text-sm font-bold text-slate-900 mt-0.5">
-            US CPI-U YoY Inflation: <span className="text-blue-600 font-mono-numbers">{inflationKpis.inflation_rate}%</span> · Cumulative Inflation: <span className="text-indigo-600 font-mono-numbers">{inflationKpis.cumulative_inflation}%</span>
+          <p className="text-sm font-bold text-text-primary mt-0.5">
+            US CPI-U YoY Inflation: <span className="text-primary-blue font-mono-numbers">{inflationKpis.inflation_rate}%</span> · Cumulative Inflation: <span className="text-primary-blue font-mono-numbers">{inflationKpis.cumulative_inflation}%</span>
           </p>
         </div>
       </div>
       <div className="flex items-center gap-6 text-xs font-mono-numbers">
         <div className="text-right">
-          <span className="text-[10px] font-bold text-slate-400 uppercase block font-sans">Real Dollar Purchasing Power</span>
-          <span className="text-base font-extrabold text-emerald-600">${inflationKpis.purchasing_power}</span>
+          <span className="text-[10px] font-bold text-text-secondary uppercase block font-sans">Real Dollar Purchasing Power</span>
+          <span className="text-base font-extrabold text-savings-green">${inflationKpis.purchasing_power}</span>
         </div>
-        <div className="text-right border-l border-slate-200 pl-6">
-          <span className="text-[10px] font-bold text-slate-400 uppercase block font-sans">Current CPI Level</span>
-          <span className="text-base font-extrabold text-slate-900">{inflationKpis.latest_cpi}</span>
+        <div className="text-right border-l border-border-hairline pl-6">
+          <span className="text-[10px] font-bold text-text-secondary uppercase block font-sans">Current CPI Level</span>
+          <span className="text-base font-extrabold text-text-primary">{inflationKpis.latest_cpi}</span>
         </div>
       </div>
     </div>
@@ -741,49 +840,49 @@ const Unified360CustomerCard = () => {
   if (!data360) return null;
 
   return (
-    <div className="bg-white border border-slate-200/80 rounded-2xl p-6 mb-8 shadow-xs font-sans space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+    <div className="bg-bg-surface border border-border-hairline rounded-2xl p-6 mb-8 shadow-xs font-sans space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-hairline pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/10 text-blue-600 border border-blue-200 flex items-center justify-center font-bold">
+          <div className="w-9 h-9 rounded-xl bg-blue-600/10 text-primary-blue border border-primary-blue/20 flex items-center justify-center font-bold">
             360°
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+            <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider">
               Cross-Dataset 360° Utility Intelligence Engine
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-text-secondary">
               Unified synthesis joining Bills ↔ Weather ↔ PJM Wholesale ↔ Tariffs ↔ CPI ↔ Census ↔ EIA-861
             </p>
           </div>
         </div>
-        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
+        <span className="text-xs font-bold text-savings-green bg-savings-green/10 border border-savings-green/20 px-3 py-1 rounded-full">
           Fully Synthesized Matrix
         </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono-numbers pt-1">
-        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Weather vs Rate Variance</span>
-          <span className="text-base font-extrabold text-blue-600">${data360.weather_variance_breakdown?.weather_driven_cost}</span>
-          <span className="text-[10px] text-slate-500 block font-sans font-medium">due to climate ({data360.weather_variance_breakdown?.weather_usage_pct}% of load)</span>
+        <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block font-sans">Weather vs Rate Variance</span>
+          <span className="text-base font-extrabold text-primary-blue">${data360.weather_variance_breakdown?.weather_driven_cost}</span>
+          <span className="text-[10px] text-text-secondary block font-sans font-medium">due to climate ({data360.weather_variance_breakdown?.weather_usage_pct}% of load)</span>
         </div>
 
-        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Wholesale LMP Exposure</span>
-          <span className="text-base font-extrabold text-indigo-600">${data360.wholesale_pjm_exposure?.wholesale_cost_estimate}</span>
-          <span className="text-[10px] text-slate-500 block font-sans font-medium">PJM supply cost (${data360.wholesale_pjm_exposure?.avg_lmp_mwh}/MWh)</span>
+        <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block font-sans">Wholesale LMP Exposure</span>
+          <span className="text-base font-extrabold text-primary-blue">${data360.wholesale_pjm_exposure?.wholesale_cost_estimate}</span>
+          <span className="text-[10px] text-text-secondary block font-sans font-medium">PJM supply cost (${data360.wholesale_pjm_exposure?.avg_lmp_mwh}/MWh)</span>
         </div>
 
-        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Census Energy Burden</span>
-          <span className="text-base font-extrabold text-amber-600">{data360.demographic_energy_burden?.energy_burden_pct}%</span>
-          <span className="text-[10px] text-slate-500 block font-sans font-medium">income share (SVI: {data360.demographic_energy_burden?.social_vulnerability_index})</span>
+        <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block font-sans">Census Energy Burden</span>
+          <span className="text-base font-extrabold text-warning-amber">{data360.demographic_energy_burden?.energy_burden_pct}%</span>
+          <span className="text-[10px] text-text-secondary block font-sans font-medium">income share (SVI: {data360.demographic_energy_burden?.social_vulnerability_index})</span>
         </div>
 
-        <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">Carbon Footprint</span>
-          <span className="text-base font-extrabold text-emerald-600">{data360.environmental_footprint?.scope_2_co2_kg} kg</span>
-          <span className="text-[10px] text-slate-500 block font-sans font-medium">CO2 (Offset: {data360.environmental_footprint?.trees_equivalent} trees/yr)</span>
+        <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+          <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block font-sans">Carbon Footprint</span>
+          <span className="text-base font-extrabold text-savings-green">{data360.environmental_footprint?.scope_2_co2_kg} kg</span>
+          <span className="text-[10px] text-text-secondary block font-sans font-medium">CO2 (Offset: {data360.environmental_footprint?.trees_equivalent} trees/yr)</span>
         </div>
       </div>
     </div>
@@ -795,15 +894,35 @@ const MissionControlDashboard = () => {
   const { uploadedBill } = useBill();
   const navigate = useNavigation();
 
-  const { data: dashboardData } = useUserDashboard();
+  const { data: dashboardData, dataUpdatedAt } = useUserDashboard();
+  // React Query reports 0 until the first successful fetch.
+  const lastSyncedAt = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
   const kpisFromDb = dashboardData?.kpis;
 
-  const currentBill = uploadedBill?.total_bill ?? kpisFromDb?.current_bill ?? 42850.00;
-  const usageKwh = uploadedBill?.usage_kwh ?? kpisFromDb?.usage_kwh ?? 145200;
-  const effectiveRate = uploadedBill?.effective_rate ?? kpisFromDb?.effective_rate ?? (usageKwh > 0 ? currentBill / usageKwh : 0.295);
+  // These are the figures the page presents as the customer's own, so they are
+  // never invented: with no uploaded bill and no dashboard record they stay
+  // null and each card renders "Unavailable", the same way the forecast card
+  // already did. (They previously defaulted to $42,850 / 145,200 kWh / 3.2% /
+  // $4,350 and displayed them under an "Audited Statement" badge.)
+  const currentBill: number | null =
+    uploadedBill?.total_bill ?? kpisFromDb?.current_bill ?? null;
+  const usageKwh: number | null =
+    uploadedBill?.usage_kwh ?? kpisFromDb?.usage_kwh ?? null;
+  const effectiveRate: number | null =
+    uploadedBill?.effective_rate ??
+    kpisFromDb?.effective_rate ??
+    (currentBill !== null && usageKwh !== null && usageKwh > 0 ? currentBill / usageKwh : null);
   const forecastBill = dashboardData?.forecast_results?.status === "success" ? (kpisFromDb?.forecast_next_month ?? 0.0) : 0.0;
-  const billChangePct = kpisFromDb?.bill_change_pct ?? 3.2;
-  const savingsOpportunity = ((kpisFromDb as unknown as Record<string, number>)?.savings_opportunity) ?? (uploadedBill?.total_bill ? Math.max(0, Math.round((currentBill - 118.0) * 100) / 100) : 4350.00);
+  const billChangePct: number | null = kpisFromDb?.bill_change_pct ?? null;
+  const savingsOpportunity: number | null =
+    ((kpisFromDb as unknown as Record<string, number>)?.savings_opportunity) ??
+    (uploadedBill?.total_bill ? Math.max(0, Math.round((currentBill! - 118.0) * 100) / 100) : null);
+
+  const hasBillData = currentBill !== null;
+  const UNAVAILABLE_BADGE = {
+    text: 'Unavailable',
+    color: 'bg-bg-secondary text-text-secondary border-border-hairline',
+  };
 
   const utilityName = uploadedBill?.utility ?? 'Public Service Electric & Gas Co';
   const billingCycle = uploadedBill?.billing_period ?? 'Oct 1 - Oct 31, 2024';
@@ -815,6 +934,9 @@ const MissionControlDashboard = () => {
   const [smartMeterHourly, setSmartMeterHourly] = useState<any>(null);
   const [smartMeterDemand, setSmartMeterDemand] = useState<any>(null);
   const [loadingMeter, setLoadingMeter] = useState(false);
+  const [meterError, setMeterError] = useState<string | null>(null);
+  // Bumped by the retry affordance to re-run the telemetry effect.
+  const [meterReloadKey, setMeterReloadKey] = useState(0);
   const [isAdvancedDiagnosticsOpen, setIsAdvancedDiagnosticsOpen] = useState(false);
 
   useEffect(() => {
@@ -822,22 +944,28 @@ const MissionControlDashboard = () => {
       if (dashboardMode !== 'metering') return;
       try {
         setLoadingMeter(true);
-        const liveRes = await apiClient.get('/smart-meter/live-status?customer_id=USR_001');
+        setMeterError(null);
+        // Independent reads — fetch concurrently instead of serially.
+        const [liveRes, hourlyRes, demandRes] = await Promise.all([
+          apiClient.get('/smart-meter/live-status?customer_id=USR_001'),
+          apiClient.get('/smart-meter/hourly?customer_id=USR_001'),
+          apiClient.get('/smart-meter/demand-history?customer_id=USR_001'),
+        ]);
         setSmartMeterData(liveRes.data);
-        
-        const hourlyRes = await apiClient.get('/smart-meter/hourly?customer_id=USR_001');
         setSmartMeterHourly(hourlyRes.data);
-        
-        const demandRes = await apiClient.get('/smart-meter/demand-history?customer_id=USR_001');
         setSmartMeterDemand(demandRes.data);
       } catch (err) {
-        console.warn("Failed to load smart meter data:", err);
+        // Surface the failure instead of silently falling back to sample data.
+        setMeterError(err instanceof Error ? err.message : 'Unknown error');
+        setSmartMeterData(null);
+        setSmartMeterHourly(null);
+        setSmartMeterDemand(null);
       } finally {
         setLoadingMeter(false);
       }
     }
     loadSmartMeter();
-  }, [dashboardMode]);
+  }, [dashboardMode, meterReloadKey]);
 
   // Billing view alerts
   const billingAlerts = [
@@ -853,15 +981,18 @@ const MissionControlDashboard = () => {
       description: 'Current billing period is evaluated under Peak Summer Season Rate Schedule.',
       actionText: 'View Tariff Schedules',
     },
-    {
-      severity: 'low' as const,
-      title: 'Off-Peak Shift Opportunity',
-      description: `Shift 15% of flexible load to off-peak hours (10 PM–8 AM) to save estimated $${savingsOpportunity.toFixed(2)}/mo.`,
-      actionText: 'Simulate Load Shift',
-    },
+    ...(savingsOpportunity !== null && savingsOpportunity > 0
+      ? [{
+          severity: 'low' as const,
+          title: 'Off-Peak Shift Opportunity',
+          description: `Shift 15% of flexible load to off-peak hours (10 PM–8 AM) to save estimated $${savingsOpportunity.toFixed(2)}/mo.`,
+          actionText: 'Simulate Load Shift',
+        }]
+      : []),
   ];
 
-  // Helper values for Smart Meter dashboard representation
+  // Only reached once smartMeterData is present (the metering branch is gated
+  // below), so this object is a shape default, not a stand-in for real readings.
   const meterKpis = smartMeterData || {
     current_demand_kw: 2.4,
     current_power_factor: 0.96,
@@ -890,45 +1021,25 @@ const MissionControlDashboard = () => {
     ]
   };
 
-  const dummyHourly = [
-    { hour: "00:00", usage_kwh: 0.65 },
-    { hour: "02:00", usage_kwh: 0.58 },
-    { hour: "04:00", usage_kwh: 0.60 },
-    { hour: "06:00", usage_kwh: 1.10 },
-    { hour: "08:00", usage_kwh: 1.95 },
-    { hour: "10:00", usage_kwh: 2.30 },
-    { hour: "12:00", usage_kwh: 2.10 },
-    { hour: "14:00", usage_kwh: 2.65 },
-    { hour: "16:00", usage_kwh: 3.40 },
-    { hour: "18:00", usage_kwh: 4.80 },
-    { hour: "20:00", usage_kwh: 2.20 },
-    { hour: "22:00", usage_kwh: 0.95 }
-  ];
-  
-  const hourlyChartData = smartMeterHourly?.hourly_data || dummyHourly;
+  // Interval data comes from the meter; when the meter has reported nothing
+  // yet these stay empty and the panels below render an empty state rather
+  // than synthetic readings. (This block previously fabricated a week of
+  // demand with Math.random(), which also violated React's purity rule.)
+  const hourlyChartData: Array<{ hour: string; usage_kwh: number }> =
+    smartMeterHourly?.hourly_data ?? [];
 
-  const dummyHeatmap = [];
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  for (let d of days) {
-    for (let h = 0; h < 24; h++) {
-      let base = [0.6, 0.5, 0.5, 0.6, 0.9, 1.4, 1.8, 2.0, 1.8, 1.6, 1.5, 1.6, 1.7, 2.2, 2.8, 3.4, 4.2, 4.8, 3.6, 2.8, 2.0, 1.4, 0.9, 0.7][h];
-      let factor = d === "Sat" || d === "Sun" ? 0.75 : 1.0;
-      dummyHeatmap.push({
-        day: d,
-        hour: h,
-        value: base * factor * (0.9 + Math.random() * 0.2)
-      });
-    }
-  }
-  
-  const heatmapData = smartMeterDemand?.heatmap || dummyHeatmap;
+  const heatmapData: Array<{ day: string; hour: number; value: number }> =
+    smartMeterDemand?.heatmap ?? [];
+
+  const hasHourlyData = hourlyChartData.length > 0;
+  const hasHeatmapData = heatmapData.length > 0;
 
   // Active alerts count for health card
   const activeAlertsCount = meterKpis.alerts ? meterKpis.alerts.length : 0;
   const isSystemHealthy = activeAlertsCount === 0;
 
   return (
-    <div className="space-y-6 pb-16 font-sans bg-slate-50/50 min-h-screen p-4 md:p-6 lg:p-8 rounded-2xl border border-slate-200/60">
+    <div className="space-y-6 pb-16 font-sans bg-bg-secondary min-h-screen p-4 md:p-6 lg:p-8 rounded-2xl border border-border-hairline">
       {/* 1. Executive Dashboard Header */}
       <ExecutiveHeader
         utilityName={utilityName}
@@ -937,6 +1048,7 @@ const MissionControlDashboard = () => {
         dashboardMode={dashboardMode}
         setDashboardMode={setDashboardMode}
         loadingMeter={loadingMeter}
+        lastSyncedAt={lastSyncedAt}
       />
 
       {dashboardMode === 'billing' ? (
@@ -946,35 +1058,49 @@ const MissionControlDashboard = () => {
             <SaaSExecutiveKpiCard
               id="kpi-current-bill"
               label="Current Bill"
-              value={`$${currentBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-              description="Total electricity charges for the current billing period."
+              value={currentBill === null
+                ? 'Unavailable'
+                : `$${currentBill.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+              description={hasBillData
+                ? "Total electricity charges for the current billing period."
+                : "Upload a utility bill to see your billed charges."}
               icon={<DollarSign className="w-5 h-5" />}
-              iconBgColor="bg-blue-50 text-blue-600 border-blue-100"
-              statusBadge={{ text: 'Audited Statement', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' }}
+              iconBgColor="bg-primary-blue/10 text-primary-blue border-primary-blue/20"
+              statusBadge={hasBillData
+                ? { text: 'Audited Statement', color: 'bg-savings-green/10 text-savings-green border-savings-green/20' }
+                : UNAVAILABLE_BADGE}
               targetTab="Bill Analysis"
             />
 
             <SaaSExecutiveKpiCard
               id="kpi-usage"
               label="Energy Usage"
-              value={usageKwh.toLocaleString('en-US')}
-              unit="kWh"
-              description="Total electricity consumed during the current billing period."
+              value={usageKwh === null ? 'Unavailable' : usageKwh.toLocaleString('en-US')}
+              unit={usageKwh === null ? undefined : "kWh"}
+              description={usageKwh !== null
+                ? "Total electricity consumed during the current billing period."
+                : "Upload a utility bill to see your metered consumption."}
               icon={<Zap className="w-5 h-5" />}
-              iconBgColor="bg-cyan-50 text-cyan-600 border-cyan-100"
-              statusBadge={{ text: 'Stable', color: 'bg-blue-50 text-blue-700 border-blue-200' }}
+              iconBgColor="bg-electric-cyan/10 text-electric-cyan border-electric-cyan/20"
+              statusBadge={usageKwh !== null
+                ? { text: 'Stable', color: 'bg-primary-blue/10 text-primary-blue border-primary-blue/20' }
+                : UNAVAILABLE_BADGE}
               targetTab="Bill Analysis"
             />
 
             <SaaSExecutiveKpiCard
               id="kpi-rate"
               label="Effective Rate"
-              value={`$${effectiveRate.toFixed(3)}`}
-              unit="/kWh"
-              description="Blended average cost per kilowatt-hour across all tariff tiers."
+              value={effectiveRate === null ? 'Unavailable' : `$${effectiveRate.toFixed(3)}`}
+              unit={effectiveRate === null ? undefined : "/kWh"}
+              description={effectiveRate !== null
+                ? "Blended average cost per kilowatt-hour across all tariff tiers."
+                : "Upload a utility bill to see your blended effective rate."}
               icon={<Activity className="w-5 h-5" />}
-              iconBgColor="bg-indigo-50 text-indigo-600 border-indigo-100"
-              statusBadge={{ text: 'Stable Rate', color: 'bg-slate-100 text-slate-700 border-slate-200' }}
+              iconBgColor="bg-primary-blue/10 text-primary-blue border-primary-blue/20"
+              statusBadge={effectiveRate !== null
+                ? { text: 'Stable Rate', color: 'bg-bg-secondary text-text-primary border-border-hairline' }
+                : UNAVAILABLE_BADGE}
               targetTab="Impact & Simulation"
             />
 
@@ -1004,18 +1130,18 @@ const MissionControlDashboard = () => {
           {/* 4. Main Analytics Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
             {/* Left Column: Recent Billing History */}
-            <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+            <div className="lg:col-span-5 bg-bg-surface rounded-2xl border border-border-hairline p-5 flex flex-col justify-between shadow-xs">
               <div>
-                <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-border-hairline">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                      <FileText size={16} className="text-blue-600" /> Recent Billing History
+                    <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                      <FileText size={16} className="text-primary-blue" /> Recent Billing History
                     </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Historical audited monthly invoices</p>
+                    <p className="text-xs text-text-secondary mt-0.5">Historical audited monthly invoices</p>
                   </div>
                   <button
                     onClick={() => navigate('Bill Analysis')}
-                    className="text-xs font-bold text-blue-600 hover:opacity-85 transition-all cursor-pointer"
+                    className="text-xs font-bold text-primary-blue hover:opacity-85 transition-all cursor-pointer"
                   >
                     Full History →
                   </button>
@@ -1025,16 +1151,16 @@ const MissionControlDashboard = () => {
             </div>
 
             {/* Right Column: Expanded Smart Alerts */}
-            <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-xs">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div className="lg:col-span-7 bg-bg-surface rounded-2xl border border-border-hairline p-5 space-y-4 shadow-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-border-hairline">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    <ShieldAlert size={16} className="text-amber-500" /> Smart Alerts & Facility Exceptions
+                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                    <ShieldAlert size={16} className="text-warning-amber" /> Smart Alerts & Facility Exceptions
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
+                  <p className="text-xs text-text-secondary mt-0.5">Active grid telemetry monitoring, tariff tier rules, and load anomaly notifications</p>
                 </div>
-                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                  3 Active Exceptions
+                <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-warning-amber/10 text-warning-amber border border-warning-amber/20">
+                  {billingAlerts.length} Active Exception{billingAlerts.length === 1 ? '' : 's'}
                 </span>
               </div>
 
@@ -1059,6 +1185,21 @@ const MissionControlDashboard = () => {
           {/* 6. Executive Quick Actions */}
           <QuickActions />
         </>
+      ) : loadingMeter ? (
+        <LoadingState label="Connecting to smart meter…" className="h-96" />
+      ) : meterError ? (
+        <ErrorState
+          title="Smart meter unreachable"
+          message={meterError}
+          onRetry={() => setMeterReloadKey((k) => k + 1)}
+          className="h-96"
+        />
+      ) : !smartMeterData ? (
+        <EmptyState
+          title="No smart meter connected"
+          message="Link a smart meter to this account to see live demand, power quality and interval telemetry."
+          className="h-96"
+        />
       ) : (
         <>
           {/* Smart Metering Executive Sub-Dashboard (Level 1: Executive 4 KPI Summary Cards) */}
@@ -1070,11 +1211,11 @@ const MissionControlDashboard = () => {
               value={`${meterKpis.current_demand_kw ?? 2.4}`}
               unit="kW"
               description="Current real-time electricity demand."
-              icon={<Zap className="w-5 h-5 text-blue-600" />}
-              iconBgColor="bg-blue-50 border-blue-100"
+              icon={<Zap className="w-5 h-5 text-primary-blue" />}
+              iconBgColor="bg-primary-blue/10 border-primary-blue/20"
               statusBadge={{
                 text: meterKpis.current_demand_kw > 4.5 ? "High" : meterKpis.current_demand_kw < 1.0 ? "Low" : "Live",
-                color: meterKpis.current_demand_kw > 4.5 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                color: meterKpis.current_demand_kw > 4.5 ? "bg-warning-amber/10 text-warning-amber border-warning-amber/20" : "bg-savings-green/10 text-savings-green border-savings-green/20"
               }}
             />
 
@@ -1086,16 +1227,16 @@ const MissionControlDashboard = () => {
               unit="kWh"
               description="Total electricity consumed today."
               secondaryInfo={
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <div className="flex items-center gap-1.5 text-xs text-text-secondary">
                   <span>Compared to yesterday</span>
-                  <span className="font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[11px]">
+                  <span className="font-bold text-savings-green bg-savings-green/10 px-1.5 py-0.5 rounded border border-savings-green/20 text-[11px]">
                     {meterKpis.usage_vs_yesterday_pct ? `${meterKpis.usage_vs_yesterday_pct > 0 ? '+' : ''}${meterKpis.usage_vs_yesterday_pct}%` : '+5%'}
                   </span>
                 </div>
               }
-              icon={<Zap className="w-5 h-5 text-cyan-600" />}
-              iconBgColor="bg-cyan-50 border-cyan-100"
-              statusBadge={{ text: "On Track", color: "bg-blue-50 text-blue-700 border-blue-200" }}
+              icon={<Zap className="w-5 h-5 text-electric-cyan" />}
+              iconBgColor="bg-electric-cyan/10 border-electric-cyan/20"
+              statusBadge={{ text: "On Track", color: "bg-primary-blue/10 text-primary-blue border-primary-blue/20" }}
             />
 
             {/* Card 3 — Peak Demand */}
@@ -1106,14 +1247,14 @@ const MissionControlDashboard = () => {
               unit="kW"
               description="Highest recorded demand today."
               secondaryInfo={
-                <div className="flex items-center gap-1 text-xs text-slate-500">
+                <div className="flex items-center gap-1 text-xs text-text-secondary">
                   <span>Occurred at</span>
-                  <span className="font-bold text-slate-800">{meterKpis.peak_hour || '18:00'}</span>
+                  <span className="font-bold text-text-primary">{meterKpis.peak_hour || '18:00'}</span>
                 </div>
               }
-              icon={<BarChart3 className="w-5 h-5 text-amber-600" />}
-              iconBgColor="bg-amber-50 border-amber-100"
-              statusBadge={{ text: "Peak Recorded", color: "bg-amber-50 text-amber-700 border-amber-200" }}
+              icon={<BarChart3 className="w-5 h-5 text-warning-amber" />}
+              iconBgColor="bg-warning-amber/10 border-warning-amber/20"
+              statusBadge={{ text: "Peak Recorded", color: "bg-warning-amber/10 text-warning-amber border-warning-amber/20" }}
             />
 
             {/* Card 4 — System Health */}
@@ -1123,15 +1264,15 @@ const MissionControlDashboard = () => {
               value={isSystemHealthy ? "Healthy" : "Warning"}
               description="Overall electrical system condition based on meter telemetry."
               secondaryInfo={
-                <div className="text-xs text-slate-500 font-medium">
-                  <span className="font-bold text-slate-800">{activeAlertsCount} Active Alert{activeAlertsCount === 1 ? '' : 's'}</span>
+                <div className="text-xs text-text-secondary font-medium">
+                  <span className="font-bold text-text-primary">{activeAlertsCount} Active Alert{activeAlertsCount === 1 ? '' : 's'}</span>
                 </div>
               }
-              icon={isSystemHealthy ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 text-amber-600" />}
-              iconBgColor={isSystemHealthy ? "bg-emerald-50 border-emerald-100" : "bg-amber-50 border-amber-100"}
+              icon={isSystemHealthy ? <CheckCircle2 className="w-5 h-5 text-savings-green" /> : <AlertTriangle className="w-5 h-5 text-warning-amber" />}
+              iconBgColor={isSystemHealthy ? "bg-savings-green/10 border-savings-green/20" : "bg-warning-amber/10 border-warning-amber/20"}
               statusBadge={{
                 text: isSystemHealthy ? "Healthy" : "Warning",
-                color: isSystemHealthy ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"
+                color: isSystemHealthy ? "bg-savings-green/10 text-savings-green border-savings-green/20" : "bg-warning-amber/10 text-warning-amber border-warning-amber/20"
               }}
             />
           </div>
@@ -1139,14 +1280,28 @@ const MissionControlDashboard = () => {
           {/* Level 2: Interactive Telemetry & Analytical Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
             {/* 24-Hour Load Curve */}
-            <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-5 flex flex-col justify-between shadow-xs">
+            <div className="lg:col-span-8 bg-bg-surface rounded-2xl border border-border-hairline p-5 flex flex-col justify-between shadow-xs">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-                  <Activity size={16} className="text-blue-600" /> 24-Hour Load Curve Telemetry
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
+                  <Activity size={16} className="text-primary-blue" /> 24-Hour Load Curve Telemetry
                 </h3>
-                <p className="text-xs text-slate-500 mb-4">Hourly usage profiles from smart meter telemetry</p>
+                <p className="text-xs text-text-secondary mb-4">Hourly usage profiles from smart meter telemetry</p>
                 
                 <div className="h-64 w-full pt-2">
+                  {loadingMeter ? (
+                    <LoadingState label="Reading meter telemetry…" />
+                  ) : meterError ? (
+                    <ErrorState
+                      title="Meter telemetry unavailable"
+                      message={meterError}
+                      onRetry={() => setMeterReloadKey((k) => k + 1)}
+                    />
+                  ) : !hasHourlyData ? (
+                    <EmptyState
+                      title="No interval readings yet"
+                      message="This meter has not reported an hourly load profile for the last 24 hours."
+                    />
+                  ) : (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={hourlyChartData}>
                       <defs>
@@ -1162,17 +1317,18 @@ const MissionControlDashboard = () => {
                       <Area type="monotone" dataKey="usage_kwh" stroke="#2563eb" strokeWidth={2.5} fillOpacity={1} fill="url(#meterGrad)" />
                     </AreaChart>
                   </ResponsiveContainer>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Smart Meter Live Alerts */}
-            <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/80 p-5 space-y-4 shadow-xs">
+            <div className="lg:col-span-4 bg-bg-surface rounded-2xl border border-border-hairline p-5 space-y-4 shadow-xs">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-                  <ShieldAlert size={16} className="text-amber-500" /> Live Telemetry Anomalies
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
+                  <ShieldAlert size={16} className="text-warning-amber" /> Live Telemetry Anomalies
                 </h3>
-                <p className="text-xs text-slate-500">Instantaneous load curves threshold exceptions</p>
+                <p className="text-xs text-text-secondary">Instantaneous load curves threshold exceptions</p>
               </div>
 
               <div className="space-y-3">
@@ -1188,10 +1344,10 @@ const MissionControlDashboard = () => {
                     />
                   ))
                 ) : (
-                  <div className="text-center py-10 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-                    <CheckCircle2 className="mx-auto text-emerald-500 mb-2" size={24} />
-                    <span className="text-xs font-bold text-slate-800">Telemetry Status Stable</span>
-                    <p className="text-[10px] text-slate-400 font-medium max-w-[200px] mx-auto mt-1">
+                  <div className="text-center py-10 bg-bg-secondary rounded-xl border border-dashed border-border-hairline">
+                    <CheckCircle2 className="mx-auto text-savings-green mb-2" size={24} />
+                    <span className="text-xs font-bold text-text-primary">Telemetry Status Stable</span>
+                    <p className="text-[10px] text-text-secondary font-medium max-w-[200px] mx-auto mt-1">
                       Zero power spikes, voltage drops, or base load drifts detected in the last 24h.
                     </p>
                   </div>
@@ -1201,31 +1357,51 @@ const MissionControlDashboard = () => {
           </div>
 
           {/* 7-Day Demand Heatmap */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs mb-8">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 mb-1">
-              <BarChart3 size={16} className="text-blue-600" /> Hourly Load Intensity Heatmap (kW)
+          <div className="bg-bg-surface rounded-2xl border border-border-hairline p-5 shadow-xs mb-8">
+            <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-1">
+              <BarChart3 size={16} className="text-primary-blue" /> Hourly Load Intensity Heatmap (kW)
             </h3>
-            <p className="text-xs text-slate-500 mb-5">Visualizing average power draw per hour (x-axis) across weekdays (y-axis)</p>
+            <p className="text-xs text-text-secondary mb-5">Visualizing average power draw per hour (x-axis) across weekdays (y-axis)</p>
 
+            {loadingMeter ? (
+              <LoadingState label="Reading demand history…" className="h-56" />
+            ) : meterError ? (
+              <ErrorState
+                title="Demand history unavailable"
+                message={meterError}
+                onRetry={() => setMeterReloadKey((k) => k + 1)}
+                className="h-56"
+              />
+            ) : !hasHeatmapData ? (
+              <EmptyState
+                title="No demand history yet"
+                message="Once this meter has reported a full week of interval data, the load-intensity heatmap will appear here."
+                className="h-56"
+              />
+            ) : (
             <div className="overflow-x-auto">
               <div className="min-w-[800px] space-y-2">
-                <div className="flex text-[10px] font-bold text-slate-400 pb-1">
+                <div className="flex text-[10px] font-bold text-text-secondary pb-1">
                   <div className="w-16 shrink-0" />
                   {Array.from({ length: 24 }).map((_, h) => (
                     <div key={h} className="flex-1 text-center font-mono">{String(h).padStart(2, '0')}</div>
                   ))}
                 </div>
-                {days.map((day) => {
+                {HEATMAP_DAYS.map((day) => {
                   const dayReadings = heatmapData.filter((x: any) => x.day === day);
                   return (
                     <div key={day} className="flex items-center">
-                      <div className="w-16 text-xs font-bold text-slate-500 shrink-0">{day}</div>
+                      <div className="w-16 text-xs font-bold text-text-secondary shrink-0">{day}</div>
                       <div className="flex-1 flex gap-0.5">
                         {Array.from({ length: 24 }).map((_, h) => {
-                          const val = dayReadings.find((x: any) => x.hour === h)?.value || 0.5;
+                          // Absent readings render as an explicit gap, not a fabricated 0.5 kW.
+                          const reading = dayReadings.find((x) => x.hour === h);
+                          const val = reading?.value;
                           // color intensity mapping: 0.5kW to 5kW
-                          const intensity = Math.min(1, Math.max(0.1, val / 5.0));
-                          const color = intensity > 0.85
+                          const intensity = val === undefined ? 0 : Math.min(1, Math.max(0.1, val / 5.0));
+                          const color = val === undefined
+                            ? 'bg-bg-secondary'
+                            : intensity > 0.85
                             ? 'bg-blue-800'
                             : intensity > 0.65
                             ? 'bg-blue-600'
@@ -1233,12 +1409,16 @@ const MissionControlDashboard = () => {
                             ? 'bg-blue-400'
                             : intensity > 0.25
                             ? 'bg-blue-300'
-                            : 'bg-blue-100';
+                            : 'bg-primary-blue/10';
                           return (
                             <div
                               key={h}
                               className={`flex-1 h-7 rounded ${color} transition-all hover:scale-110 cursor-pointer`}
-                              title={`${day} @ ${h}:00 - Average Load: ${val.toFixed(2)} kW`}
+                              title={
+                                val === undefined
+                                  ? `${day} @ ${h}:00 — no reading`
+                                  : `${day} @ ${h}:00 - Average Load: ${val.toFixed(2)} kW`
+                              }
                             />
                           );
                         })}
@@ -1248,9 +1428,10 @@ const MissionControlDashboard = () => {
                 })}
               </div>
             </div>
-            <div className="flex justify-end gap-4 text-[10px] text-slate-400 font-semibold mt-3">
+            )}
+            <div className="flex justify-end gap-4 text-[10px] text-text-secondary font-semibold mt-3">
               <div className="flex items-center gap-1">
-                <span className="w-2.5 h-2.5 rounded bg-blue-100" />
+                <span className="w-2.5 h-2.5 rounded bg-primary-blue/10" />
                 <span>Base Load (&lt;1 kW)</span>
               </div>
               <div className="flex items-center gap-1">
@@ -1265,101 +1446,101 @@ const MissionControlDashboard = () => {
           </div>
 
           {/* Level 3: Advanced Meter Diagnostics (Collapsible Section) */}
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs mb-8 transition-all">
+          <div className="bg-bg-surface rounded-2xl border border-border-hairline p-5 shadow-xs mb-8 transition-all">
             <div 
               onClick={() => setIsAdvancedDiagnosticsOpen(!isAdvancedDiagnosticsOpen)}
               className="flex items-center justify-between cursor-pointer select-none"
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center border border-slate-200 shrink-0">
-                  <Gauge className="w-5 h-5 text-slate-700" />
+                <div className="w-10 h-10 rounded-xl bg-bg-secondary text-text-primary flex items-center justify-center border border-border-hairline shrink-0">
+                  <Gauge className="w-5 h-5 text-text-primary" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
                     Advanced Meter Diagnostics
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5">
                     Engineering telemetry, power factor vector analytics, line stability, and sensor health
                   </p>
                 </div>
               </div>
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 transition-all cursor-pointer">
+              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-secondary hover:bg-bg-secondary border border-border-hairline text-xs font-semibold text-text-primary transition-all cursor-pointer">
                 <span>{isAdvancedDiagnosticsOpen ? 'Hide Diagnostics' : 'Show Advanced Diagnostics'}</span>
                 {isAdvancedDiagnosticsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
             </div>
 
             {isAdvancedDiagnosticsOpen && (
-              <div className="mt-5 pt-5 border-t border-slate-100">
+              <div className="mt-5 pt-5 border-t border-border-hairline">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                   {/* Voltage */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Line Voltage</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.voltage ?? 121.2} V</div>
-                    <span className="inline-block text-[10px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Nominal Service Drop</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Line Voltage</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.voltage ?? 121.2} V</div>
+                    <span className="inline-block text-[10px] font-semibold text-text-secondary bg-bg-surface border border-border-hairline px-2 py-0.5 rounded-md">Nominal Service Drop</span>
                   </div>
 
                   {/* Current */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.current_amps ?? 19.8} A</div>
-                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Balanced Phase Draw</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Current</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.current_amps ?? 19.8} A</div>
+                    <span className="inline-block text-[10px] font-semibold text-savings-green bg-savings-green/10 border border-savings-green/20 px-2 py-0.5 rounded-md">Balanced Phase Draw</span>
                   </div>
 
                   {/* Power Factor */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Power Factor</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.current_power_factor ?? 0.96}</div>
-                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Optimal (&gt;0.95)</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Power Factor</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.current_power_factor ?? 0.96}</div>
+                    <span className="inline-block text-[10px] font-semibold text-savings-green bg-savings-green/10 border border-savings-green/20 px-2 py-0.5 rounded-md">Optimal (&gt;0.95)</span>
                   </div>
 
                   {/* Frequency */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Frequency</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.frequency_hz ?? 60.0} Hz</div>
-                    <span className="inline-block text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">Grid Synchronized</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Frequency</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.frequency_hz ?? 60.0} Hz</div>
+                    <span className="inline-block text-[10px] font-semibold text-primary-blue bg-primary-blue/10 border border-primary-blue/20 px-2 py-0.5 rounded-md">Grid Synchronized</span>
                   </div>
 
                   {/* Reactive Power */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Reactive Power</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.reactive_kvar ?? 0.70} kVAR</div>
-                    <span className="inline-block text-[10px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md">Inductive Baseline</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Reactive Power</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.reactive_kvar ?? 0.70} kVAR</div>
+                    <span className="inline-block text-[10px] font-semibold text-text-secondary bg-bg-surface border border-border-hairline px-2 py-0.5 rounded-md">Inductive Baseline</span>
                   </div>
 
                   {/* Power Quality */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Power Quality</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.power_quality_pct ?? 99.8}%</div>
-                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Pure Sine Harmonic</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Power Quality</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.power_quality_pct ?? 99.8}%</div>
+                    <span className="inline-block text-[10px] font-semibold text-savings-green bg-savings-green/10 border border-savings-green/20 px-2 py-0.5 rounded-md">Pure Sine Harmonic</span>
                   </div>
 
                   {/* Phase Balance */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Phase Balance</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.phase_balance_pct ?? 99.2}%</div>
-                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Symmetrical Load</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Phase Balance</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.phase_balance_pct ?? 99.2}%</div>
+                    <span className="inline-block text-[10px] font-semibold text-savings-green bg-savings-green/10 border border-savings-green/20 px-2 py-0.5 rounded-md">Symmetrical Load</span>
                   </div>
 
                   {/* Power Factor Trend */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Power Factor Trend</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.power_factor_trend || 'Steady 0.96'}</div>
-                    <span className="inline-block text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">No Penalty Risk</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Power Factor Trend</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.power_factor_trend || 'Steady 0.96'}</div>
+                    <span className="inline-block text-[10px] font-semibold text-primary-blue bg-primary-blue/10 border border-primary-blue/20 px-2 py-0.5 rounded-md">No Penalty Risk</span>
                   </div>
 
                   {/* Voltage Stability */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Voltage Stability</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.voltage_stability || 'Nominal ±0.5%'}</div>
-                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">ANSI C84.1 Compliant</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Voltage Stability</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.voltage_stability || 'Nominal ±0.5%'}</div>
+                    <span className="inline-block text-[10px] font-semibold text-savings-green bg-savings-green/10 border border-savings-green/20 px-2 py-0.5 rounded-md">ANSI C84.1 Compliant</span>
                   </div>
 
                   {/* Sensor Health */}
-                  <div className="bg-slate-50/80 p-3.5 rounded-xl border border-slate-200/60 space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Sensor Health</span>
-                    <div className="text-base font-extrabold text-slate-900">{meterKpis.sensor_health || '100% Operational'}</div>
-                    <span className="inline-block text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">Calibrated CT/PT</span>
+                  <div className="bg-bg-secondary p-3.5 rounded-xl border border-border-hairline space-y-1">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider block">Sensor Health</span>
+                    <div className="text-base font-extrabold text-text-primary">{meterKpis.sensor_health || '100% Operational'}</div>
+                    <span className="inline-block text-[10px] font-semibold text-savings-green bg-savings-green/10 border border-savings-green/20 px-2 py-0.5 rounded-md">Calibrated CT/PT</span>
                   </div>
                 </div>
               </div>

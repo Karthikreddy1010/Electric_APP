@@ -14,7 +14,6 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
 import { apiClient } from '../lib/apiClient.ts';
 import { useBill } from '../context/BillContext.tsx';
 import EmptyBillState from '../components/shared/EmptyBillState.tsx';
@@ -102,7 +101,7 @@ const ImpactPage = () => {
         base_rates: uploadedBill?.rates,
         base_costs: uploadedBill?.costs
       };
-      const res = await axios.post('/impact/what-if-v2', payload);
+      const res = await apiClient.post('/impact/what-if-v2', payload);
       return res.data;
     },
     enabled: !!uploadedBill
@@ -118,7 +117,7 @@ const ImpactPage = () => {
     {
       id: 'supply',
       title: 'Electricity Supply Price',
-      icon: <Zap className="w-5 h-5 text-amber-500" />,
+      icon: <Zap className="w-5 h-5 text-warning-amber" />,
       description: 'Seasonal increase in energy market supply rates',
       amount: 9.80,
       pct: 60
@@ -126,7 +125,7 @@ const ImpactPage = () => {
     {
       id: 'weather',
       title: 'Hot Weather Air Conditioning',
-      icon: <Flame className="w-5 h-5 text-rose-500" />,
+      icon: <Flame className="w-5 h-5 text-alert-red" />,
       description: 'Air conditioning ran more days due to summer heatwaves',
       amount: 4.50,
       pct: 28
@@ -134,7 +133,7 @@ const ImpactPage = () => {
     {
       id: 'usage',
       title: 'Higher Electricity Usage',
-      icon: <TrendingUp className="w-5 h-5 text-blue-500" />,
+      icon: <TrendingUp className="w-5 h-5 text-primary-blue" />,
       description: `Used 35 kWh more electricity than last month`,
       amount: 2.00,
       pct: 12
@@ -291,26 +290,26 @@ const ImpactPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 font-sans">
+    <div className="min-h-screen bg-bg-secondary text-text-primary pb-20 font-sans">
 
       {/* HEADER BAR */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+      <header className="bg-bg-surface border-b border-border-hairline sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+              <span className="bg-primary-blue/10 text-primary-blue text-xs font-semibold px-2.5 py-0.5 rounded-full">
                 Consumer Portal
               </span>
-              <span className="text-xs text-slate-500 font-medium">
+              <span className="text-xs text-text-secondary font-medium">
                 {uploadedBill.utility || 'PSE&G'}
               </span>
             </div>
-            <h1 className="text-2xl font-bold text-slate-900 mt-1">Bill & Savings Hub</h1>
+            <h1 className="text-2xl font-bold text-text-primary mt-1">Bill & Savings Hub</h1>
           </div>
 
           <a
             href="/app/impact"
-            className="text-xs text-slate-500 hover:text-slate-800 underline font-medium"
+            className="text-xs text-text-secondary hover:text-text-primary underline font-medium"
           >
             Refresh Impact Simulation →
           </a>
@@ -321,52 +320,52 @@ const ImpactPage = () => {
 
         {/* 1. BILL SUMMARY CARDS */}
         <section className="space-y-3">
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-blue-600" />
+          <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-primary-blue" />
             1. Bill Summary
           </h2>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Current Bill</span>
-              <span className="text-2xl font-black text-slate-900">${currentBill.toFixed(2)}</span>
-              <span className="text-[11px] text-slate-400 block">Current Period</span>
+            <div className="bg-bg-surface p-4 rounded-xl border border-border-hairline shadow-sm space-y-1">
+              <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">Current Bill</span>
+              <span className="text-2xl font-black text-text-primary">${currentBill.toFixed(2)}</span>
+              <span className="text-[11px] text-text-secondary block">Current Period</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Last Month</span>
-              <span className="text-2xl font-black text-slate-700">${lastMonthBill.toFixed(2)}</span>
-              <span className="text-[11px] text-slate-400 block">Previous Period</span>
+            <div className="bg-bg-surface p-4 rounded-xl border border-border-hairline shadow-sm space-y-1">
+              <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">Last Month</span>
+              <span className="text-2xl font-black text-text-primary">${lastMonthBill.toFixed(2)}</span>
+              <span className="text-[11px] text-text-secondary block">Previous Period</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Difference</span>
-              <span className={`text-2xl font-black ${billDiff >= 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+            <div className="bg-bg-surface p-4 rounded-xl border border-border-hairline shadow-sm space-y-1">
+              <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">Difference</span>
+              <span className={`text-2xl font-black ${billDiff >= 0 ? 'text-alert-red' : 'text-savings-green'}`}>
                 {billDiff >= 0 ? '+' : ''}${billDiff.toFixed(2)}
               </span>
-              <span className={`text-[11px] font-semibold ${billDiff >= 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+              <span className={`text-[11px] font-semibold ${billDiff >= 0 ? 'text-alert-red' : 'text-savings-green'}`}>
                 {billDiff >= 0 ? '▲' : '▼'} {Math.abs(billDiffPct).toFixed(1)}% vs last month
               </span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Electricity Usage</span>
-              <span className="text-2xl font-black text-slate-900">{currentUsageKwh} <span className="text-sm font-normal text-slate-500">kWh</span></span>
-              <span className="text-[11px] text-slate-400 block">Total Billed Units</span>
+            <div className="bg-bg-surface p-4 rounded-xl border border-border-hairline shadow-sm space-y-1">
+              <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">Electricity Usage</span>
+              <span className="text-2xl font-black text-text-primary">{currentUsageKwh} <span className="text-sm font-normal text-text-secondary">kWh</span></span>
+              <span className="text-[11px] text-text-secondary block">Total Billed Units</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Average Rate</span>
-              <span className="text-2xl font-black text-blue-600">${effectiveRate.toFixed(3)} <span className="text-xs font-normal text-slate-500">/kWh</span></span>
-              <span className="text-[11px] text-slate-400 block">All-in Unit Price</span>
+            <div className="bg-bg-surface p-4 rounded-xl border border-border-hairline shadow-sm space-y-1">
+              <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">Average Rate</span>
+              <span className="text-2xl font-black text-primary-blue">${effectiveRate.toFixed(3)} <span className="text-xs font-normal text-text-secondary">/kWh</span></span>
+              <span className="text-[11px] text-text-secondary block">All-in Unit Price</span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Usage Trend</span>
-              <span className="text-base font-bold text-amber-600 flex items-center gap-1">
-                <Flame className="w-4 h-4 text-amber-500" /> High Summer
+            <div className="bg-bg-surface p-4 rounded-xl border border-border-hairline shadow-sm space-y-1">
+              <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider block">Usage Trend</span>
+              <span className="text-base font-bold text-warning-amber flex items-center gap-1">
+                <Flame className="w-4 h-4 text-warning-amber" /> High Summer
               </span>
-              <span className="text-[11px] text-slate-500 block">Peak Seasonal Demand</span>
+              <span className="text-[11px] text-text-secondary block">Peak Seasonal Demand</span>
             </div>
           </div>
         </section>
@@ -375,40 +374,40 @@ const ImpactPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
           {/* 2. WHY YOUR BILL CHANGED */}
-          <section className="lg:col-span-7 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+          <section className="lg:col-span-7 bg-bg-surface p-6 rounded-2xl border border-border-hairline shadow-sm space-y-5">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <HelpCircle className="w-5 h-5 text-amber-500" />
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-warning-amber" />
                 2. Why Is My Bill Higher This Month?
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-text-secondary mt-1">
                 Primary reasons your electricity bill increased compared to last month:
               </p>
             </div>
 
             <div className="space-y-4">
               {changeDrivers.map((driver) => (
-                <div key={driver.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
+                <div key={driver.id} className="p-4 rounded-xl bg-bg-secondary border border-border-hairline flex items-center justify-between gap-4">
                   <div className="flex items-start gap-3">
-                    <div className="p-2.5 rounded-lg bg-white shadow-xs border border-slate-200">
+                    <div className="p-2.5 rounded-lg bg-bg-surface shadow-xs border border-border-hairline">
                       {driver.icon}
                     </div>
                     <div>
-                      <h3 className="text-sm font-bold text-slate-900">{driver.title}</h3>
-                      <p className="text-xs text-slate-500">{driver.description}</p>
+                      <h3 className="text-sm font-bold text-text-primary">{driver.title}</h3>
+                      <p className="text-xs text-text-secondary">{driver.description}</p>
                     </div>
                   </div>
 
                   <div className="text-right">
-                    <span className="text-base font-bold text-rose-600">+${driver.amount.toFixed(2)}</span>
-                    <span className="text-xs font-medium text-slate-400 block">{driver.pct}% of increase</span>
+                    <span className="text-base font-bold text-alert-red">+${driver.amount.toFixed(2)}</span>
+                    <span className="text-xs font-medium text-text-secondary block">{driver.pct}% of increase</span>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="p-3 bg-warning-amber/10 border border-warning-amber/20 rounded-xl text-xs text-warning-amber flex items-start gap-2">
+              <Info className="w-4 h-4 text-warning-amber shrink-0 mt-0.5" />
               <span>
                 <strong>Main Reason:</strong> Summer air conditioning and seasonal electricity supply price increases are responsible for over 85% of your bill increase this month.
               </span>
@@ -416,13 +415,13 @@ const ImpactPage = () => {
           </section>
 
           {/* 3. BILL BREAKDOWN */}
-          <section className="lg:col-span-5 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 flex flex-col justify-between">
+          <section className="lg:col-span-5 bg-bg-surface p-6 rounded-2xl border border-border-hairline shadow-sm space-y-5 flex flex-col justify-between">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <PieChart className="w-5 h-5 text-primary-blue" />
                 3. Where Does Your Money Go?
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-text-secondary mt-1">
                 Simple breakdown of your total ${currentBill.toFixed(2)} bill:
               </p>
             </div>
@@ -451,14 +450,14 @@ const ImpactPage = () => {
               </ResponsiveContainer>
             </div>
 
-            <div className="space-y-2 pt-2 border-t border-slate-100">
+            <div className="space-y-2 pt-2 border-t border-border-hairline">
               {donutData.map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full" style={{ backgroundColor: DONUT_COLORS[idx % DONUT_COLORS.length] }} />
-                    <span className="font-semibold text-slate-700">{item.name}</span>
+                    <span className="font-semibold text-text-primary">{item.name}</span>
                   </div>
-                  <span className="font-bold text-slate-900">${item.value.toFixed(2)} ({((item.value / currentBill) * 100).toFixed(0)}%)</span>
+                  <span className="font-bold text-text-primary">${item.value.toFixed(2)} ({((item.value / currentBill) * 100).toFixed(0)}%)</span>
                 </div>
               ))}
             </div>
@@ -466,47 +465,47 @@ const ImpactPage = () => {
         </div>
 
         {/* 4. SAVINGS RECOMMENDATIONS */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-4">
+        <section className="bg-bg-surface p-6 rounded-2xl border border-border-hairline shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-border-hairline pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-emerald-600" />
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-savings-green" />
                 4. Recommended Actions to Lower Your Bill
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-text-secondary mt-1">
                 Top savings recommendations ranked by estimated monthly dollar savings:
               </p>
             </div>
-            <span className="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full">
+            <span className="text-xs font-semibold bg-savings-green/10 text-savings-green border border-savings-green/20 px-3 py-1 rounded-full">
               Potential Total Savings: Up to $42.70/month ($512/year)
             </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {recommendations.map((rec) => (
-              <div key={rec.id} className="p-5 rounded-xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between hover:border-emerald-300 transition-all">
+              <div key={rec.id} className="p-5 rounded-xl bg-bg-secondary border border-border-hairline space-y-3 flex flex-col justify-between hover:border-savings-green/20 transition-all">
                 <div>
                   <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-bold text-slate-900">{rec.title}</h3>
-                    <div className="flex text-amber-400 text-xs">
+                    <h3 className="text-sm font-bold text-text-primary">{rec.title}</h3>
+                    <div className="flex text-warning-amber text-xs">
                       {'★'.repeat(rec.stars)}{'☆'.repeat(5 - rec.stars)}
                     </div>
                   </div>
-                  <p className="text-xs text-slate-600 mt-1">{rec.description}</p>
+                  <p className="text-xs text-text-secondary mt-1">{rec.description}</p>
                 </div>
 
-                <div className="pt-3 border-t border-slate-200 flex items-center justify-between">
+                <div className="pt-3 border-t border-border-hairline flex items-center justify-between">
                   <div>
-                    <span className="text-xs text-slate-400 font-medium block">Estimated Savings</span>
-                    <span className="text-base font-black text-emerald-600">${rec.monthlySavings.toFixed(2)} <span className="text-xs font-normal text-slate-500">/ month</span></span>
-                    <span className="text-[11px] text-slate-500 block">(${rec.yearlySavings.toFixed(0)} / year)</span>
+                    <span className="text-xs text-text-secondary font-medium block">Estimated Savings</span>
+                    <span className="text-base font-black text-savings-green">${rec.monthlySavings.toFixed(2)} <span className="text-xs font-normal text-text-secondary">/ month</span></span>
+                    <span className="text-[11px] text-text-secondary block">(${rec.yearlySavings.toFixed(0)} / year)</span>
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[11px] font-semibold bg-blue-50 text-blue-700 px-2 py-0.5 rounded block">
+                    <span className="text-[11px] font-semibold bg-primary-blue/10 text-primary-blue px-2 py-0.5 rounded block">
                       {rec.impact}
                     </span>
-                    <span className="text-[11px] text-slate-500 mt-1 block">
+                    <span className="text-[11px] text-text-secondary mt-1 block">
                       Difficulty: <strong>{rec.difficulty}</strong>
                     </span>
                   </div>
@@ -517,24 +516,24 @@ const ImpactPage = () => {
         </section>
 
         {/* 5. WHAT-IF CALCULATOR */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <SlidersHorizontal className="w-5 h-5 text-blue-600" />
+        <section className="bg-bg-surface p-6 rounded-2xl border border-border-hairline shadow-sm space-y-6">
+          <div className="border-b border-border-hairline pb-4">
+            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+              <SlidersHorizontal className="w-5 h-5 text-primary-blue" />
               5. Interactive What-If Calculator
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-text-secondary mt-1">
               Adjust the sliders below to see instantly how changing your electricity usage or rate impacts your estimated bill.
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-            <div className="lg:col-span-7 space-y-6 bg-slate-50 p-6 rounded-xl border border-slate-200">
+            <div className="lg:col-span-7 space-y-6 bg-bg-secondary p-6 rounded-xl border border-border-hairline">
 
               <div className="space-y-2">
-                <div className="flex justify-between text-xs font-semibold text-slate-700">
+                <div className="flex justify-between text-xs font-semibold text-text-primary">
                   <span>Change Electricity Usage</span>
-                  <span className={`font-bold ${usageChangePct > 0 ? 'text-rose-600' : usageChangePct < 0 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                  <span className={`font-bold ${usageChangePct > 0 ? 'text-alert-red' : usageChangePct < 0 ? 'text-savings-green' : 'text-text-primary'}`}>
                     {usageChangePct > 0 ? '+' : ''}{usageChangePct}% ({simulatedKwh} kWh)
                   </span>
                 </div>
@@ -545,9 +544,9 @@ const ImpactPage = () => {
                   step="5"
                   value={usageChangePct}
                   onChange={(e) => setUsageChangePct(parseInt(e.target.value))}
-                  className="w-full accent-blue-600 cursor-pointer h-2 bg-slate-200 rounded-lg"
+                  className="w-full accent-primary-blue cursor-pointer h-2 bg-border-hairline rounded-lg"
                 />
-                <div className="flex justify-between text-[10px] text-slate-400">
+                <div className="flex justify-between text-[10px] text-text-secondary">
                   <span>-30% (High Conservation)</span>
                   <span>0% (Current Usage)</span>
                   <span>+30% (High Usage)</span>
@@ -555,9 +554,9 @@ const ImpactPage = () => {
               </div>
 
               <div className="space-y-2">
-                <div className="flex justify-between text-xs font-semibold text-slate-700">
+                <div className="flex justify-between text-xs font-semibold text-text-primary">
                   <span>Electricity Rate ($/kWh)</span>
-                  <span className="font-bold text-blue-600">${targetRate.toFixed(3)} / kWh</span>
+                  <span className="font-bold text-primary-blue">${targetRate.toFixed(3)} / kWh</span>
                 </div>
                 <input
                   type="range"
@@ -566,9 +565,9 @@ const ImpactPage = () => {
                   step="0.01"
                   value={targetRate}
                   onChange={(e) => setCustomRate(parseFloat(e.target.value))}
-                  className="w-full accent-blue-600 cursor-pointer h-2 bg-slate-200 rounded-lg"
+                  className="w-full accent-primary-blue cursor-pointer h-2 bg-border-hairline rounded-lg"
                 />
-                <div className="flex justify-between text-[10px] text-slate-400">
+                <div className="flex justify-between text-[10px] text-text-secondary">
                   <span>$0.12 (Low Rate)</span>
                   <span>$0.21 (Current Avg)</span>
                   <span>$0.32 (High Rate)</span>
@@ -576,13 +575,13 @@ const ImpactPage = () => {
               </div>
 
               <div className="space-y-2">
-                <span className="text-xs font-semibold text-slate-700 block">Weather Impact Preset</span>
+                <span className="text-xs font-semibold text-text-primary block">Weather Impact Preset</span>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { id: 'mild', label: 'Mild Weather', icon: <Sun className="w-3.5 h-3.5 text-amber-500" /> },
-                    { id: 'normal', label: 'Normal Weather', icon: <Check className="w-3.5 h-3.5 text-blue-500" /> },
-                    { id: 'hot', label: 'Extreme Heat', icon: <Flame className="w-3.5 h-3.5 text-rose-500" /> },
-                    { id: 'cold', label: 'Extreme Cold', icon: <Snowflake className="w-3.5 h-3.5 text-cyan-500" /> },
+                    { id: 'mild', label: 'Mild Weather', icon: <Sun className="w-3.5 h-3.5 text-warning-amber" /> },
+                    { id: 'normal', label: 'Normal Weather', icon: <Check className="w-3.5 h-3.5 text-primary-blue" /> },
+                    { id: 'hot', label: 'Extreme Heat', icon: <Flame className="w-3.5 h-3.5 text-alert-red" /> },
+                    { id: 'cold', label: 'Extreme Cold', icon: <Snowflake className="w-3.5 h-3.5 text-electric-cyan" /> },
                   ].map((preset) => (
                     <button
                       key={preset.id}
@@ -590,7 +589,7 @@ const ImpactPage = () => {
                       className={`p-2 rounded-lg border text-xs font-medium flex flex-col items-center gap-1 transition-all ${
                         weatherPreset === preset.id
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          : 'bg-bg-surface text-text-primary border-border-hairline hover:bg-bg-secondary'
                       }`}
                     >
                       {preset.icon}
@@ -606,7 +605,7 @@ const ImpactPage = () => {
                   setCustomRate(null);
                   setWeatherPreset('normal');
                 }}
-                className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 pt-1"
+                className="text-xs text-text-secondary hover:text-text-primary flex items-center gap-1 pt-1"
               >
                 <RotateCcw className="w-3.5 h-3.5" /> Reset Calculator
               </button>
@@ -648,13 +647,13 @@ const ImpactPage = () => {
         </section>
 
         {/* 6. COMPARE SCENARIOS */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+        <section className="bg-bg-surface p-6 rounded-2xl border border-border-hairline shadow-sm space-y-5">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
               <Layers className="w-5 h-5 text-purple-600" />
               6. Compare Usage Scenarios
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-text-secondary mt-1">
               Explore how your monthly bill changes under different real-world scenarios:
             </p>
           </div>
@@ -666,21 +665,21 @@ const ImpactPage = () => {
                 onClick={() => setActiveScenarioId(scen.id)}
                 className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between space-y-3 ${
                   activeScenarioId === scen.id
-                    ? 'bg-blue-50/50 border-blue-500 shadow-sm ring-2 ring-blue-500/20'
-                    : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    ? 'bg-primary-blue/10 border-blue-500 shadow-sm ring-2 ring-blue-500/20'
+                    : 'bg-bg-secondary border-border-hairline hover:border-border-hairline'
                 }`}
               >
                 <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider bg-white text-slate-600 px-2 py-0.5 rounded border border-slate-200 inline-block mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-bg-surface text-text-secondary px-2 py-0.5 rounded border border-border-hairline inline-block mb-2">
                     {scen.badge}
                   </span>
-                  <h3 className="text-xs font-bold text-slate-900">{scen.title}</h3>
-                  <p className="text-[11px] text-slate-500 mt-1 leading-snug">{scen.desc}</p>
+                  <h3 className="text-xs font-bold text-text-primary">{scen.title}</h3>
+                  <p className="text-[11px] text-text-secondary mt-1 leading-snug">{scen.desc}</p>
                 </div>
 
-                <div className="pt-2 border-t border-slate-200/60">
-                  <span className="text-lg font-black text-slate-900 block">${scen.bill.toFixed(2)}</span>
-                  <span className={`text-[11px] font-bold ${scen.savings >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                <div className="pt-2 border-t border-border-hairline">
+                  <span className="text-lg font-black text-text-primary block">${scen.bill.toFixed(2)}</span>
+                  <span className={`text-[11px] font-bold ${scen.savings >= 0 ? 'text-savings-green' : 'text-alert-red'}`}>
                     {scen.savings > 0 ? `Save $${scen.savings.toFixed(2)}/mo` : scen.savings < 0 ? `+$${Math.abs(scen.savings).toFixed(2)}/mo` : 'Current Level'}
                   </span>
                 </div>
@@ -690,14 +689,14 @@ const ImpactPage = () => {
         </section>
 
         {/* 7. BILL HISTORY */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+        <section className="bg-bg-surface p-6 rounded-2xl border border-border-hairline shadow-sm space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary-blue" />
                 7. 12-Month Bill & Usage History
               </h2>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-text-secondary mt-1">
                 Track your monthly bill total ($) alongside electricity usage (kWh) over the past year:
               </p>
             </div>
@@ -729,13 +728,13 @@ const ImpactPage = () => {
         </section>
 
         {/* 8. AI ASSISTANT */}
-        <section className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+        <section className="bg-bg-surface p-6 rounded-2xl border border-border-hairline shadow-sm space-y-5">
           <div>
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              <Bot className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
+              <Bot className="w-5 h-5 text-primary-blue" />
               8. AI Bill Assistant
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-text-secondary mt-1">
               Ask any question about your bill in plain English or click a suggested topic:
             </p>
           </div>
@@ -750,15 +749,15 @@ const ImpactPage = () => {
               <button
                 key={idx}
                 onClick={() => handleSendChat(question)}
-                className="text-xs font-semibold bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 px-3 py-1.5 rounded-full border border-slate-200 transition-all flex items-center gap-1.5"
+                className="text-xs font-semibold bg-bg-secondary hover:bg-primary-blue/10 hover:text-primary-blue text-text-primary px-3 py-1.5 rounded-full border border-border-hairline transition-all flex items-center gap-1.5"
               >
-                <Sparkles className="w-3 h-3 text-blue-500" />
+                <Sparkles className="w-3 h-3 text-primary-blue" />
                 {question}
               </button>
             ))}
           </div>
 
-          <div className="bg-slate-50 rounded-xl border border-slate-200 p-4 h-64 overflow-y-auto space-y-3">
+          <div className="bg-bg-secondary rounded-xl border border-border-hairline p-4 h-64 overflow-y-auto space-y-3">
             {chatMessages.map((msg, idx) => (
               <div
                 key={idx}
@@ -772,7 +771,7 @@ const ImpactPage = () => {
                 <div className={`p-3.5 rounded-2xl max-w-xl text-xs leading-relaxed ${
                   msg.role === 'user'
                     ? 'bg-blue-600 text-white rounded-br-none'
-                    : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none shadow-2xs'
+                    : 'bg-bg-surface text-text-primary border border-border-hairline rounded-bl-none shadow-2xs'
                 }`}>
                   {msg.content}
                 </div>
@@ -787,7 +786,7 @@ const ImpactPage = () => {
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSendChat()}
-              className="flex-1 bg-white border border-slate-300 rounded-xl px-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 bg-bg-surface border border-border-hairline rounded-xl px-4 py-2.5 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               onClick={() => handleSendChat()}

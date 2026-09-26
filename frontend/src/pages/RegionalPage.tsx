@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import axios from 'axios';
+import { apiClient } from '../lib/apiClient.ts';
 import ExecutiveEnergyReport from '../components/regional/ExecutiveEnergyReport.tsx';
 import USMap from '../components/USMap.tsx';
 import StateZipMap from '../components/StateZipMap.tsx';
@@ -223,7 +223,7 @@ const RegionalPage = () => {
     queryKey: ['geo_boundaries', selectedState],
     queryFn: async () => {
       console.log(`[GIS Platform] Fetching /geo/boundaries?state=${selectedState}...`);
-      const res = await axios.get(`/geo/boundaries?state=${selectedState}`);
+      const res = await apiClient.get(`/geo/boundaries?state=${selectedState}`);
       return res.data;
     },
   });
@@ -243,12 +243,12 @@ const RegionalPage = () => {
   // Telemetry queries
   const { data: benchmarkData } = useQuery({
     queryKey: ['benchmark', selectedYear, selectedState],
-    queryFn: async () => (await axios.get(`/benchmark?year=${selectedYear}&compare_state=${selectedState}`)).data
+    queryFn: async () => (await apiClient.get(`/benchmark?year=${selectedYear}&compare_state=${selectedState}`)).data
   });
 
   const { data: geoData } = useQuery({
     queryKey: ['geo', viewMode],
-    queryFn: async () => (await axios.get(`/geo?view_mode=${viewMode}`)).data
+    queryFn: async () => (await apiClient.get(`/geo?view_mode=${viewMode}`)).data
   });
 
   const { data: insightsData, isLoading: isInsightsLoading, refetch: refetchInsights } = useQuery({
@@ -260,7 +260,7 @@ const RegionalPage = () => {
           region: 'Mid-Atlantic / PJM',
           time_period: '2026',
         };
-        const res = await axios.post('/geo/generate-insights', payload);
+        const res = await apiClient.post('/geo/generate-insights', payload);
         return res.data;
       } catch {
         return null;
@@ -429,17 +429,17 @@ const RegionalPage = () => {
   };
 
   return (
-    <div className="space-y-6 font-sans text-gray-900 pb-16">
+    <div className="space-y-6 font-sans text-text-primary pb-16">
       {/* ── GROUNDED CUSTOMER BILL CONTEXT BANNER ──────────────────────── */}
       {hasBill && uploadedBill && (
-        <div className="bg-blue-50/80 border border-blue-200 p-3 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs shadow-xs">
-          <div className="flex items-center gap-2 text-[#1B365D]">
-            <FileCheck size={16} className="text-[#2a4b7c] shrink-0" />
+        <div className="bg-primary-blue/10 border border-primary-blue/20 p-3 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-2 text-xs shadow-xs">
+          <div className="flex items-center gap-2 text-text-primary">
+            <FileCheck size={16} className="text-text-secondary shrink-0" />
             <span>
               <strong>PRIMARY SOURCE OF TRUTH (CUSTOMER BILL):</strong> {uploadedBill.utility} ({uploadedBill.billing_period}) — Meter #{uploadedBill.meter_number || '8849201'} | Total: <strong>${uploadedBill.total_bill?.toFixed(2)}</strong> ({uploadedBill.usage_kwh?.toLocaleString()} kWh @ ${uploadedBill.effective_rate?.toFixed(4)}/kWh)
             </span>
           </div>
-          <span className="text-[10px] font-bold text-green-700 bg-white px-2.5 py-0.5 rounded border border-green-300 shrink-0">
+          <span className="text-[10px] font-bold text-savings-green bg-bg-surface px-2.5 py-0.5 rounded border border-savings-green/20 shrink-0">
             ✓ Uploaded Bill Telemetry Active
           </span>
         </div>
@@ -447,23 +447,23 @@ const RegionalPage = () => {
 
       {/* ── NATIONWIDE PLATFORM CONTROL BAR ─────────────────────────────── */}
       {subTab !== 'ai' && (
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-gray-200 shadow-xs text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-bg-surface p-3.5 rounded-xl border border-border-hairline shadow-xs text-xs">
           <div className="flex items-center gap-2">
-            <Compass size={16} className="text-[#1B365D]" />
-            <span className="font-bold text-gray-800">
+            <Compass size={16} className="text-text-primary" />
+            <span className="font-bold text-text-primary">
               National Regional Analytics &amp; GIS Platform:
             </span>
-            <span className="text-gray-500 font-medium">
+            <span className="text-text-secondary font-medium">
               Exploring <strong>{selectedState}</strong> (Default Customer Focus: {customerState})
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="font-bold text-gray-600 uppercase text-[10px] tracking-wider">Select Region:</label>
+            <label className="font-bold text-text-secondary uppercase text-[10px] tracking-wider">Select Region:</label>
             <select
               value={selectedState}
               onChange={(e) => handleStateSelectionChange(e.target.value)}
-              className="bg-gray-50 border border-gray-300 text-gray-900 text-xs font-bold rounded-lg px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
+              className="bg-bg-secondary border border-border-hairline text-text-primary text-xs font-bold rounded-lg px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
             >
               {ALL_STATE_OPTIONS.map((st) => (
                 <option key={st.code} value={st.code}>{st.name}</option>
@@ -476,7 +476,7 @@ const RegionalPage = () => {
                   handleStateSelectionChange(customerState);
                   setSelectedZip(customerZip);
                 }}
-                className="px-3 py-1 bg-blue-50 text-[#1B365D] hover:bg-blue-100 border border-blue-200 font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                className="px-3 py-1 bg-primary-blue/10 text-text-primary hover:bg-primary-blue/10 border border-primary-blue/20 font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
                 title="Reset view to customer service area"
               >
                 <MapPin size={13} />
@@ -488,7 +488,7 @@ const RegionalPage = () => {
       )}
 
       {/* Navigation Sub-Tabs Header */}
-      <div className="bg-white border border-gray-200 p-2 rounded-xl shadow-xs flex items-center justify-between gap-2 overflow-x-auto print:hidden">
+      <div className="bg-bg-surface border border-border-hairline p-2 rounded-xl shadow-xs flex items-center justify-between gap-2 overflow-x-auto print:hidden">
         <div className="flex items-center gap-1.5 overflow-x-auto">
           {SUB_TABS.map((tab) => {
             const isActive = subTab === tab.id;
@@ -499,10 +499,10 @@ const RegionalPage = () => {
                 className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                   isActive
                     ? 'bg-[#1B365D] text-white shadow-xs'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
                 }`}
               >
-                {tab.id === 'ai' && <Sparkles size={14} className={isActive ? 'text-amber-400' : 'text-blue-600'} />}
+                {tab.id === 'ai' && <Sparkles size={14} className={isActive ? 'text-warning-amber' : 'text-primary-blue'} />}
                 {tab.id === 'summary' && <BarChart3 size={14} />}
                 {tab.id === 'map' && <MapPin size={14} />}
                 {tab.id === 'utility' && <Building2 size={14} />}
@@ -537,24 +537,24 @@ const RegionalPage = () => {
         {/* ── 2. SUMMARY SUB-TAB (Territory Benchmarking & Comparisons) ────── */}
         {subTab === 'summary' && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+            <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-hairline pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <BarChart3 size={20} className="text-[#1B365D]" />
+                  <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                    <BarChart3 size={20} className="text-text-primary" />
                     <span>Nationwide Benchmarking &amp; State Comparisons ({selectedState})</span>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5">
                     Statewide retail electricity price benchmarks vs national baselines and multi-state comparisons.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Select State:</span>
+                  <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">Select State:</span>
                   <select
                     value={selectedState}
                     onChange={(e) => handleStateSelectionChange(e.target.value)}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
+                    className="bg-bg-secondary border border-border-hairline text-text-primary text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
                   >
                     {ALL_STATE_OPTIONS.map((st) => (
                       <option key={st.code} value={st.code}>{st.name}</option>
@@ -565,53 +565,53 @@ const RegionalPage = () => {
 
               {/* Dynamic KPI Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                <div className="bg-blue-50/60 border border-blue-200 p-4 rounded-xl space-y-1">
-                  <span className="text-blue-700 font-bold uppercase tracking-wider block text-[10px]">Average Price ({selectedState})</span>
-                  <span className="text-2xl font-black text-[#1B365D] block">
+                <div className="bg-primary-blue/10 border border-primary-blue/20 p-4 rounded-xl space-y-1">
+                  <span className="text-primary-blue font-bold uppercase tracking-wider block text-[10px]">Average Price ({selectedState})</span>
+                  <span className="text-2xl font-black text-text-primary block">
                     {currentStateMetrics.avgPrice}
                   </span>
-                  <span className="text-[11px] text-blue-600 font-medium block">{currentStateMetrics.grid}</span>
+                  <span className="text-[11px] text-primary-blue font-medium block">{currentStateMetrics.grid}</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider block text-[10px]">Average Monthly Bill</span>
-                  <span className="text-2xl font-black text-gray-900 block">
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
+                  <span className="text-text-secondary font-bold uppercase tracking-wider block text-[10px]">Average Monthly Bill</span>
+                  <span className="text-2xl font-black text-text-primary block">
                     {currentStateMetrics.avgBill}
                   </span>
-                  <span className="text-[11px] text-gray-500 block">Baseline: {currentStateMetrics.avgUsage}</span>
+                  <span className="text-[11px] text-text-secondary block">Baseline: {currentStateMetrics.avgUsage}</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider block text-[10px]">Peak System Demand</span>
-                  <span className="text-2xl font-black text-gray-900 block">
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
+                  <span className="text-text-secondary font-bold uppercase tracking-wider block text-[10px]">Peak System Demand</span>
+                  <span className="text-2xl font-black text-text-primary block">
                     {currentStateMetrics.peakDemand}
                   </span>
-                  <span className="text-[11px] text-gray-500 block">Monitored Grid Telemetry</span>
+                  <span className="text-[11px] text-text-secondary block">Monitored Grid Telemetry</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider block text-[10px]">National Rank</span>
-                  <span className="text-2xl font-black text-amber-600 block">
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
+                  <span className="text-text-secondary font-bold uppercase tracking-wider block text-[10px]">National Rank</span>
+                  <span className="text-2xl font-black text-warning-amber block">
                     {currentStateMetrics.rank}
                   </span>
-                  <span className="text-[11px] text-gray-500 block">Energy Burden: {currentStateMetrics.burden}</span>
+                  <span className="text-[11px] text-text-secondary block">Energy Burden: {currentStateMetrics.burden}</span>
                 </div>
               </div>
 
               {/* State vs State Comparison Panel */}
-              <div className="bg-gray-50/80 border border-gray-200 rounded-xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-gray-800 flex items-center gap-2">
-                    <GitCompare size={16} className="text-[#1B365D]" />
+              <div className="bg-bg-secondary border border-border-hairline rounded-xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border-hairline pb-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary flex items-center gap-2">
+                    <GitCompare size={16} className="text-text-primary" />
                     <span>State vs State Comparison Tool</span>
                   </h4>
 
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-gray-500 font-bold">Compare {selectedState} against:</span>
+                    <span className="text-text-secondary font-bold">Compare {selectedState} against:</span>
                     <select
                       value={compareState}
                       onChange={(e) => setCompareState(e.target.value)}
-                      className="bg-white border border-gray-300 text-gray-900 text-xs font-bold rounded px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D]"
+                      className="bg-bg-surface border border-border-hairline text-text-primary text-xs font-bold rounded px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D]"
                     >
                       {ALL_STATE_OPTIONS.map((st) => (
                         <option key={st.code} value={st.code}>{st.name}</option>
@@ -622,10 +622,10 @@ const RegionalPage = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   {/* Selected State Metric */}
-                  <div className="p-4 bg-white border-2 border-[#1B365D] rounded-xl space-y-2">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-1">
-                      <strong className="text-[#1B365D] text-sm">{selectedState} (Selected Region)</strong>
-                      <span className="bg-blue-100 text-blue-900 px-2 py-0.2 rounded font-bold text-[10px]">Active</span>
+                  <div className="p-4 bg-bg-surface border-2 border-border-hairline rounded-xl space-y-2">
+                    <div className="flex items-center justify-between border-b border-border-hairline pb-1">
+                      <strong className="text-text-primary text-sm">{selectedState} (Selected Region)</strong>
+                      <span className="bg-primary-blue/10 text-primary-blue px-2 py-0.2 rounded font-bold text-[10px]">Active</span>
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between"><span>Retail Price:</span><strong>{currentStateMetrics.avgPrice}</strong></div>
@@ -636,10 +636,10 @@ const RegionalPage = () => {
                   </div>
 
                   {/* Comparison State Metric */}
-                  <div className="p-4 bg-white border border-gray-300 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-1">
-                      <strong className="text-gray-900 text-sm">{compareState} (Comparison Region)</strong>
-                      <span className="bg-gray-100 text-gray-700 px-2 py-0.2 rounded font-bold text-[10px]">Benchmark</span>
+                  <div className="p-4 bg-bg-surface border border-border-hairline rounded-xl space-y-2">
+                    <div className="flex items-center justify-between border-b border-border-hairline pb-1">
+                      <strong className="text-text-primary text-sm">{compareState} (Comparison Region)</strong>
+                      <span className="bg-bg-secondary text-text-primary px-2 py-0.2 rounded font-bold text-[10px]">Benchmark</span>
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between"><span>Retail Price:</span><strong>{compareStateMetrics.avgPrice}</strong></div>
@@ -650,10 +650,10 @@ const RegionalPage = () => {
                   </div>
 
                   {/* Customer Bill vs State Comparison */}
-                  <div className="p-4 bg-amber-50/60 border border-amber-300 rounded-xl space-y-2">
-                    <div className="flex items-center justify-between border-b border-amber-200 pb-1">
-                      <strong className="text-amber-900 text-sm">Your Customer Bill Baseline</strong>
-                      <span className="bg-amber-200 text-amber-900 px-2 py-0.2 rounded font-bold text-[10px]">Uploaded Bill</span>
+                  <div className="p-4 bg-warning-amber/10 border border-warning-amber/20 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between border-b border-warning-amber/20 pb-1">
+                      <strong className="text-warning-amber text-sm">Your Customer Bill Baseline</strong>
+                      <span className="bg-warning-amber/10 text-warning-amber px-2 py-0.2 rounded font-bold text-[10px]">Uploaded Bill</span>
                     </div>
                     <div className="space-y-1">
                       <div className="flex justify-between"><span>Effective Rate:</span><strong>${uploadedBill?.effective_rate?.toFixed(4) || '0.3126'}/kWh</strong></div>
@@ -671,15 +671,15 @@ const RegionalPage = () => {
         {/* ── 3. MAP SUB-TAB (NATIONAL GIS SPATIAL PLATFORM) ───────────────── */}
         {subTab === 'map' && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-6">
+            <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-xs space-y-6">
               {/* GIS Header & Search Controls */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border-hairline pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <MapPin size={20} className="text-[#1B365D]" />
+                  <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                    <MapPin size={20} className="text-text-primary" />
                     <span>National GIS Spatial Drilldown &amp; Analytics Platform ({selectedState})</span>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5">
                     Search any U.S. ZIP Code (e.g. 07304, 10001, 60601, 94105), Municipality, County, or Utility Territory to zoom &amp; highlight boundary polygons.
                   </p>
                 </div>
@@ -687,13 +687,13 @@ const RegionalPage = () => {
                 {/* Search Box */}
                 <form onSubmit={handleGisSearchSubmit} className="flex items-center gap-2">
                   <div className="relative w-full sm:w-64">
-                    <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                    <Search size={14} className="absolute left-3 top-2.5 text-text-secondary" />
                     <input
                       type="text"
                       placeholder="Enter ZIP (07304, 10001...), City..."
                       value={gisSearchQuery}
                       onChange={(e) => setGisSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B365D] font-medium"
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-bg-secondary border border-border-hairline rounded-lg focus:outline-none focus:ring-1 focus:ring-[#1B365D] font-medium"
                     />
                   </div>
 
@@ -707,9 +707,9 @@ const RegionalPage = () => {
               </div>
 
               {/* GIS Layer Controls & View Toggles */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-bg-secondary p-3 rounded-xl border border-border-hairline text-xs">
                 <div className="flex items-center gap-2 overflow-x-auto">
-                  <span className="font-bold text-gray-600 uppercase text-[10px] tracking-wider flex items-center gap-1">
+                  <span className="font-bold text-text-secondary uppercase text-[10px] tracking-wider flex items-center gap-1">
                     <Layers size={14} /> Active Layer:
                   </span>
 
@@ -718,7 +718,7 @@ const RegionalPage = () => {
                     className={`px-2.5 py-1 rounded font-bold transition-all cursor-pointer ${
                       gisActiveLayer === 'rate'
                         ? 'bg-[#1B365D] text-white shadow-xs'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                        : 'bg-bg-surface text-text-primary border border-border-hairline hover:bg-bg-secondary'
                     }`}
                   >
                     Rate Heatmap ($/kWh)
@@ -729,7 +729,7 @@ const RegionalPage = () => {
                     className={`px-2.5 py-1 rounded font-bold transition-all cursor-pointer ${
                       gisActiveLayer === 'utility'
                         ? 'bg-[#1B365D] text-white shadow-xs'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                        : 'bg-bg-surface text-text-primary border border-border-hairline hover:bg-bg-secondary'
                     }`}
                   >
                     Utility Boundaries
@@ -740,7 +740,7 @@ const RegionalPage = () => {
                     className={`px-2.5 py-1 rounded font-bold transition-all cursor-pointer ${
                       gisActiveLayer === 'pjm'
                         ? 'bg-[#1B365D] text-white shadow-xs'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                        : 'bg-bg-surface text-text-primary border border-border-hairline hover:bg-bg-secondary'
                     }`}
                   >
                     PJM Grid Zones
@@ -751,7 +751,7 @@ const RegionalPage = () => {
                     className={`px-2.5 py-1 rounded font-bold transition-all cursor-pointer ${
                       gisActiveLayer === 'weather'
                         ? 'bg-[#1B365D] text-white shadow-xs'
-                        : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                        : 'bg-bg-surface text-text-primary border border-border-hairline hover:bg-bg-secondary'
                     }`}
                   >
                     NOAA Weather Overlay
@@ -760,11 +760,11 @@ const RegionalPage = () => {
 
                 {/* Map Action Toolbar Buttons */}
                 <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 bg-white border border-gray-300 rounded p-0.5">
+                  <div className="flex items-center gap-1 bg-bg-surface border border-border-hairline rounded p-0.5">
                     <button
                       onClick={() => setGisMapMode('zip')}
                       className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                        gisMapMode === 'zip' ? 'bg-[#1B365D] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-100'
+                        gisMapMode === 'zip' ? 'bg-[#1B365D] text-white shadow-xs' : 'text-text-secondary hover:bg-bg-secondary'
                       }`}
                     >
                       ZIP Boundaries ({selectedState})
@@ -772,7 +772,7 @@ const RegionalPage = () => {
                     <button
                       onClick={() => setGisMapMode('national')}
                       className={`px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-all ${
-                        gisMapMode === 'national' ? 'bg-[#1B365D] text-white shadow-xs' : 'text-gray-600 hover:bg-gray-100'
+                        gisMapMode === 'national' ? 'bg-[#1B365D] text-white shadow-xs' : 'text-text-secondary hover:bg-bg-secondary'
                       }`}
                     >
                       50-State National Map
@@ -782,7 +782,7 @@ const RegionalPage = () => {
                   <select
                     value={selectedState}
                     onChange={(e) => handleStateSelectionChange(e.target.value)}
-                    className="bg-white border border-gray-300 text-gray-900 text-xs font-bold rounded px-2 py-1 focus:ring-1 focus:ring-[#1B365D]"
+                    className="bg-bg-surface border border-border-hairline text-text-primary text-xs font-bold rounded px-2 py-1 focus:ring-1 focus:ring-[#1B365D]"
                   >
                     {ALL_STATE_OPTIONS.map((st) => (
                       <option key={st.code} value={st.code}>{st.name}</option>
@@ -795,7 +795,7 @@ const RegionalPage = () => {
                       setSelectedZip(customerZip);
                       refetchBoundaries();
                     }}
-                    className="p-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 rounded transition-colors cursor-pointer"
+                    className="p-1.5 bg-bg-surface border border-border-hairline text-text-primary hover:bg-bg-secondary rounded transition-colors cursor-pointer"
                     title="Focus Customer Territory"
                   >
                     <RotateCcw size={14} />
@@ -804,7 +804,7 @@ const RegionalPage = () => {
                   <button
                     onClick={() => setShowDiagnostics(!showDiagnostics)}
                     className={`p-1.5 border rounded transition-colors cursor-pointer ${
-                      showDiagnostics ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-100'
+                      showDiagnostics ? 'bg-warning-amber/10 text-warning-amber border-warning-amber/20' : 'bg-bg-surface border-border-hairline text-text-primary hover:bg-bg-secondary'
                     }`}
                     title="Toggle GIS Diagnostics Panel"
                   >
@@ -813,7 +813,7 @@ const RegionalPage = () => {
 
                   <button
                     onClick={() => setIsMapFullscreen(!isMapFullscreen)}
-                    className="p-1.5 bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 rounded transition-colors cursor-pointer"
+                    className="p-1.5 bg-bg-surface border border-border-hairline text-text-primary hover:bg-bg-secondary rounded transition-colors cursor-pointer"
                     title="Toggle Fullscreen Map"
                   >
                     {isMapFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
@@ -825,30 +825,30 @@ const RegionalPage = () => {
               {showDiagnostics && (
                 <div className="bg-slate-900 text-slate-100 p-4 rounded-xl text-xs font-mono space-y-2 border border-slate-700 shadow-md">
                   <div className="flex items-center justify-between border-b border-slate-700 pb-2">
-                    <span className="font-bold text-amber-400 flex items-center gap-1.5">
+                    <span className="font-bold text-warning-amber flex items-center gap-1.5">
                       <Cpu size={14} /> GIS Pipeline Diagnostics Inspector
                     </span>
-                    <span className="text-[10px] text-slate-400">CRS: EPSG:4326 (WGS84 Lat/Lon)</span>
+                    <span className="text-[10px] text-text-secondary">CRS: EPSG:4326 (WGS84 Lat/Lon)</span>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[11px]">
                     <div>
-                      <span className="text-slate-400 block">Active Layer Component:</span>
-                      <strong className="text-cyan-400">{gisMapMode === 'national' ? 'USMap (50-State Topology)' : 'StateZipMap (ZCTA ZIP Polygons)'}</strong>
+                      <span className="text-text-secondary block">Active Layer Component:</span>
+                      <strong className="text-electric-cyan">{gisMapMode === 'national' ? 'USMap (50-State Topology)' : 'StateZipMap (ZCTA ZIP Polygons)'}</strong>
                     </div>
 
                     <div>
-                      <span className="text-slate-400 block">Boundary Cache File:</span>
-                      <strong className="text-green-400">data/geojson_cache/zctas_{selectedState}.json</strong>
+                      <span className="text-text-secondary block">Boundary Cache File:</span>
+                      <strong className="text-savings-green">data/geojson_cache/zctas_{selectedState}.json</strong>
                     </div>
 
                     <div>
-                      <span className="text-slate-400 block">Loaded Feature Count:</span>
+                      <span className="text-text-secondary block">Loaded Feature Count:</span>
                       <strong className="text-amber-300">{boundariesGeoJson?.features?.length || 0} ZIP Polygons</strong>
                     </div>
 
                     <div>
-                      <span className="text-slate-400 block">Active Selected ZIP:</span>
+                      <span className="text-text-secondary block">Active Selected ZIP:</span>
                       <strong className="text-blue-300">{selectedZip || 'None (State Center Active)'}</strong>
                     </div>
                   </div>
@@ -856,8 +856,8 @@ const RegionalPage = () => {
               )}
 
               {/* Leaflet GIS Map Canvas Container */}
-              <div className={`w-full bg-slate-50 rounded-xl border border-gray-200 overflow-hidden shadow-inner relative transition-all ${
-                isMapFullscreen ? 'fixed inset-4 z-50 h-[calc(100vh-2rem)] bg-white p-4 rounded-2xl shadow-2xl' : 'h-[500px]'
+              <div className={`w-full bg-bg-secondary rounded-xl border border-border-hairline overflow-hidden shadow-inner relative transition-all ${
+                isMapFullscreen ? 'fixed inset-4 z-50 h-[calc(100vh-2rem)] bg-bg-surface p-4 rounded-2xl shadow-2xl' : 'h-[500px]'
               }`}>
                 {gisMapMode === 'national' ? (
                   <USMap
@@ -891,7 +891,7 @@ const RegionalPage = () => {
               <div className="bg-[#1B365D] text-white rounded-xl p-5 shadow-lg space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-800/80 pb-3">
                   <div className="flex items-center gap-2">
-                    <MapPin size={18} className="text-amber-400" />
+                    <MapPin size={18} className="text-warning-amber" />
                     <div>
                       <h4 className="text-sm font-bold text-white tracking-tight">
                         GIS Context Analytics — {selectedZipDetails.zip} ({selectedZipDetails.state})
@@ -940,7 +940,7 @@ const RegionalPage = () => {
                 </div>
 
                 <div className="flex items-center gap-2 text-xs text-blue-100 bg-white/5 p-2.5 rounded-lg border border-white/10">
-                  <Info size={14} className="text-amber-400 shrink-0" />
+                  <Info size={14} className="text-warning-amber shrink-0" />
                   <span>
                     <strong>NOAA Climate Baseline:</strong> {selectedZipDetails.weather}. Grid telemetry synchronized with {selectedStateInfo.gridOperator}.
                   </span>
@@ -953,34 +953,34 @@ const RegionalPage = () => {
         {/* ── 4. UTILITY SUB-TAB (NATIONWIDE UTILITY INTELLIGENCE) ─────────── */}
         {subTab === 'utility' && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+            <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-hairline pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <Building2 size={20} className="text-[#1B365D]" />
+                  <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                    <Building2 size={20} className="text-text-primary" />
                     <span>Nationwide Utility Intelligence &amp; Tariff Directory ({selectedState})</span>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5">
                     Primary electric utilities serving {selectedState} with active supply rates, delivery riders, SAIDI reliability scores, and customer counts.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <div className="relative w-48">
-                    <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+                    <Search size={14} className="absolute left-2.5 top-2.5 text-text-secondary" />
                     <input
                       type="text"
                       placeholder="Filter utilities..."
                       value={utilitySearchQuery}
                       onChange={(e) => setUtilitySearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1 text-xs bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#1B365D]"
+                      className="w-full pl-8 pr-3 py-1 text-xs bg-bg-secondary border border-border-hairline rounded-md focus:outline-none focus:ring-1 focus:ring-[#1B365D]"
                     />
                   </div>
 
                   <select
                     value={selectedState}
                     onChange={(e) => handleStateSelectionChange(e.target.value)}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
+                    className="bg-bg-secondary border border-border-hairline text-text-primary text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
                   >
                     {ALL_STATE_OPTIONS.map((st) => (
                       <option key={st.code} value={st.code}>{st.name}</option>
@@ -990,7 +990,7 @@ const RegionalPage = () => {
               </div>
 
               {/* Utility Directory Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <div className="overflow-x-auto border border-border-hairline rounded-xl">
                 <table className="w-full text-xs text-left border-collapse">
                   <thead>
                     <tr className="bg-[#1B365D] text-white uppercase text-[11px] font-bold tracking-wider">
@@ -1004,21 +1004,21 @@ const RegionalPage = () => {
                       <th className="p-3">Avg Monthly Bill</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white font-medium text-gray-800">
+                  <tbody className="divide-y divide-border-hairline bg-bg-surface font-medium text-text-primary">
                     {activeUtilities.map((ut, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="p-3 font-bold text-gray-900">{ut.name}</td>
-                        <td className="p-3 text-gray-600">{ut.customers}</td>
-                        <td className="p-3 font-bold text-blue-700">{ut.supplyRate}</td>
-                        <td className="p-3 font-bold text-green-700">{ut.deliveryRate}</td>
-                        <td className="p-3 text-gray-600">{ut.serviceFee}</td>
+                      <tr key={idx} className="hover:bg-bg-secondary">
+                        <td className="p-3 font-bold text-text-primary">{ut.name}</td>
+                        <td className="p-3 text-text-secondary">{ut.customers}</td>
+                        <td className="p-3 font-bold text-primary-blue">{ut.supplyRate}</td>
+                        <td className="p-3 font-bold text-savings-green">{ut.deliveryRate}</td>
+                        <td className="p-3 text-text-secondary">{ut.serviceFee}</td>
                         <td className="p-3">
-                          <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold border border-green-200">
+                          <span className="bg-savings-green/10 text-savings-green px-2 py-0.5 rounded text-[10px] font-bold border border-savings-green/20">
                             {ut.saidi}
                           </span>
                         </td>
-                        <td className="p-3 font-bold text-amber-600">{ut.renewables}</td>
-                        <td className="p-3 font-bold text-gray-900">{ut.avgBill}</td>
+                        <td className="p-3 font-bold text-warning-amber">{ut.renewables}</td>
+                        <td className="p-3 font-bold text-text-primary">{ut.avgBill}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1031,34 +1031,34 @@ const RegionalPage = () => {
         {/* ── 5. MUNICIPALITY SUB-TAB (MUNICIPAL & AGGREGATION ANALYTICS) ──── */}
         {subTab === 'community' && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+            <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-hairline pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <Globe size={20} className="text-[#1B365D]" />
+                  <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                    <Globe size={20} className="text-text-primary" />
                     <span>Municipal &amp; Community Solar Analytics ({selectedState})</span>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5">
                     Municipal energy aggregation programs, median household income, energy burden %, and community solar discounts across major cities.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <div className="relative w-48">
-                    <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
+                    <Search size={14} className="absolute left-2.5 top-2.5 text-text-secondary" />
                     <input
                       type="text"
                       placeholder="Filter cities..."
                       value={muniSearchQuery}
                       onChange={(e) => setMuniSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1 text-xs bg-gray-50 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#1B365D]"
+                      className="w-full pl-8 pr-3 py-1 text-xs bg-bg-secondary border border-border-hairline rounded-md focus:outline-none focus:ring-1 focus:ring-[#1B365D]"
                     />
                   </div>
 
                   <select
                     value={selectedState}
                     onChange={(e) => handleStateSelectionChange(e.target.value)}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
+                    className="bg-bg-secondary border border-border-hairline text-text-primary text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
                   >
                     {ALL_STATE_OPTIONS.map((st) => (
                       <option key={st.code} value={st.code}>{st.name}</option>
@@ -1068,7 +1068,7 @@ const RegionalPage = () => {
               </div>
 
               {/* Municipal Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <div className="overflow-x-auto border border-border-hairline rounded-xl">
                 <table className="w-full text-xs text-left border-collapse">
                   <thead>
                     <tr className="bg-[#1B365D] text-white uppercase text-[11px] font-bold tracking-wider">
@@ -1080,19 +1080,19 @@ const RegionalPage = () => {
                       <th className="p-3">Community Solar Discount</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white font-medium text-gray-800">
+                  <tbody className="divide-y divide-border-hairline bg-bg-surface font-medium text-text-primary">
                     {activeMunicipalities.map((muni, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="p-3 font-bold text-gray-900">{muni.city}</td>
-                        <td className="p-3 text-gray-600">{muni.population}</td>
-                        <td className="p-3 font-bold text-gray-900">{muni.medianIncome}</td>
-                        <td className="p-3 font-bold text-amber-600">{muni.energyBurden}</td>
+                      <tr key={idx} className="hover:bg-bg-secondary">
+                        <td className="p-3 font-bold text-text-primary">{muni.city}</td>
+                        <td className="p-3 text-text-secondary">{muni.population}</td>
+                        <td className="p-3 font-bold text-text-primary">{muni.medianIncome}</td>
+                        <td className="p-3 font-bold text-warning-amber">{muni.energyBurden}</td>
                         <td className="p-3">
-                          <span className="bg-green-50 text-green-700 px-2 py-0.5 rounded text-[10px] font-bold border border-green-200">
+                          <span className="bg-savings-green/10 text-savings-green px-2 py-0.5 rounded text-[10px] font-bold border border-savings-green/20">
                             ✓ {muni.aggregation}
                           </span>
                         </td>
-                        <td className="p-3 font-bold text-blue-700">{muni.solarDiscount}</td>
+                        <td className="p-3 font-bold text-primary-blue">{muni.solarDiscount}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1105,21 +1105,21 @@ const RegionalPage = () => {
         {/* ── 6. GRID SUB-TAB (REAL PJM & NATIONAL GRID BALANCING & TELEMETRY) ─ */}
         {subTab === 'grid' && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-6">
+            <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-xs space-y-6">
               {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-hairline pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <Activity size={20} className="text-[#1B365D]" />
+                  <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                    <Activity size={20} className="text-text-primary" />
                     <span>Real-Time Grid Telemetry &amp; LMP Pricing ({selectedStateInfo.gridOperator})</span>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5">
                     Monitoring balancing area telemetry, locational marginal pricing (LMP), and fuel mix dispatch for {selectedState}.
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-green-700 bg-green-50 px-3 py-1 rounded border border-green-200 flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-savings-green bg-savings-green/10 px-3 py-1 rounded border border-savings-green/20 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-ping" />
                     <span>Live {selectedStateInfo.gridOperator} Stream: Normal</span>
                   </span>
@@ -1128,84 +1128,84 @@ const RegionalPage = () => {
 
               {/* Top System Status Metrics */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                <div className="bg-blue-50/60 border border-blue-200 p-4 rounded-xl space-y-1">
-                  <span className="text-blue-700 font-bold uppercase tracking-wider block text-[10px]">{selectedStateInfo.gridOperator} LMP</span>
-                  <span className="text-2xl font-black text-[#1B365D] block">$38.45/MWh</span>
-                  <span className="text-[11px] text-blue-600 block">Day-Ahead: $36.80/MWh</span>
+                <div className="bg-primary-blue/10 border border-primary-blue/20 p-4 rounded-xl space-y-1">
+                  <span className="text-primary-blue font-bold uppercase tracking-wider block text-[10px]">{selectedStateInfo.gridOperator} LMP</span>
+                  <span className="text-2xl font-black text-text-primary block">$38.45/MWh</span>
+                  <span className="text-[11px] text-primary-blue block">Day-Ahead: $36.80/MWh</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider block text-[10px]">Total System Load</span>
-                  <span className="text-2xl font-black text-gray-900 block">{currentStateMetrics.peakDemand}</span>
-                  <span className="text-[11px] text-gray-500 block">Peak Forecast: +5.5% Margin</span>
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
+                  <span className="text-text-secondary font-bold uppercase tracking-wider block text-[10px]">Total System Load</span>
+                  <span className="text-2xl font-black text-text-primary block">{currentStateMetrics.peakDemand}</span>
+                  <span className="text-[11px] text-text-secondary block">Peak Forecast: +5.5% Margin</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider block text-[10px]">Grid Frequency</span>
-                  <span className="text-2xl font-black text-green-600 block">60.00 Hz</span>
-                  <span className="text-[11px] text-gray-500 block">Operating Reserve: 2,450 MW</span>
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
+                  <span className="text-text-secondary font-bold uppercase tracking-wider block text-[10px]">Grid Frequency</span>
+                  <span className="text-2xl font-black text-savings-green block">60.00 Hz</span>
+                  <span className="text-[11px] text-text-secondary block">Operating Reserve: 2,450 MW</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
-                  <span className="text-gray-500 font-bold uppercase tracking-wider block text-[10px]">Interface Congestion</span>
-                  <span className="text-2xl font-black text-amber-600 block">+$4.20/MWh</span>
-                  <span className="text-[11px] text-gray-500 block">Regional Transfer Limit Active</span>
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
+                  <span className="text-text-secondary font-bold uppercase tracking-wider block text-[10px]">Interface Congestion</span>
+                  <span className="text-2xl font-black text-warning-amber block">+$4.20/MWh</span>
+                  <span className="text-[11px] text-text-secondary block">Regional Transfer Limit Active</span>
                 </div>
               </div>
 
               {/* Fuel Mix Generation Dispatch Breakdown */}
-              <div className="bg-gray-50/70 border border-gray-200 rounded-xl p-5 space-y-4">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700">
+              <div className="bg-bg-secondary border border-border-hairline rounded-xl p-5 space-y-4">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-text-primary">
                   Real-Time Fuel Mix Generation Dispatch ({selectedStateInfo.gridOperator})
                 </h4>
 
                 <div className="space-y-3 text-xs">
                   <div>
-                    <div className="flex justify-between font-bold text-gray-800 mb-1">
+                    <div className="flex justify-between font-bold text-text-primary mb-1">
                       <span>Natural Gas (Marginal Price Setter)</span>
                       <span>44.2% (50,500 MW)</span>
                     </div>
-                    <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-border-hairline h-2.5 rounded-full overflow-hidden">
                       <div className="bg-[#2B6CB0] h-full rounded-full" style={{ width: '44.2%' }} />
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex justify-between font-bold text-gray-800 mb-1">
+                    <div className="flex justify-between font-bold text-text-primary mb-1">
                       <span>Nuclear (Baseload Zero-Carbon)</span>
                       <span>31.5% (36,000 MW)</span>
                     </div>
-                    <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-border-hairline h-2.5 rounded-full overflow-hidden">
                       <div className="bg-[#2F855A] h-full rounded-full" style={{ width: '31.5%' }} />
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex justify-between font-bold text-gray-800 mb-1">
+                    <div className="flex justify-between font-bold text-text-primary mb-1">
                       <span>Renewables (Solar &amp; Wind Interconnection)</span>
                       <span>14.3% (16,340 MW)</span>
                     </div>
-                    <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-border-hairline h-2.5 rounded-full overflow-hidden">
                       <div className="bg-amber-500 h-full rounded-full" style={{ width: '14.3%' }} />
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex justify-between font-bold text-gray-800 mb-1">
+                    <div className="flex justify-between font-bold text-text-primary mb-1">
                       <span>Coal Generation</span>
                       <span>7.2% (8,220 MW)</span>
                     </div>
-                    <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-border-hairline h-2.5 rounded-full overflow-hidden">
                       <div className="bg-[#C53030] h-full rounded-full" style={{ width: '7.2%' }} />
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex justify-between font-bold text-gray-800 mb-1">
+                    <div className="flex justify-between font-bold text-text-primary mb-1">
                       <span>Hydro &amp; Other Resources</span>
                       <span>2.8% (3,190 MW)</span>
                     </div>
-                    <div className="w-full bg-gray-200 h-2.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-border-hairline h-2.5 rounded-full overflow-hidden">
                       <div className="bg-[#63B3ED] h-full rounded-full" style={{ width: '2.8%' }} />
                     </div>
                   </div>
@@ -1218,14 +1218,14 @@ const RegionalPage = () => {
         {/* ── 7. TRENDS SUB-TAB (EIA TIMELINE VOLATILITY & TRENDS) ─────────── */}
         {subTab === 'trends' && (
           <div className="space-y-6">
-            <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-xs space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+            <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-hairline pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                    <TrendingUp size={20} className="text-[#1B365D]" />
+                  <h3 className="text-lg font-bold text-text-primary flex items-center gap-2">
+                    <TrendingUp size={20} className="text-text-primary" />
                     <span>EIA Timeline &amp; Rate Volatility Trends ({selectedState})</span>
                   </h3>
-                  <p className="text-xs text-gray-500 mt-0.5">
+                  <p className="text-xs text-text-secondary mt-0.5">
                     12-month historical trajectory and EIA-861M monthly retail electricity price trends across all U.S. states.
                   </p>
                 </div>
@@ -1234,7 +1234,7 @@ const RegionalPage = () => {
                   <select
                     value={selectedState}
                     onChange={(e) => handleStateSelectionChange(e.target.value)}
-                    className="bg-gray-50 border border-gray-300 text-gray-900 text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
+                    className="bg-bg-secondary border border-border-hairline text-text-primary text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#1B365D] focus:outline-none cursor-pointer"
                   >
                     {ALL_STATE_OPTIONS.map((st) => (
                       <option key={st.code} value={st.code}>{st.name}</option>
@@ -1245,42 +1245,42 @@ const RegionalPage = () => {
 
               {/* Retail Power Sector Price Trends */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Residential Sector</span>
-                    <span className="text-green-600 font-bold text-[10px] flex items-center gap-0.5">
+                    <span className="text-text-secondary font-bold uppercase tracking-wider text-[10px]">Residential Sector</span>
+                    <span className="text-savings-green font-bold text-[10px] flex items-center gap-0.5">
                       <ArrowUpRight size={12} /> +1.8% YoY
                     </span>
                   </div>
-                  <span className="text-2xl font-black text-gray-900 block">{currentStateMetrics.avgPrice}</span>
-                  <span className="text-[11px] text-gray-500 block">52-Wk Range: $0.298 - $0.334</span>
+                  <span className="text-2xl font-black text-text-primary block">{currentStateMetrics.avgPrice}</span>
+                  <span className="text-[11px] text-text-secondary block">52-Wk Range: $0.298 - $0.334</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Commercial Sector</span>
-                    <span className="text-green-600 font-bold text-[10px] flex items-center gap-0.5">
+                    <span className="text-text-secondary font-bold uppercase tracking-wider text-[10px]">Commercial Sector</span>
+                    <span className="text-savings-green font-bold text-[10px] flex items-center gap-0.5">
                       <ArrowUpRight size={12} /> +0.9% YoY
                     </span>
                   </div>
-                  <span className="text-2xl font-black text-gray-900 block">$0.2450/kWh</span>
-                  <span className="text-[11px] text-gray-500 block">52-Wk Range: $0.232 - $0.258</span>
+                  <span className="text-2xl font-black text-text-primary block">$0.2450/kWh</span>
+                  <span className="text-[11px] text-text-secondary block">52-Wk Range: $0.232 - $0.258</span>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl space-y-1">
+                <div className="bg-bg-secondary border border-border-hairline p-4 rounded-xl space-y-1">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-500 font-bold uppercase tracking-wider text-[10px]">Industrial Sector</span>
-                    <span className="text-red-600 font-bold text-[10px] flex items-center gap-0.5">
+                    <span className="text-text-secondary font-bold uppercase tracking-wider text-[10px]">Industrial Sector</span>
+                    <span className="text-alert-red font-bold text-[10px] flex items-center gap-0.5">
                       <ArrowDownRight size={12} /> -0.4% YoY
                     </span>
                   </div>
-                  <span className="text-2xl font-black text-gray-900 block">$0.1820/kWh</span>
-                  <span className="text-[11px] text-gray-500 block">52-Wk Range: $0.175 - $0.191</span>
+                  <span className="text-2xl font-black text-text-primary block">$0.1820/kWh</span>
+                  <span className="text-[11px] text-text-secondary block">52-Wk Range: $0.175 - $0.191</span>
                 </div>
               </div>
 
               {/* 12-Month Historical Trajectory Table */}
-              <div className="overflow-x-auto border border-gray-200 rounded-xl">
+              <div className="overflow-x-auto border border-border-hairline rounded-xl">
                 <table className="w-full text-xs text-left border-collapse">
                   <thead>
                     <tr className="bg-[#1B365D] text-white uppercase text-[11px] font-bold tracking-wider">
@@ -1292,7 +1292,7 @@ const RegionalPage = () => {
                       <th className="p-3">Price Volatility Index</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white font-medium text-gray-800">
+                  <tbody className="divide-y divide-border-hairline bg-bg-surface font-medium text-text-primary">
                     {[
                       { month: 'Jan 2026', res: currentStateMetrics.avgPrice, com: '$0.2450', ind: '$0.1820', mom: '+0.00%', vol: 'Low' },
                       { month: 'Dec 2025', res: currentStateMetrics.avgPrice, com: '$0.2448', ind: '$0.1822', mom: '+0.15%', vol: 'Low' },
@@ -1301,15 +1301,15 @@ const RegionalPage = () => {
                       { month: 'Sep 2025', res: '$0.3180', com: '$0.2490', ind: '$0.1850', mom: '+1.20%', vol: 'Medium' },
                       { month: 'Aug 2025', res: '$0.3240', com: '$0.2520', ind: '$0.1880', mom: '+1.80%', vol: 'Medium' },
                     ].map((row, idx) => (
-                      <tr key={idx} className="hover:bg-gray-50">
-                        <td className="p-3 font-bold text-gray-900">{row.month}</td>
-                        <td className="p-3 font-bold text-blue-700">{row.res}</td>
-                        <td className="p-3 font-bold text-[#1B365D]">{row.com}</td>
-                        <td className="p-3 text-gray-700">{row.ind}</td>
-                        <td className="p-3 font-bold text-gray-900">{row.mom}</td>
+                      <tr key={idx} className="hover:bg-bg-secondary">
+                        <td className="p-3 font-bold text-text-primary">{row.month}</td>
+                        <td className="p-3 font-bold text-primary-blue">{row.res}</td>
+                        <td className="p-3 font-bold text-text-primary">{row.com}</td>
+                        <td className="p-3 text-text-primary">{row.ind}</td>
+                        <td className="p-3 font-bold text-text-primary">{row.mom}</td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                            row.vol === 'Medium' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-green-50 text-green-700 border-green-200'
+                            row.vol === 'Medium' ? 'bg-warning-amber/10 text-warning-amber border-warning-amber/20' : 'bg-savings-green/10 text-savings-green border-savings-green/20'
                           }`}>
                             {row.vol}
                           </span>

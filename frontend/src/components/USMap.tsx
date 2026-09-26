@@ -110,16 +110,16 @@ const USMap = ({ selectedState = 'NJ', onStateClick, onStateHover }: USMapProps)
 
   if (loadError) {
     return (
-      <div className="w-full h-full min-h-[400px] flex flex-col items-center justify-center bg-slate-50 text-slate-700 p-6 space-y-2">
+      <div className="w-full h-full min-h-[400px] flex flex-col items-center justify-center bg-bg-secondary text-text-primary p-6 space-y-2">
         <span className="font-bold text-sm">50-State Topology Map Loading Fallback</span>
-        <span className="text-xs text-slate-500">Select any state from the dropdown to load state ZIP boundaries.</span>
+        <span className="text-xs text-text-secondary">Select any state from the dropdown to load state ZIP boundaries.</span>
       </div>
     );
   }
 
   if (!geoJson) {
     return (
-      <div className="w-full h-full min-h-[400px] flex items-center justify-center bg-slate-50 text-xs font-bold text-[#1B365D]">
+      <div className="w-full h-full min-h-[400px] flex items-center justify-center bg-bg-secondary text-xs font-bold text-text-primary">
         Loading 50-State National Topology &amp; Coverage Map...
       </div>
     );
@@ -209,34 +209,34 @@ const USMap = ({ selectedState = 'NJ', onStateClick, onStateHover }: USMapProps)
       </MapContainer>
 
       {/* ── National Data Availability Coverage Legend ───────────────────── */}
-      <div className="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-xs p-3 rounded-xl border border-gray-200 shadow-md text-xs space-y-1.5 font-sans pointer-events-none">
-        <strong className="text-[11px] uppercase tracking-wider text-gray-700 block mb-1">
+      <div className="absolute bottom-4 left-4 z-10 bg-white/95 backdrop-blur-xs p-3 rounded-xl border border-border-hairline shadow-md text-xs space-y-1.5 font-sans pointer-events-none">
+        <strong className="text-[11px] uppercase tracking-wider text-text-primary block mb-1">
           National Data Availability &amp; Coverage Legend
         </strong>
 
         <div className="flex items-center gap-2">
           <span className="w-3.5 h-3.5 rounded-xs bg-[#1D4ED8] inline-block border border-blue-900" />
-          <span className="text-gray-800 font-medium">Complete Analytics (ZCTAs, Rates, EIA, Weather)</span>
+          <span className="text-text-primary font-medium">Complete Analytics (ZCTAs, Rates, EIA, Weather)</span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="w-3.5 h-3.5 rounded-xs bg-[#3B82F6] inline-block border border-blue-700" />
-          <span className="text-gray-800 font-medium">Most Datasets Available (Rates, Utilities, Grid)</span>
+          <span className="text-text-primary font-medium">Most Datasets Available (Rates, Utilities, Grid)</span>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="w-3.5 h-3.5 rounded-xs bg-[#93C5FD] inline-block border border-blue-400" />
-          <span className="text-gray-800 font-medium">Limited Datasets (EIA Retail Benchmarks)</span>
+          <span className="text-text-primary font-medium">Limited Datasets (EIA Retail Benchmarks)</span>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="w-3.5 h-3.5 rounded-xs bg-[#E2E8F0] inline-block border border-gray-300" />
-          <span className="text-gray-500 font-medium">No Analytics Available (Gray)</span>
+          <span className="w-3.5 h-3.5 rounded-xs bg-[#E2E8F0] inline-block border border-border-hairline" />
+          <span className="text-text-secondary font-medium">No Analytics Available (Gray)</span>
         </div>
 
-        <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
+        <div className="flex items-center gap-2 pt-1 border-t border-border-hairline">
           <span className="w-3.5 h-3.5 rounded-xs bg-[#1D4ED8] inline-block border-2 border-[#EF4444]" />
-          <span className="text-gray-900 font-bold">Selected Active Region (Red Selection Outline)</span>
+          <span className="text-text-primary font-bold">Selected Active Region (Red Selection Outline)</span>
         </div>
       </div>
     </div>

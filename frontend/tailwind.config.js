@@ -13,18 +13,23 @@ export default {
         negative: '#DC2626',
         neutral: '#64748B',
         border: '#E5E7EB',
-        'bg-primary': 'var(--bg-primary)',
+        // Channel form so opacity modifiers work: bg-primary-blue/10 compiles
+        // to rgb(var(--primary-blue-rgb) / 0.1). A bare var() holding a hex
+        // cannot take an alpha modifier — those utilities emitted no CSS at all.
+        'bg-primary': 'rgb(var(--bg-primary-rgb) / <alpha-value>)',
+        'bg-secondary': 'rgb(var(--bg-secondary-rgb) / <alpha-value>)',
+        'text-primary': 'rgb(var(--text-primary-rgb) / <alpha-value>)',
+        'text-secondary': 'rgb(var(--text-secondary-rgb) / <alpha-value>)',
+        'primary-blue': 'rgb(var(--primary-blue-rgb) / <alpha-value>)',
+        'energy-teal': 'rgb(var(--energy-teal-rgb) / <alpha-value>)',
+        'electric-cyan': 'rgb(var(--electric-cyan-rgb) / <alpha-value>)',
+        'warning-amber': 'rgb(var(--warning-amber-rgb) / <alpha-value>)',
+        'savings-green': 'rgb(var(--savings-green-rgb) / <alpha-value>)',
+        'alert-red': 'rgb(var(--alert-red-rgb) / <alpha-value>)',
+        // These two carry their own alpha, so they stay as plain vars and do
+        // not accept an opacity modifier.
         'bg-surface': 'var(--bg-surface)',
-        'bg-secondary': 'var(--bg-secondary)',
         'border-hairline': 'var(--border-hairline)',
-        'text-primary': 'var(--text-primary)',
-        'text-secondary': 'var(--text-secondary)',
-        'primary-blue': 'var(--primary-blue)',
-        'energy-teal': 'var(--energy-teal)',
-        'electric-cyan': 'var(--electric-cyan)',
-        'warning-amber': 'var(--warning-amber)',
-        'savings-green': 'var(--savings-green)',
-        'alert-red': 'var(--alert-red)',
       },
       boxShadow: {
         'sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',

@@ -133,6 +133,7 @@ export default function AIAssistantDrawer({ isOpen, onClose }: AIAssistantDrawer
               </div>
               <button 
                 onClick={onClose} 
+                aria-label="Close AI assistant"
                 className="p-1.5 rounded-md hover:bg-col-hover text-text-secondary hover:text-text-primary transition-all active:scale-95"
               >
                 <X size={16} />

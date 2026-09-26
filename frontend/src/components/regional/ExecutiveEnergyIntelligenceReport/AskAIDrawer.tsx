@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { X, Send, Bot, User, Sparkles, HelpCircle } from 'lucide-react';
 import type { ExecutiveReportData } from './types';
 
@@ -45,12 +45,18 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
     'Explain the 90-day forecast assumptions',
   ];
 
+  const messageIdRef = useRef(0);
+  const nextMessageId = () => {
+    messageIdRef.current += 1;
+    return `msg-${messageIdRef.current}`;
+  };
+
   const handleSend = (textToSend?: string) => {
     const query = textToSend || input;
     if (!query.trim()) return;
 
     const userMsg: Message = {
-      id: Date.now().toString(),
+      id: nextMessageId(),
       sender: 'user',
       text: query,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -76,7 +82,7 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
       }
 
       const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
+        id: nextMessageId(),
         sender: 'ai',
         text: aiResponseText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -89,7 +95,7 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/40 backdrop-blur-xs flex justify-end transition-opacity">
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col font-sans border-l border-gray-200 animate-in slide-in-from-right duration-300">
+      <div className="w-full max-w-md bg-bg-surface h-full shadow-2xl flex flex-col font-sans border-l border-border-hairline animate-in slide-in-from-right duration-300">
         {/* Drawer Header */}
         <div className="p-4 bg-[#1B365D] text-white flex items-center justify-between shadow-md">
           <div className="flex items-center gap-2.5">
@@ -99,7 +105,7 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
                 <span>AI Energy Analyst Assistant</span>
-                <Sparkles size={13} className="text-amber-400 fill-amber-400" />
+                <Sparkles size={13} className="text-warning-amber fill-warning-amber" />
               </h3>
               <span className="text-[11px] text-blue-200">Context: Executive Energy Intelligence Report ({stateCode})</span>
             </div>
@@ -107,6 +113,7 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
 
           <button
             onClick={onClose}
+            aria-label="Close Ask AI panel"
             className="p-1 rounded-md text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <X size={18} />
@@ -114,8 +121,8 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
         </div>
 
         {/* Quick Questions Suggestions */}
-        <div className="bg-blue-50/70 p-3 border-b border-blue-100 space-y-1.5">
-          <span className="text-[11px] font-bold text-[#2a4b7c] uppercase tracking-wider flex items-center gap-1">
+        <div className="bg-primary-blue/10 p-3 border-b border-primary-blue/20 space-y-1.5">
+          <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider flex items-center gap-1">
             <HelpCircle size={12} />
             <span>Suggested Context Questions:</span>
           </span>
@@ -124,7 +131,7 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
               <button
                 key={idx}
                 onClick={() => handleSend(q)}
-                className="text-[11px] bg-white border border-blue-200 hover:border-blue-400 text-gray-800 px-2.5 py-1 rounded-full transition-colors cursor-pointer text-left hover:bg-blue-50"
+                className="text-[11px] bg-bg-surface border border-primary-blue/20 hover:border-blue-400 text-text-primary px-2.5 py-1 rounded-full transition-colors cursor-pointer text-left hover:bg-primary-blue/10"
               >
                 {q}
               </button>
@@ -133,7 +140,7 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
         </div>
 
         {/* Message Log */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-gray-50/50">
+        <div className="flex-1 p-4 overflow-y-auto space-y-3.5 bg-bg-secondary">
           {messages.map((msg) => {
             const isAI = msg.sender === 'ai';
             return (
@@ -141,19 +148,19 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
                 key={msg.id}
                 className={`flex items-start gap-2.5 ${isAI ? '' : 'flex-row-reverse'}`}
               >
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 font-bold ${isAI ? 'bg-[#1B365D] text-amber-300' : 'bg-amber-400 text-gray-950'}`}>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 font-bold ${isAI ? 'bg-[#1B365D] text-amber-300' : 'bg-amber-400 text-text-primary'}`}>
                   {isAI ? <Bot size={14} /> : <User size={14} />}
                 </div>
 
                 <div
                   className={`max-w-[80%] rounded-xl p-3 text-xs leading-relaxed ${
                     isAI
-                      ? 'bg-white text-gray-800 border border-gray-200 shadow-xs'
+                      ? 'bg-bg-surface text-text-primary border border-border-hairline shadow-xs'
                       : 'bg-[#1B365D] text-white'
                   }`}
                 >
                   <p className="whitespace-pre-line">{msg.text}</p>
-                  <span className={`text-[10px] block mt-1 text-right ${isAI ? 'text-gray-400' : 'text-blue-200'}`}>
+                  <span className={`text-[10px] block mt-1 text-right ${isAI ? 'text-text-secondary' : 'text-blue-200'}`}>
                     {msg.timestamp}
                   </span>
                 </div>
@@ -162,15 +169,15 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
           })}
 
           {isThinking && (
-            <div className="flex items-center gap-2 text-xs text-gray-500 bg-white p-2.5 rounded-lg border border-gray-200 w-fit animate-pulse">
-              <Bot size={14} className="text-[#1B365D]" />
+            <div className="flex items-center gap-2 text-xs text-text-secondary bg-bg-surface p-2.5 rounded-lg border border-border-hairline w-fit animate-pulse">
+              <Bot size={14} className="text-text-primary" />
               <span>Analyzing report telemetry...</span>
             </div>
           )}
         </div>
 
         {/* Input Bar */}
-        <div className="p-3 bg-white border-t border-gray-200">
+        <div className="p-3 bg-bg-surface border-t border-border-hairline">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -183,10 +190,11 @@ export const AskAIDrawer: React.FC<AskAIDrawerProps> = ({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask AI about this executive report..."
-              className="flex-1 bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#1B365D]"
+              className="flex-1 bg-bg-secondary border border-border-hairline rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-[#1B365D]"
             />
             <button
               type="submit"
+              aria-label="Send question"
               disabled={!input.trim() || isThinking}
               className="p-2 bg-[#1B365D] hover:bg-[#0F2942] disabled:opacity-50 text-white rounded-lg transition-colors cursor-pointer shrink-0"
             >

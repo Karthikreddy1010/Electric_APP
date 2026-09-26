@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillContextProvider } from './context/BillContext.tsx';
 import { NavigationProvider } from './context/NavigationContext.tsx';
 import { AuthContextProvider, useAuth } from './context/AuthContext.tsx';
+import { ThemeProvider } from './context/ThemeContext.tsx';
 
 import LandingPage from './pages/LandingPage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
@@ -120,6 +121,7 @@ function VerifyPendingPage() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
       <BrowserRouter basename="/app">
         <AuthContextProvider>
           <BillContextProvider>
@@ -159,6 +161,7 @@ function App() {
           </BillContextProvider>
         </AuthContextProvider>
       </BrowserRouter>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -21,11 +21,25 @@ _INSECURE_PREFIXES = (
 
 
 def _get_jwt_secret(env_var: str, dev_fallback_prefix: str) -> str:
-    """Return the JWT secret from the environment, or a random dev-only fallback."""
+    """Return the JWT secret from the environment, or a random dev-only fallback.
+
+    The fallback is generated per process, so every worker would sign tokens with
+    a different key. That is tolerable for a single-process dev server and fatal
+    anywhere else, which is what validate_production_secrets() guards against.
+    """
     value = os.environ.get(env_var, "").strip()
     if value:
         return value
     return dev_fallback_prefix + secrets.token_hex(16)
+
+
+def _is_production_env() -> bool:
+    """True when APP_ENV names a deployed environment."""
+    return os.environ.get("APP_ENV", "development").strip().lower() in {
+        "production",
+        "prod",
+        "staging",
+    }
 
 
 class AuthConfig:
@@ -50,6 +64,7 @@ class AuthConfig:
     REMEMBER_ME_DAYS: int = int(os.environ.get("REMEMBER_ME_DAYS", "30"))
 
     # ── Cookies ───────────────────────────────────────────────────────────────
+    APP_ENV: str = os.environ.get("APP_ENV", "development").strip().lower()
     COOKIE_SECURE: bool = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
     COOKIE_SAMESITE: str = os.environ.get("COOKIE_SAMESITE", "lax")
     COOKIE_DOMAIN: str | None = os.environ.get("COOKIE_DOMAIN") or None
@@ -78,7 +93,8 @@ class AuthConfig:
 
     def validate_production_secrets(self) -> None:
         """Refuse to start in production mode with insecure default secrets."""
-        if not self.COOKIE_SECURE:
+        is_production = self.COOKIE_SECURE or _is_production_env()
+        if not is_production:
             # Dev mode — warn but allow startup
             for name, val in [("JWT_SECRET_KEY", self.SECRET_KEY),
                               ("JWT_REFRESH_SECRET_KEY", self.REFRESH_SECRET_KEY)]:
@@ -90,7 +106,8 @@ class AuthConfig:
                     )
             return
 
-        # Production mode (COOKIE_SECURE=true) — hard fail on insecure secrets
+        # Production mode (APP_ENV=production|staging or COOKIE_SECURE=true)
+        # — hard fail on insecure secrets
         for name, val in [("JWT_SECRET_KEY", self.SECRET_KEY),
                           ("JWT_REFRESH_SECRET_KEY", self.REFRESH_SECRET_KEY)]:
             if any(val.startswith(p) for p in _INSECURE_PREFIXES):

@@ -10,6 +10,8 @@ from api.schemas import BillBreakdownResponse, TrendResponse, UtilityLookupRespo
 from api.services.billing_service import build_breakdown, build_trends
 
 router = APIRouter(tags=["billing"])
+# Mounted twice in api/main.py: under /billing (documented) and bare
+# (legacy alias). Declare each path once here.
 
 
 @router.get("/bill-breakdown", response_model=list[BillBreakdownResponse])
@@ -33,7 +35,6 @@ async def get_trends(months: int = Query(36, ge=6, le=84)):
 # ── Customer Archetypes & Bill Health Endpoints ────────────────────────────
 
 @router.get("/customer-archetype")
-@router.get("/billing/customer-archetype")
 async def get_customer_archetype(
     usage_kwh: float = Query(750.0, ge=0),
     peak_kw: float = Query(0.0, ge=0),
@@ -45,7 +46,6 @@ async def get_customer_archetype(
 
 
 @router.get("/bill-health-score")
-@router.get("/billing/bill-health-score")
 async def get_bill_health_score(
     usage_kwh: float = Query(750.0, ge=0),
     total_bill: float = Query(160.65, ge=0),

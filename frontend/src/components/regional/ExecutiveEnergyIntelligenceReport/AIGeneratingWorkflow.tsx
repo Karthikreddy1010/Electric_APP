@@ -60,32 +60,32 @@ export const AIGeneratingWorkflow: React.FC<AIGeneratingWorkflowProps> = ({
   return (
     <div className="max-w-[900px] mx-auto space-y-6 font-sans">
       {/* Header Container */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-md space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+      <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-md space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border-hairline pb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-[#2a4b7c] flex items-center justify-center text-white shadow-xs shrink-0">
               <Cpu size={22} className="animate-pulse" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
                 <span>AI Analyst is Generating Your Executive Intelligence Report</span>
-                <Sparkles size={16} className="text-amber-500 fill-amber-400" />
+                <Sparkles size={16} className="text-warning-amber fill-warning-amber" />
               </h2>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-text-secondary">
                 Synthesizing multi-page intelligence across 14 comprehensive executive sections...
               </p>
             </div>
           </div>
 
           <div className="text-right">
-            <span className="text-xs font-bold text-[#2a4b7c] bg-blue-50 px-2.5 py-1 rounded border border-blue-200 inline-block">
+            <span className="text-xs font-bold text-text-secondary bg-primary-blue/10 px-2.5 py-1 rounded border border-primary-blue/20 inline-block">
               Progress: {progressPct}%
             </span>
           </div>
         </div>
 
         {/* Progress Bar */}
-        <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
+        <div className="w-full bg-bg-secondary h-2.5 rounded-full overflow-hidden">
           <div
             className="bg-gradient-to-r from-[#2a4b7c] via-blue-600 to-amber-500 h-full transition-all duration-300 ease-out"
             style={{ width: `${progressPct}%` }}
@@ -103,18 +103,18 @@ export const AIGeneratingWorkflow: React.FC<AIGeneratingWorkflowProps> = ({
                 key={step.id}
                 className={`flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[11px] transition-all border ${
                   isDone
-                    ? 'bg-green-50/60 border-green-200 text-gray-800'
+                    ? 'bg-savings-green/10 border-savings-green/20 text-text-primary'
                     : isCurrent
-                    ? 'bg-blue-50 border-blue-300 text-[#2a4b7c] font-bold shadow-xs'
-                    : 'bg-gray-50/50 border-gray-100 text-gray-400'
+                    ? 'bg-primary-blue/10 border-primary-blue/20 text-text-secondary font-bold shadow-xs'
+                    : 'bg-bg-secondary border-border-hairline text-text-secondary'
                 }`}
               >
                 {isDone ? (
-                  <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+                  <CheckCircle2 size={14} className="text-savings-green shrink-0" />
                 ) : isCurrent ? (
-                  <Loader2 size={14} className="animate-spin text-[#2a4b7c] shrink-0" />
+                  <Loader2 size={14} className="animate-spin text-text-secondary shrink-0" />
                 ) : (
-                  <div className="w-3.5 h-3.5 rounded-full border border-gray-300 shrink-0" />
+                  <div className="w-3.5 h-3.5 rounded-full border border-border-hairline shrink-0" />
                 )}
 
                 <span className="truncate">{step.label}</span>
@@ -124,8 +124,8 @@ export const AIGeneratingWorkflow: React.FC<AIGeneratingWorkflowProps> = ({
         </div>
 
         {/* Streaming Section Indicators */}
-        <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-600">
-          <span className="font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1">
+        <div className="pt-2 border-t border-border-hairline flex flex-wrap items-center justify-between gap-2 text-[11px] text-text-secondary">
+          <span className="font-bold uppercase tracking-wider text-text-secondary flex items-center gap-1">
             <Layers size={13} />
             <span>Multi-Page Sections:</span>
           </span>
@@ -136,8 +136,8 @@ export const AIGeneratingWorkflow: React.FC<AIGeneratingWorkflowProps> = ({
                 key={secKey}
                 className={`px-2 py-0.5 rounded border ${
                   isUnlocked
-                    ? 'bg-green-50 border-green-300 text-green-700 font-bold'
-                    : 'bg-gray-50 border-gray-200 text-gray-400'
+                    ? 'bg-savings-green/10 border-savings-green/20 text-savings-green font-bold'
+                    : 'bg-bg-secondary border-border-hairline text-text-secondary'
                 }`}
               >
                 {isUnlocked ? `✓ Sec ${idx + 1}` : `Sec ${idx + 1}`}

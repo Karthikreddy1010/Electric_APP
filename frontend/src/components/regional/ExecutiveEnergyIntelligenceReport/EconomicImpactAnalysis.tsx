@@ -17,7 +17,7 @@ export const EconomicImpactAnalysis: React.FC<EconomicImpactAnalysisProps> = Rea
       <div className="section-label">SECTION {sectionNumber}</div>
       <h2 className="serif-title">Economic Impact Analysis</h2>
 
-      <div className="overflow-x-auto border border-gray-300">
+      <div className="overflow-x-auto border border-border-hairline">
         <table className="risk-matrix">
           <thead>
             <tr>
@@ -32,7 +32,7 @@ export const EconomicImpactAnalysis: React.FC<EconomicImpactAnalysisProps> = Rea
               <tr key={idx}>
                 <td>{item.sector}</td>
                 <td>
-                  <span className="font-bold text-[#2a4b7c]">{item.billImpact}</span>
+                  <span className="font-bold text-text-secondary">{item.billImpact}</span>
                 </td>
                 <td>{item.operationalImpact}</td>
                 <td className="text-[#27ae60] font-bold">{item.savingsOpportunity}</td>

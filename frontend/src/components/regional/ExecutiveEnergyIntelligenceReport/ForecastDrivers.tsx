@@ -17,7 +17,7 @@ export const ForecastDrivers: React.FC<ForecastDriversProps> = React.memo(({
       <div className="section-label">SECTION {sectionNumber}</div>
       <h2 className="serif-title">Forecast Drivers &amp; Regression Evidence</h2>
 
-      <div className="overflow-x-auto border border-gray-300">
+      <div className="overflow-x-auto border border-border-hairline">
         <table className="risk-matrix">
           <thead>
             <tr>
@@ -31,7 +31,7 @@ export const ForecastDrivers: React.FC<ForecastDriversProps> = React.memo(({
             {drivers.map((d, idx) => (
               <tr key={idx}>
                 <td>{d.factor}</td>
-                <td className="font-bold text-[#2a4b7c]">{d.contributionPct}%</td>
+                <td className="font-bold text-text-secondary">{d.contributionPct}%</td>
                 <td>
                   <span className="badge low" style={{ width: '70px', fontSize: '11px' }}>
                     {d.confidencePct}%

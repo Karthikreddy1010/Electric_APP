@@ -123,8 +123,8 @@ const StateZipMap = ({
   // Render Loading state
   if (isLoading) {
     return (
-      <div className="w-full h-full min-h-[480px] flex flex-col items-center justify-center bg-slate-50 text-slate-600 gap-3">
-        <RefreshCw size={24} className="animate-spin text-[#1B365D]" />
+      <div className="w-full h-full min-h-[480px] flex flex-col items-center justify-center bg-bg-secondary text-text-secondary gap-3">
+        <RefreshCw size={24} className="animate-spin text-text-primary" />
         <span className="text-xs font-bold uppercase tracking-wider">Fetching {selectedState} ZCTA GeoJSON Boundary Datasets...</span>
       </div>
     );
@@ -133,10 +133,10 @@ const StateZipMap = ({
   // Render Error state
   if (error) {
     return (
-      <div className="w-full h-full min-h-[480px] flex flex-col items-center justify-center bg-red-50 text-red-700 p-6 space-y-3 border border-red-200 rounded-xl">
-        <AlertCircle size={28} className="text-red-600" />
+      <div className="w-full h-full min-h-[480px] flex flex-col items-center justify-center bg-alert-red/10 text-alert-red p-6 space-y-3 border border-alert-red/20 rounded-xl">
+        <AlertCircle size={28} className="text-alert-red" />
         <span className="text-sm font-bold">GIS Boundary Data Error ({selectedState})</span>
-        <p className="text-xs text-red-600 text-center max-w-md">{error}</p>
+        <p className="text-xs text-alert-red text-center max-w-md">{error}</p>
         {onRetry && (
           <button
             onClick={onRetry}
@@ -152,10 +152,10 @@ const StateZipMap = ({
   // Render Empty/Missing FeatureCollection state
   if (!normalizedGeoJson || !normalizedGeoJson.features || normalizedGeoJson.features.length === 0) {
     return (
-      <div className="w-full h-full min-h-[480px] flex flex-col items-center justify-center bg-amber-50 text-amber-800 p-6 space-y-3 border border-amber-200 rounded-xl">
-        <AlertCircle size={28} className="text-amber-600" />
+      <div className="w-full h-full min-h-[480px] flex flex-col items-center justify-center bg-warning-amber/10 text-warning-amber p-6 space-y-3 border border-warning-amber/20 rounded-xl">
+        <AlertCircle size={28} className="text-warning-amber" />
         <span className="text-sm font-bold">No ZIP Boundary Geometries Found for {selectedState}</span>
-        <p className="text-xs text-amber-700 text-center max-w-md">
+        <p className="text-xs text-warning-amber text-center max-w-md">
           Boundary dataset for {selectedState} contained 0 polygon features. Verify database cache or backend shapefiles.
         </p>
         {onRetry && (

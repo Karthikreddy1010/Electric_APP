@@ -123,7 +123,7 @@ export const ExecutiveEnergyIntelligenceReport: React.FC<ExecutiveEnergyIntellig
       overallHealth: 'Grounded in Uploaded Bill',
       momChange: 0.0,
     };
-  }, [report, totalBillVal, usageKwhVal, effectiveRateVal, billingPeriodStr, selectedUtility, meterNoStr, supplyVal, supplyPct, deliveryVal, deliveryPct, taxVal, taxPct, avgDailyUsage, billingDaysVal, rateScheduleStr]);
+  }, [report, reportData?.executive_summary?.primary_finding, reportData?.executive_summary?.briefing, totalBillVal, usageKwhVal, effectiveRateVal, billingPeriodStr, selectedUtility, meterNoStr, supplyVal, supplyPct, deliveryVal, deliveryPct, taxVal, taxPct, avgDailyUsage, billingDaysVal, rateScheduleStr]);
 
   // Section 2: Regional Market Analysis (Comparative context relative to customer bill)
   const marketData: MarketAnalysisData = useMemo(() => {
@@ -407,10 +407,9 @@ export const ExecutiveEnergyIntelligenceReport: React.FC<ExecutiveEnergyIntellig
   useEffect(() => {
     if (reportState !== 'generating') return;
 
-    let stepTimer: ReturnType<typeof setInterval>;
     const intervalMs = 260;
 
-    stepTimer = setInterval(() => {
+    const stepTimer = setInterval(() => {
       setCurrentStepIndex((prev) => {
         const next = prev + 1;
 
@@ -733,15 +732,15 @@ ${dataSourcesData.sources.map((s) => `- **${s.name}**: ${s.dateRange} (${s.updat
       {reportState === 'completed' && (
         <div className="space-y-4">
           {/* Primary Source Customer Bill Banner */}
-          <div className="bg-blue-50 border border-blue-200 p-2.5 rounded-xl max-w-[900px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs print:hidden">
-            <div className="flex items-center gap-2 text-[#1B365D]">
-              <FileCheck size={16} className="text-[#2a4b7c] shrink-0" />
+          <div className="bg-primary-blue/10 border border-primary-blue/20 p-2.5 rounded-xl max-w-[900px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs print:hidden">
+            <div className="flex items-center gap-2 text-text-primary">
+              <FileCheck size={16} className="text-text-secondary shrink-0" />
               <span>
                 <strong>Primary Source of Truth:</strong> Uploaded {selectedUtility} Bill ({billingPeriodStr}) — Total: <strong>${totalBillVal.toFixed(2)}</strong> ({usageKwhVal.toLocaleString()} kWh @ ${effectiveRateVal.toFixed(4)}/kWh)
               </span>
             </div>
 
-            <span className="text-[10px] font-bold text-green-700 bg-white px-2 py-0.5 rounded border border-green-300 shrink-0">
+            <span className="text-[10px] font-bold text-savings-green bg-bg-surface px-2 py-0.5 rounded border border-savings-green/20 shrink-0">
               ✓ Grounded in Bill Telemetry
             </span>
           </div>
@@ -750,7 +749,7 @@ ${dataSourcesData.sources.map((s) => `- **${s.name}**: ${s.dateRange} (${s.updat
           {onNavigateSubTab && (
             <div className="bg-gradient-to-r from-[#1B365D] via-[#2a4b7c] to-[#0F2942] text-white p-3 rounded-xl max-w-[900px] mx-auto flex flex-wrap items-center justify-between gap-2 text-xs print:hidden shadow-sm">
               <div className="flex items-center gap-2">
-                <Sparkles size={16} className="text-amber-400 animate-pulse" />
+                <Sparkles size={16} className="text-warning-amber animate-pulse" />
                 <span className="font-bold text-blue-100">
                   Explainable AI Evidence Navigator: <span className="font-normal text-gray-200">Click any insight statement to inspect raw visualizations &amp; GIS datasets</span>
                 </span>
@@ -792,13 +791,13 @@ ${dataSourcesData.sources.map((s) => `- **${s.name}**: ${s.dateRange} (${s.updat
           )}
 
           {/* Executive Action Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-gray-200 shadow-sm max-w-[900px] mx-auto print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-bg-surface p-3.5 rounded-xl border border-border-hairline shadow-sm max-w-[900px] mx-auto print:hidden">
             <div className="flex items-center gap-3">
-              <label className="text-xs font-bold uppercase tracking-wider text-gray-600">Territory:</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-text-secondary">Territory:</label>
               <select
                 value={selectedState}
                 onChange={(e) => onStateChange?.(e.target.value)}
-                className="bg-gray-50 border border-gray-300 text-gray-900 text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#2a4b7c] focus:outline-none cursor-pointer"
+                className="bg-bg-secondary border border-border-hairline text-text-primary text-xs font-bold rounded-md px-2.5 py-1 focus:ring-1 focus:ring-[#2a4b7c] focus:outline-none cursor-pointer"
               >
                 <option value="NJ">New Jersey (NJ)</option>
                 <option value="NY">New York (NY)</option>
@@ -806,24 +805,24 @@ ${dataSourcesData.sources.map((s) => `- **${s.name}**: ${s.dateRange} (${s.updat
                 <option value="DE">Delaware (DE)</option>
                 <option value="MD">Maryland (MD)</option>
               </select>
-              <span className="text-xs text-gray-500 font-medium hidden md:inline">
-                Utility: <strong className="text-gray-900">{selectedUtility}</strong>
+              <span className="text-xs text-text-secondary font-medium hidden md:inline">
+                Utility: <strong className="text-text-primary">{selectedUtility}</strong>
               </span>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setIsAskOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-gray-950 font-bold rounded-md text-xs transition-colors shadow-xs cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-text-primary font-bold rounded-md text-xs transition-colors shadow-xs cursor-pointer"
               >
                 <MessageSquare size={14} />
                 <span>Ask AI About This Bill</span>
-                <Sparkles size={12} className="text-amber-900 fill-amber-900" />
+                <Sparkles size={12} className="text-warning-amber fill-amber-900" />
               </button>
 
               <button
                 onClick={handlePrintPDF}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-xs font-bold transition-colors border border-gray-300 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary hover:bg-border-hairline text-text-primary rounded-md text-xs font-bold transition-colors border border-border-hairline cursor-pointer"
               >
                 <Printer size={14} />
                 <span>Export PDF</span>
@@ -831,17 +830,17 @@ ${dataSourcesData.sources.map((s) => `- **${s.name}**: ${s.dateRange} (${s.updat
 
               <button
                 onClick={handleCopyBriefing}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-xs font-bold transition-colors border border-gray-300 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary hover:bg-border-hairline text-text-primary rounded-md text-xs font-bold transition-colors border border-border-hairline cursor-pointer"
               >
-                {copiedBriefing ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                {copiedBriefing ? <Check size={14} className="text-savings-green" /> : <Copy size={14} />}
                 <span>{copiedBriefing ? 'Copied!' : 'Copy Briefing'}</span>
               </button>
 
               <button
                 onClick={handleExportMarkdown}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-md text-xs font-bold transition-colors border border-gray-300 cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary hover:bg-border-hairline text-text-primary rounded-md text-xs font-bold transition-colors border border-border-hairline cursor-pointer"
               >
-                {copiedMd ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
+                {copiedMd ? <Check size={14} className="text-savings-green" /> : <Copy size={14} />}
                 <span>{copiedMd ? 'Copied MD!' : 'Export DOCX / MD'}</span>
               </button>
 

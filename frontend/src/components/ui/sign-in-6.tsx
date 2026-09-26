@@ -231,7 +231,7 @@ export function SignIn6({
                 type="checkbox"
                 id="ss-remember"
                 {...registerRemember}
-                className="w-4 h-4 rounded border-slate-300 bg-white text-blue-600 focus:ring-blue-500/30 accent-blue-600"
+                className="w-4 h-4 rounded border-slate-300 bg-white text-blue-600 focus:ring-blue-500/30 accent-primary-blue"
               />
               <label htmlFor="ss-remember" className="text-xs text-slate-600 cursor-pointer select-none">
                 Remember me for 30 days

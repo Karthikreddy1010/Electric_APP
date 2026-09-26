@@ -7,6 +7,7 @@ Global state lives in api/state.py
 
 This file handles: app creation, lifespan (data + model loading), CORS, and static files.
 """
+import os
 import sys
 import logging
 from pathlib import Path
@@ -23,6 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from api.state import app_state
+from api.auth_config import auth_config
 from database.connection import init_db, close_db
 from api.cache import init_cache, close_cache
 
@@ -364,14 +366,44 @@ from infra.tenancy.middleware import TenantContextMiddleware
 app.add_middleware(TenantContextMiddleware)
 app.add_middleware(AIGatewayMiddleware)
 
+# ── CORS ────────────────────────────────────────────────────────────────────
+# Origins come from CORS_ALLOW_ORIGINS (comma-separated). The localhost defaults
+# apply only outside production, so a deployed instance cannot silently fall back
+# to a dev allowlist. allow_credentials=True means a wildcard is never valid here.
+_DEV_CORS_ORIGINS = [
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:8000",   # FastAPI serving frontend
+    "http://127.0.0.1:8000",
+    "http://127.0.0.1:5173",
+]
+
+
+def _resolve_cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ALLOW_ORIGINS", "").strip()
+    configured = [o.strip() for o in raw.split(",") if o.strip()]
+
+    if "*" in configured:
+        raise RuntimeError(
+            "CORS_ALLOW_ORIGINS cannot be '*' because credentials are enabled. "
+            "List the exact origins instead."
+        )
+    if configured:
+        return configured
+    if auth_config.COOKIE_SECURE or auth_config.APP_ENV in {"production", "prod", "staging"}:
+        raise RuntimeError(
+            f"CORS_ALLOW_ORIGINS must be set when APP_ENV={auth_config.APP_ENV!r}. "
+            "Example: CORS_ALLOW_ORIGINS=https://app.example.com"
+        )
+    logger.warning(
+        "CORS_ALLOW_ORIGINS is unset — falling back to localhost dev origins: %s",
+        ", ".join(_DEV_CORS_ORIGINS),
+    )
+    return _DEV_CORS_ORIGINS
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite dev server
-        "http://localhost:8000",   # FastAPI serving frontend
-        "http://127.0.0.1:8000",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_resolve_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -425,7 +457,9 @@ app.include_router(health_router)
 app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(dashboard_router)
-app.include_router(billing_router)
+app.include_router(billing_router, prefix="/billing")
+# Unprefixed aliases (/trends, /bill-breakdown, ...) kept for existing callers.
+app.include_router(billing_router, include_in_schema=False)
 app.include_router(geo_insights_router)
 app.include_router(bill_impact_router)
 app.include_router(llm_router)
@@ -433,10 +467,12 @@ app.include_router(llm_metrics_router)
 app.include_router(benchmark_router)
 app.include_router(forecast_router)
 
+# NOTE: five routers below are also mounted under /api as legacy aliases.
+# They are excluded from the OpenAPI schema so each route is documented once.
 app.include_router(bgs_router)
 app.include_router(municipal_router)
 app.include_router(eia861_router)
-app.include_router(eia861_router, prefix="/api")
+app.include_router(eia861_router, prefix="/api", include_in_schema=False)  # legacy alias
 app.include_router(monitoring_router)
 app.include_router(eia861m_router)
 app.include_router(openei_router)
@@ -444,19 +480,19 @@ app.include_router(eia930_router)
 app.include_router(overview_router)
 app.include_router(report_router)
 app.include_router(simulate_router)
-app.include_router(simulate_router, prefix="/api")
+app.include_router(simulate_router, prefix="/api", include_in_schema=False)  # legacy alias
 app.include_router(geo_boundaries_router)
 app.include_router(metrics_router)
 from api.routes.tariff_analytics import router as tariffs_router
 app.include_router(tariffs_router)
-app.include_router(tariffs_router, prefix="/api")
+app.include_router(tariffs_router, prefix="/api", include_in_schema=False)  # legacy alias
 app.include_router(service_territory_router)
 app.include_router(customers_router)
 app.include_router(bill_router)
 app.include_router(smart_meter_router)
 app.include_router(tariff_optimization_router)
-app.include_router(tariff_optimization_router, prefix="/api")
-app.include_router(bill_impact_router, prefix="/api")
+app.include_router(tariff_optimization_router, prefix="/api", include_in_schema=False)  # legacy alias
+app.include_router(bill_impact_router, prefix="/api", include_in_schema=False)  # legacy alias
 
 # ── Dataset Integration Routers ─────────────────────────────────────────────
 from api.routes.pjm_router import router as pjm_router
