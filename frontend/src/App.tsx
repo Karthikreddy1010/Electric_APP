@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BillContextProvider } from './context/BillContext.tsx';
 import { NavigationProvider } from './context/NavigationContext.tsx';
@@ -50,6 +50,19 @@ const queryClient = new QueryClient({
 function ProtectedRoute() {
   const { status } = useAuth();
 
+  // Auto-enable demo mode for frictionless workspace access. This runs in an
+  // effect, not during render: writing to sessionStorage from the render body
+  // re-set the flag on every re-render, so sign-out could never clear it.
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      try {
+        sessionStorage.setItem('is_demo_mode', 'true');
+      } catch {
+        // Storage unavailable (private mode) — the workspace still renders.
+      }
+    }
+  }, [status]);
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-primary">
@@ -59,11 +72,6 @@ function ProtectedRoute() {
         </div>
       </div>
     );
-  }
-
-  if (status === 'unauthenticated' && sessionStorage.getItem('is_demo_mode') !== 'true') {
-    // Auto-enable demo mode for frictionless workspace access
-    sessionStorage.setItem('is_demo_mode', 'true');
   }
 
   // Unverified users get redirected to a pending verification page
@@ -86,7 +94,10 @@ function PublicAuthRoute() {
     );
   }
 
-  if (status === 'authenticated' || sessionStorage.getItem('is_demo_mode') === 'true') {
+  // Only a real session redirects away from the auth pages. Demo mode is not a
+  // session: treating it as one made /login unreachable for demo visitors, and
+  // left users unable to sign back in after signing out.
+  if (status === 'authenticated') {
     return <Navigate to="/overview" replace />;
   }
 
@@ -96,6 +107,7 @@ function PublicAuthRoute() {
 // Email Verification Pending Page (inline — simple banner)
 function VerifyPendingPage() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-primary px-4">
       <div className="max-w-md w-full bg-bg-surface border border-border-hairline rounded-lg p-8 text-center space-y-4">
@@ -108,7 +120,7 @@ function VerifyPendingPage() {
         </p>
         <p className="text-xs text-text-secondary">Didn't get the email? Check your spam folder.</p>
         <button
-          onClick={async () => { await logout(); }}
+          onClick={async () => { await logout(); navigate('/', { replace: true }); }}
           className="text-xs text-text-secondary hover:text-text-primary underline"
         >
           Back to Login

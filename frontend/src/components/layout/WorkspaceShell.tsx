@@ -53,9 +53,13 @@ export default function WorkspaceShell() {
     ? `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase() || 'U'
     : 'U';
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    // `logout` is async: without awaiting it, navigation ran while status was
+    // still 'authenticated', so the public-route guard bounced straight back
+    // to /overview and sign-out looked like it did nothing.
+    await logout();
+    // `replace` so the back button cannot return to the signed-in workspace.
+    navigate('/', { replace: true });
   };
 
   return (
