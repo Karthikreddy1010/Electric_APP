@@ -114,9 +114,9 @@ class CommunityEnergyService:
 
         query = text(f"""
             SELECT year,
-                   SUM(residential_electricity_kwh) as residential_kwh,
-                   SUM(commercial_electricity_kwh) as commercial_kwh,
-                   SUM(industrial_electricity_kwh) as industrial_kwh,
+                   SUM(residential_electricity) as residential_kwh,
+                   SUM(commercial_electricity) as commercial_kwh,
+                   SUM(industrial_electricity) as industrial_kwh,
                    SUM(total_electricity_kwh) as total_kwh,
                    SUM(total_natural_gas_therms) as total_gas_therms
             FROM community_energy
@@ -169,8 +169,9 @@ class CommunityEnergyService:
         query = text(f"""
             SELECT municipality, county, year,
                    total_electricity_kwh, total_natural_gas_therms,
-                   residential_electricity_kwh, commercial_electricity_kwh,
-                   industrial_electricity_kwh
+                   residential_electricity AS residential_electricity_kwh,
+                   commercial_electricity AS commercial_electricity_kwh,
+                   industrial_electricity AS industrial_electricity_kwh
             FROM community_energy
             WHERE municipality IN ({placeholders}) {year_filter}
             ORDER BY municipality, year

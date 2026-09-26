@@ -275,7 +275,7 @@ export default function SignupPage() {
                   <div
                     key={idx}
                     className={`flex-1 h-full rounded-full transition-colors ${
-                      idx <= strengthScore ? strengthColors[strengthScore] : 'bg-bg-primary border border-border-hairline/50'
+                      idx <= strengthScore ? strengthColors[strengthScore] : 'bg-bg-primary border border-border-hairline'
                     }`}
                   />
                 ))}

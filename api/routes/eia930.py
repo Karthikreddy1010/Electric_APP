@@ -192,27 +192,41 @@ async def get_hourly_demand_series(
     _ensure_eia930_seeded()
 
     engine = _get_engine()
-    # Query to fetch latest N hours of data
-    query = text("""
-        SELECT period, type_code, value_mwh
-        FROM eia930_hourly
-        WHERE ba_code = :ba AND period >= (
-            SELECT MAX(period) - INTERVAL ':hours HOUR' FROM eia930_hourly WHERE ba_code = :ba
-        )
-        ORDER BY period DESC, type_code
-    """)
+
+    # The window is computed in Python rather than in SQL: `INTERVAL` is
+    # PostgreSQL-only, and this app falls back to SQLite whenever Postgres is
+    # unreachable, where that query fails outright. Binding a datetime keeps one
+    # query path that both dialects accept, and avoids interpolating into SQL.
+    try:
+        with engine.connect() as conn:
+            latest = conn.execute(
+                text("SELECT MAX(period) FROM eia930_hourly WHERE ba_code = :ba"),
+                {"ba": ba_code},
+            ).scalar()
+    except Exception as e:
+        logger.error(f"Error querying latest demand period: {e}")
+        raise HTTPException(500, "Database query error")
+
+    if latest is None:
+        raise HTTPException(404, f"No grid demand history found for BA {ba_code}")
+
+    # SQLite hands back an ISO string for a DATETIME column; Postgres a datetime.
+    if isinstance(latest, str):
+        latest = datetime.fromisoformat(latest)
+
+    cutoff = latest - timedelta(hours=int(hours))
 
     try:
-        # PostgreSQL doesn't always support direct interval strings in parameter binding, so format it safely
-        raw_query = f"""
-            SELECT period, type_code, value_mwh
-            FROM eia930_hourly
-            WHERE ba_code = :ba AND period >= (
-                SELECT MAX(period) - INTERVAL '{int(hours)} hours' FROM eia930_hourly WHERE ba_code = :ba
-            )
-            ORDER BY period DESC, type_code
-        """
-        df = pd.read_sql(text(raw_query), con=engine, params={"ba": ba_code})
+        df = pd.read_sql(
+            text("""
+                SELECT period, type_code, value_mwh
+                FROM eia930_hourly
+                WHERE ba_code = :ba AND period >= :cutoff
+                ORDER BY period DESC, type_code
+            """),
+            con=engine,
+            params={"ba": ba_code, "cutoff": cutoff},
+        )
     except Exception as e:
         logger.error(f"Error querying hourly demand: {e}")
         raise HTTPException(500, "Database query error")

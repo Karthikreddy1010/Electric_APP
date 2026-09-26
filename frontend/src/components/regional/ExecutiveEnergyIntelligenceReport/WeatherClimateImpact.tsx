@@ -24,8 +24,8 @@ export const WeatherClimateImpact: React.FC<WeatherClimateImpactProps> = React.m
           <div key={idx} className="analysis-box">
             <div className="analysis-header">{m.metric}</div>
             <div className="analysis-content space-y-1">
-              <span className="text-lg font-bold text-[#2a4b7c] block">{m.value}</span>
-              <p className="text-xs text-gray-700"><strong>Bill Impact:</strong> {m.billImpact}</p>
+              <span className="text-lg font-bold text-text-secondary block">{m.value}</span>
+              <p className="text-xs text-text-primary"><strong>Bill Impact:</strong> {m.billImpact}</p>
             </div>
           </div>
         ))}

@@ -19,7 +19,7 @@ export const GeographicIntelligence: React.FC<GeographicIntelligenceProps> = Rea
 
       <p className="section-text">{summary}</p>
 
-      <div className="overflow-x-auto border border-gray-300">
+      <div className="overflow-x-auto border border-border-hairline">
         <table className="risk-matrix">
           <thead>
             <tr>

@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, User, Zap, MapPin, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
+import { useTheme } from '../context/ThemeContext.tsx';
+import type { Theme } from '../context/ThemeContext.tsx';
 
 const SettingsPage = () => {
   const { user, updateProfile } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   // ── Profile form state ────────────────────────────────────────────────────
   const [profile, setProfile] = useState(() => ({
@@ -21,9 +24,20 @@ const SettingsPage = () => {
       llm_enabled: prefs.llm_enabled ?? true,
       ocr_animation_enabled: prefs.ocr_animation_enabled ?? true,
       notifications_enabled: prefs.notifications_enabled ?? true,
-      theme: prefs.theme ?? 'dark',
+      theme: (prefs.theme as Theme | undefined) ?? 'dark',
     };
   });
+
+  // The saved account preference is authoritative across devices; adopt it once
+  // the profile has loaded if it differs from this browser's local choice.
+  const savedTheme = (user?.preferences as Record<string, unknown> | undefined)?.theme;
+  useEffect(() => {
+    if ((savedTheme === 'dark' || savedTheme === 'light') && savedTheme !== theme) {
+      setTheme(savedTheme);
+    }
+    // Runs only when the stored preference changes, not on every local toggle.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedTheme]);
 
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
@@ -41,7 +55,7 @@ const SettingsPage = () => {
     setIsSaving(true);
     setMessage(null);
     try {
-      await updateProfile({ ...profile, preferences });
+      await updateProfile({ ...profile, preferences: { ...preferences, theme } });
       setMessage({ text: 'Settings saved successfully!', type: 'success' });
     } catch {
       setMessage({ text: 'Failed to save settings. Please try again.', type: 'error' });
@@ -183,10 +197,13 @@ const SettingsPage = () => {
                 <p className="text-[10px] text-text-secondary mt-0.5">Toggle between dark mode and light theme options.</p>
               </div>
               <select
-                value={preferences.theme}
-                onChange={(e) =>
-                  setPreferences((prev) => ({ ...prev, theme: e.target.value }))
-                }
+                value={theme}
+                onChange={(e) => {
+                  const next = e.target.value as Theme;
+                  // Apply immediately, and carry it into the profile on save.
+                  setTheme(next);
+                  setPreferences((prev) => ({ ...prev, theme: next }));
+                }}
                 className="bg-bg-surface border border-border-hairline px-3 py-1 rounded text-xs text-text-primary outline-none"
                 aria-label="Theme Selection"
               >

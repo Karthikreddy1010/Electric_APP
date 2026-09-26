@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '../../lib/apiClient.ts';
 import { 
@@ -70,6 +70,7 @@ const ForecastToolbar = ({
         {/* Refresh Action */}
         <button
           onClick={onRefresh}
+          aria-label="Refresh forecast data"
           disabled={isRefetching}
           className="p-1.5 rounded-[6px] text-text-secondary hover:text-text-primary hover:bg-bg-surface border border-transparent hover:border-border-hairline transition-all active:scale-95 disabled:opacity-50"
           title="Refresh Forecast Data"
@@ -80,6 +81,7 @@ const ForecastToolbar = ({
         {/* Export Action */}
         <button
           onClick={onExport}
+          aria-label="Export forecast as spreadsheet"
           className="p-1.5 rounded-[6px] text-text-secondary hover:text-text-primary hover:bg-bg-surface border border-transparent hover:border-border-hairline transition-all active:scale-95 flex items-center gap-1.5"
           title="Export Forecast Report"
         >
@@ -276,7 +278,7 @@ const ForecastKPIRow = ({
             <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest block font-sans">
               {c.label}
             </span>
-            <div className="p-1 bg-bg-secondary rounded border border-border-hairline group-hover:border-border-hairline/80">
+            <div className="p-1 bg-bg-secondary rounded border border-border-hairline group-hover:border-border-hairline">
               {c.icon}
             </div>
           </div>
@@ -286,7 +288,7 @@ const ForecastKPIRow = ({
             {c.unit && <span className="text-[10px] text-text-secondary font-semibold font-sans">{c.unit}</span>}
           </div>
 
-          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-hairline/40">
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-border-hairline">
             <span className={`text-[9px] font-bold ${
               c.deltaType === 'increase' ? 'text-alert-red' 
               : c.deltaType === 'decrease' ? 'text-savings-green' 
@@ -400,7 +402,7 @@ const ForecastPatternAnalysis = () => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {patterns.map((p, i) => (
-        <div key={i} className="bg-bg-surface border border-border-hairline p-4 rounded-xl flex items-start gap-3 shadow-sm hover:border-border-hairline/80 transition-colors">
+        <div key={i} className="bg-bg-surface border border-border-hairline p-4 rounded-xl flex items-start gap-3 shadow-sm hover:border-border-hairline transition-colors">
           <div className="p-2 bg-bg-secondary rounded-lg border border-border-hairline">
             {p.icon}
           </div>
@@ -549,7 +551,7 @@ const HorizonCard = ({ startDate, endDate, daysRemaining }: HorizonCardProps) =>
           <span className="text-text-primary font-semibold">{endDate || 'N/A'}</span>
         </div>
 
-        <div className="flex justify-between items-center pt-2 border-t border-border-hairline/40 font-mono-numbers">
+        <div className="flex justify-between items-center pt-2 border-t border-border-hairline font-mono-numbers">
           <span className="text-text-secondary font-sans font-bold">Horizon Span:</span>
           <span className="text-primary-blue font-bold">{daysRemaining} Operational Days</span>
         </div>
@@ -674,7 +676,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
     <div 
       ref={containerRef}
       className={`panel-chart bg-bg-surface flex flex-col justify-between shadow-sm relative transition-all duration-300 ${
-        isFullscreen ? 'fixed inset-4 z-50 p-8 border border-border-hairline shadow-2xl bg-bg-surface/98 backdrop-blur-md' : 'h-[460px]'
+        isFullscreen ? 'fixed inset-4 z-50 p-8 border border-border-hairline shadow-2xl bg-bg-surface backdrop-blur-md' : 'h-[460px]'
       }`}
     >
       {/* Top action row */}
@@ -722,6 +724,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
           <div className="flex bg-bg-secondary p-0.5 rounded border border-border-hairline">
             <button 
               onClick={handleZoom} 
+              aria-label="Toggle chart fullscreen"
               className="p-1 text-text-secondary hover:text-text-primary rounded hover:bg-bg-surface transition-all"
               title="Toggle Zoom"
             >
@@ -729,6 +732,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
             </button>
             <button 
               onClick={handleDownload} 
+              aria-label="Download chart data"
               className="p-1 text-text-secondary hover:text-text-primary rounded hover:bg-bg-surface transition-all"
               title="Download SVG"
             >
@@ -752,7 +756,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-hairline)" opacity={0.3} />
             <XAxis 
               dataKey="date" 
-              tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }} 
+              tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }} 
               tickMargin={10} 
               minTickGap={zoomLevel === 1.5 ? 15 : 30} 
               axisLine={false} 
@@ -761,7 +765,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
             <YAxis
               tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
               domain={['auto', 'auto']}
-              tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'IBM Plex Mono' }}
+              tick={{ fontSize: 9, fill: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}
               axisLine={false}
               tickLine={false}
             />
@@ -778,7 +782,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
 
                   return (
                     <div className="bg-bg-surface border border-border-hairline p-4 rounded-xl text-[11px] space-y-2 shadow-xl backdrop-blur-md min-w-[200px]">
-                      <div className="border-b border-border-hairline/50 pb-1 mb-1 flex justify-between items-center">
+                      <div className="border-b border-border-hairline pb-1 mb-1 flex justify-between items-center">
                         <span className="font-mono-numbers text-text-secondary">{label}</span>
                         <span className={`text-[9px] font-bold px-1.5 py-0.25 rounded ${
                           hasPred ? "bg-primary-blue/10 text-primary-blue" : "bg-bg-secondary text-text-secondary"
@@ -809,7 +813,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
                           </div>
                         )}
                         {diff !== null && (
-                          <div className="flex justify-between gap-4 font-semibold border-t border-border-hairline/40 pt-1 mt-1 text-[10px]">
+                          <div className="flex justify-between gap-4 font-semibold border-t border-border-hairline pt-1 mt-1 text-[10px]">
                             <span className="text-text-secondary font-normal font-sans">Difference:</span>
                             <span className={diff >= 0 ? "text-alert-red font-mono-numbers" : "text-savings-green font-mono-numbers"}>
                               {diff >= 0 ? '+' : ''}{diff.toFixed(1)}%
@@ -833,7 +837,7 @@ const ForecastChart = ({ forecastData, forecastStartDate }: ForecastChartProps) 
             <Line type="monotone" dataKey="predicted_demand" stroke={showForecast ? "var(--primary-blue)" : "transparent"} strokeWidth={2.5} dot={showForecast ? { r: 2, fill: 'var(--primary-blue)', strokeWidth: 0 } : false} />
             
             {forecastStartDate && (
-               <ReferenceLine x={forecastStartDate} stroke="var(--alert-red)" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'Forecast Start', fill: 'var(--alert-red)', fontSize: 9, fontFamily: 'IBM Plex Mono' }} />
+               <ReferenceLine x={forecastStartDate} stroke="var(--alert-red)" strokeDasharray="3 3" label={{ position: 'insideTopLeft', value: 'Forecast Start', fill: 'var(--alert-red)', fontSize: 9, fontFamily: 'var(--font-mono)' }} />
             )}
           </ComposedChart>
         </ResponsiveContainer>
@@ -1036,7 +1040,7 @@ const ForecastTab = () => {
     }
   });
 
-  const fetchAnomalies = async () => {
+  const fetchAnomalies = useCallback(async () => {
     try {
       const res = await apiClient.get(`/forecast/anomalies?method=${detectionMethod}`);
       setAnomalies(res.data.anomalies || []);
@@ -1048,24 +1052,24 @@ const ForecastTab = () => {
     } catch (err) {
       console.warn("Failed to fetch anomalies:", err);
     }
-  };
+  }, [detectionMethod]);
 
-  const fetchCompareMetrics = async () => {
+  const fetchCompareMetrics = useCallback(async () => {
     try {
       const res = await apiClient.get(`/forecast/compare-cleaned?imputation_method=${imputationMethod}`);
       setCompareMetrics(res.data);
     } catch (err) {
       console.warn("Failed to fetch compare metrics:", err);
     }
-  };
+  }, [imputationMethod]);
 
   useEffect(() => {
     fetchAnomalies();
-  }, [detectionMethod]);
+  }, [fetchAnomalies]);
 
   useEffect(() => {
     fetchCompareMetrics();
-  }, [imputationMethod]);
+  }, [fetchCompareMetrics]);
 
   const handleApplyResolutions = async () => {
     try {
@@ -1382,7 +1386,7 @@ const ForecastTab = () => {
                         <th className="py-2.5 text-right">Cleaned Model</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-border-hairline/50 font-mono-numbers">
+                    <tbody className="divide-y divide-border-hairline font-mono-numbers">
                       <tr>
                         <td className="py-2.5 font-medium text-text-primary font-sans">MAPE (Percentage Error)</td>
                         <td className="py-2.5 text-right text-text-secondary">{(compareMetrics.metrics.raw.MAPE || 0).toFixed(2)}%</td>

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link, Outlet } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useBill } from '../../context/BillContext.tsx';
+import { useTheme } from '../../context/ThemeContext.tsx';
 import { 
   ChevronLeft, ChevronRight, Search, Sun, Moon, 
   Brain, Layout, FileText, TrendingUp, Activity, Map, 
@@ -19,24 +20,8 @@ export default function WorkspaceShell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('workspace-theme') as 'dark' | 'light') || 'dark';
-  });
+  const { theme, toggleTheme } = useTheme();
   const [profileOpen, setProfileOpen] = useState(false);
-
-  // Sync theme to body element
-  useEffect(() => {
-    const root = document.documentElement;
-    const body = document.body;
-    if (theme === 'light') {
-      body.classList.add('light-theme');
-      root.style.setProperty('color-scheme', 'light');
-    } else {
-      body.classList.remove('light-theme');
-      root.style.setProperty('color-scheme', 'dark');
-    }
-    localStorage.setItem('workspace-theme', theme);
-  }, [theme]);
 
   // Keyboard shortcut listener for Ctrl+K
   useEffect(() => {
@@ -49,10 +34,6 @@ export default function WorkspaceShell() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
 
   const navItems = [
     { label: 'Overview', path: '/overview', icon: <Layout size={16} /> },
@@ -72,9 +53,13 @@ export default function WorkspaceShell() {
     ? `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.toUpperCase() || 'U'
     : 'U';
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    // `logout` is async: without awaiting it, navigation ran while status was
+    // still 'authenticated', so the public-route guard bounced straight back
+    // to /overview and sign-out looked like it did nothing.
+    await logout();
+    // `replace` so the back button cannot return to the signed-in workspace.
+    navigate('/', { replace: true });
   };
 
   return (
@@ -112,7 +97,7 @@ export default function WorkspaceShell() {
         {/* Workspace Selector */}
         {!sidebarCollapsed && (
           <div className="px-3 py-4 border-b border-border-hairline bg-bg-primary/10">
-            <div className="flex items-center justify-between p-2 rounded-lg bg-bg-surface/50 border border-border-hairline">
+            <div className="flex items-center justify-between p-2 rounded-lg bg-bg-surface border border-border-hairline">
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-primary-blue animate-pulse" />
                 <span className="text-xs font-bold text-text-primary truncate max-w-[140px]">
@@ -161,11 +146,12 @@ export default function WorkspaceShell() {
           
           {/* Theme switcher inside sidebar footer if collapsed */}
           {!sidebarCollapsed && (
-            <div className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-bg-surface/50 border border-border-hairline">
+            <div className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-bg-surface border border-border-hairline">
               <span className="text-[10px] text-text-secondary font-semibold">Theme</span>
               <button 
                 onClick={toggleTheme}
                 className="p-1 rounded-md text-text-secondary hover:text-text-primary transition-all cursor-pointer"
+                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
                 title="Toggle Theme"
               >
                 {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}

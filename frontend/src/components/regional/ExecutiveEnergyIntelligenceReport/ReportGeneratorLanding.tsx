@@ -46,7 +46,7 @@ export const ReportGeneratorLanding: React.FC<ReportGeneratorLandingProps> = ({
         <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-amber-400/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-amber-300 text-xs font-semibold uppercase tracking-wider backdrop-blur-xs">
-          <Sparkles size={14} className="animate-pulse text-amber-400" />
+          <Sparkles size={14} className="animate-pulse text-warning-amber" />
           <span>Customer Bill AI Intelligence Engine</span>
         </div>
 
@@ -79,65 +79,65 @@ export const ReportGeneratorLanding: React.FC<ReportGeneratorLandingProps> = ({
 
           <button
             onClick={onStartGeneration}
-            className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-amber-400 hover:bg-amber-300 text-gray-950 font-black text-sm rounded-lg shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            className="inline-flex items-center gap-2.5 px-8 py-3.5 bg-amber-400 hover:bg-amber-300 text-text-primary font-black text-sm rounded-lg shadow-xl hover:shadow-2xl transition-all transform hover:-translate-y-0.5 cursor-pointer"
           >
             <Cpu size={18} />
             <span>Generate Executive Report from Bill</span>
-            <Sparkles size={16} className="text-amber-900 fill-amber-900" />
+            <Sparkles size={16} className="text-warning-amber fill-amber-900" />
           </button>
         </div>
       </div>
 
       {/* Primary Source of Truth: Customer Bill Telemetry Card */}
-      <div className="bg-white border-2 border-[#2a4b7c] rounded-xl p-6 shadow-sm space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-[#2a4b7c] flex items-center gap-2">
-            <FileCheck size={16} className="text-[#2a4b7c]" />
+      <div className="bg-bg-surface border-2 border-border-hairline rounded-xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-border-hairline pb-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-text-secondary flex items-center gap-2">
+            <FileCheck size={16} className="text-text-secondary" />
             <span>PRIMARY SOURCE OF TRUTH — Extracted Customer Bill Telemetry</span>
           </h3>
 
-          <span className="text-[11px] font-bold text-green-700 bg-green-50 px-2.5 py-0.5 rounded border border-green-200 flex items-center gap-1">
+          <span className="text-[11px] font-bold text-savings-green bg-savings-green/10 px-2.5 py-0.5 rounded border border-savings-green/20 flex items-center gap-1">
             <CheckCircle2 size={12} />
             <span>{hasBill ? 'Uploaded Bill Active' : 'Verified System Bill'}</span>
           </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 text-xs">
-          <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-            <span className="text-gray-500 font-semibold block text-[10px]">Total Bill Amount</span>
-            <strong className="text-[#2a4b7c] text-sm font-bold block mt-0.5">{billTotalAmount}</strong>
+          <div className="bg-primary-blue/10 p-3 rounded-lg border border-primary-blue/20">
+            <span className="text-text-secondary font-semibold block text-[10px]">Total Bill Amount</span>
+            <strong className="text-text-secondary text-sm font-bold block mt-0.5">{billTotalAmount}</strong>
           </div>
 
-          <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-            <span className="text-gray-500 font-semibold block text-[10px]">Total Consumption</span>
-            <strong className="text-gray-900 text-sm font-bold block mt-0.5">{billUsageKwh}</strong>
+          <div className="bg-primary-blue/10 p-3 rounded-lg border border-primary-blue/20">
+            <span className="text-text-secondary font-semibold block text-[10px]">Total Consumption</span>
+            <strong className="text-text-primary text-sm font-bold block mt-0.5">{billUsageKwh}</strong>
           </div>
 
-          <div className="bg-blue-50/50 p-3 rounded-lg border border-blue-100">
-            <span className="text-gray-500 font-semibold block text-[10px]">Effective Rate</span>
-            <strong className="text-gray-900 text-sm font-bold block mt-0.5">{billEffectiveRate}</strong>
+          <div className="bg-primary-blue/10 p-3 rounded-lg border border-primary-blue/20">
+            <span className="text-text-secondary font-semibold block text-[10px]">Effective Rate</span>
+            <strong className="text-text-primary text-sm font-bold block mt-0.5">{billEffectiveRate}</strong>
           </div>
 
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <span className="text-gray-500 font-semibold block text-[10px]">Utility Provider</span>
-            <strong className="text-gray-900 text-xs font-bold block mt-0.5 truncate">{billUtility}</strong>
+          <div className="bg-bg-secondary p-3 rounded-lg border border-border-hairline">
+            <span className="text-text-secondary font-semibold block text-[10px]">Utility Provider</span>
+            <strong className="text-text-primary text-xs font-bold block mt-0.5 truncate">{billUtility}</strong>
           </div>
 
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <span className="text-gray-500 font-semibold block text-[10px]">Meter Number</span>
-            <strong className="text-gray-900 text-xs font-bold block mt-0.5 truncate">{billMeter}</strong>
+          <div className="bg-bg-secondary p-3 rounded-lg border border-border-hairline">
+            <span className="text-text-secondary font-semibold block text-[10px]">Meter Number</span>
+            <strong className="text-text-primary text-xs font-bold block mt-0.5 truncate">{billMeter}</strong>
           </div>
 
-          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <span className="text-gray-500 font-semibold block text-[10px]">Billing Period</span>
-            <strong className="text-gray-900 text-xs font-bold block mt-0.5 truncate">{billPeriod}</strong>
+          <div className="bg-bg-secondary p-3 rounded-lg border border-border-hairline">
+            <span className="text-text-secondary font-semibold block text-[10px]">Billing Period</span>
+            <strong className="text-text-primary text-xs font-bold block mt-0.5 truncate">{billPeriod}</strong>
           </div>
         </div>
       </div>
 
       {/* Connected Data Feeds & Analytical Models */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm space-y-4">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+      <div className="bg-bg-surface border border-border-hairline rounded-xl p-6 shadow-sm space-y-4">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-text-secondary">
           Primary &amp; Supporting Contextual Data Feeds
         </h3>
 
@@ -149,25 +149,25 @@ export const ReportGeneratorLanding: React.FC<ReportGeneratorLandingProps> = ({
                 key={idx}
                 className={`flex items-start gap-3 p-3.5 rounded-lg border transition-colors ${
                   source.primary
-                    ? 'bg-blue-50/80 border-blue-300 shadow-xs'
-                    : 'bg-gray-50 border-gray-200 hover:border-blue-300'
+                    ? 'bg-primary-blue/10 border-primary-blue/20 shadow-xs'
+                    : 'bg-bg-secondary border-border-hairline hover:border-primary-blue/20'
                 }`}
               >
-                <div className={`p-2 rounded-md shrink-0 mt-0.5 ${source.primary ? 'bg-[#1B365D] text-amber-300' : 'bg-blue-50 text-[#2a4b7c]'}`}>
+                <div className={`p-2 rounded-md shrink-0 mt-0.5 ${source.primary ? 'bg-[#1B365D] text-amber-300' : 'bg-primary-blue/10 text-text-secondary'}`}>
                   <Icon size={16} />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-gray-900">{source.name}</span>
+                    <span className="text-xs font-bold text-text-primary">{source.name}</span>
                     <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
                       source.primary
-                        ? 'text-blue-900 bg-blue-100 border-blue-300'
-                        : 'text-green-600 bg-green-50 border-green-200'
+                        ? 'text-primary-blue bg-primary-blue/10 border-primary-blue/20'
+                        : 'text-savings-green bg-savings-green/10 border-savings-green/20'
                     }`}>
                       {source.primary ? 'PRIMARY' : '✓ Active'}
                     </span>
                   </div>
-                  <p className="text-[11px] text-gray-600 leading-snug mt-0.5">{source.desc}</p>
+                  <p className="text-[11px] text-text-secondary leading-snug mt-0.5">{source.desc}</p>
                 </div>
               </div>
             );

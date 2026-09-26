@@ -17,7 +17,7 @@ export const ReportRecommendations: React.FC<ReportRecommendationsProps> = React
       <div className="section-label">SECTION {sectionNumber}</div>
       <h2 className="serif-title">Actionable Executive Recommendations</h2>
 
-      <div className="overflow-x-auto border border-gray-300">
+      <div className="overflow-x-auto border border-border-hairline">
         <table className="risk-matrix">
           <thead>
             <tr>

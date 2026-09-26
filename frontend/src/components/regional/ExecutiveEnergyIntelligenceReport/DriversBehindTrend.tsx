@@ -22,7 +22,7 @@ export const DriversBehindTrend: React.FC<DriversBehindTrendProps> = React.memo(
           <div key={idx} className="analysis-box">
             <div className="analysis-header flex justify-between items-center">
               <span>{driver.title}</span>
-              <span className="text-[11px] font-normal text-[#2a4b7c] bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              <span className="text-[11px] font-normal text-text-secondary bg-primary-blue/10 px-2 py-0.5 rounded border border-primary-blue/20">
                 {driver.impact}
               </span>
             </div>

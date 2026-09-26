@@ -25,24 +25,24 @@ export const ConfidenceAssessment: React.FC<ConfidenceAssessmentProps> = React.m
       <h2 className="serif-title">AI Confidence &amp; Model Data Quality Assessment</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-        <div className="bg-gray-50 border border-gray-200 p-3 rounded text-center">
-          <span className="text-gray-500 uppercase font-bold text-[10px] block">Overall AI Confidence</span>
-          <span className="text-xl font-bold text-[#2a4b7c] mt-0.5 block">{overallConfidencePct}%</span>
+        <div className="bg-bg-secondary border border-border-hairline p-3 rounded text-center">
+          <span className="text-text-secondary uppercase font-bold text-[10px] block">Overall AI Confidence</span>
+          <span className="text-xl font-bold text-text-secondary mt-0.5 block">{overallConfidencePct}%</span>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 p-3 rounded text-center">
-          <span className="text-gray-500 uppercase font-bold text-[10px] block">Data Completeness</span>
+        <div className="bg-bg-secondary border border-border-hairline p-3 rounded text-center">
+          <span className="text-text-secondary uppercase font-bold text-[10px] block">Data Completeness</span>
           <span className="text-xl font-bold text-[#27ae60] mt-0.5 block">{dataCompletenessPct}%</span>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 p-3 rounded text-center">
-          <span className="text-gray-500 uppercase font-bold text-[10px] block">Model Agreement</span>
+        <div className="bg-bg-secondary border border-border-hairline p-3 rounded text-center">
+          <span className="text-text-secondary uppercase font-bold text-[10px] block">Model Agreement</span>
           <span className="text-xl font-bold text-[#d35400] mt-0.5 block">{modelAgreementPct}%</span>
         </div>
 
-        <div className="bg-gray-50 border border-gray-200 p-3 rounded text-center">
-          <span className="text-gray-500 uppercase font-bold text-[10px] block">Quality Grade</span>
-          <span className="text-xl font-bold text-gray-900 mt-0.5 block">{qualityScore}</span>
+        <div className="bg-bg-secondary border border-border-hairline p-3 rounded text-center">
+          <span className="text-text-secondary uppercase font-bold text-[10px] block">Quality Grade</span>
+          <span className="text-xl font-bold text-text-primary mt-0.5 block">{qualityScore}</span>
         </div>
       </div>
 
@@ -52,8 +52,8 @@ export const ConfidenceAssessment: React.FC<ConfidenceAssessmentProps> = React.m
           <div className="analysis-content">
             <ul className="list-disc pl-4 space-y-1">
               {availableDatasets.map((ds, idx) => (
-                <li key={idx} className="text-xs text-gray-800">
-                  <span className="text-green-600 font-bold">✓</span> {ds}
+                <li key={idx} className="text-xs text-text-primary">
+                  <span className="text-savings-green font-bold">✓</span> {ds}
                 </li>
               ))}
             </ul>
@@ -66,13 +66,13 @@ export const ConfidenceAssessment: React.FC<ConfidenceAssessmentProps> = React.m
             {missingDatasets.length > 0 ? (
               <ul className="list-disc pl-4 space-y-1">
                 {missingDatasets.map((ds, idx) => (
-                  <li key={idx} className="text-xs text-gray-600">
-                    <span className="text-amber-600 font-bold">•</span> {ds}
+                  <li key={idx} className="text-xs text-text-secondary">
+                    <span className="text-warning-amber font-bold">•</span> {ds}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-xs text-green-700 font-medium">No critical data gaps detected. Full historical telemetry validated.</p>
+              <p className="text-xs text-savings-green font-medium">No critical data gaps detected. Full historical telemetry validated.</p>
             )}
           </div>
         </div>

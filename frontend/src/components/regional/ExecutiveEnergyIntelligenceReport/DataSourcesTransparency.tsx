@@ -17,7 +17,7 @@ export const DataSourcesTransparency: React.FC<DataSourcesTransparencyProps> = R
       <div className="section-label">SECTION {sectionNumber}</div>
       <h2 className="serif-title">Data Sources &amp; Transparency Manifest</h2>
 
-      <div className="overflow-x-auto border border-gray-300">
+      <div className="overflow-x-auto border border-border-hairline">
         <table className="risk-matrix">
           <thead>
             <tr>

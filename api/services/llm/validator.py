@@ -30,6 +30,12 @@ _COMMON_CONSTANTS = {
     6.625, 0.15, 0.58, 0.30, 0.07, 0.2142, 158.1, 91.8, 46.75, 8.24, 11.31
 }
 
+# A bare 4-digit calendar year is prose, not a numeric claim to be grounded.
+# Negative lookbehind rejects "$2026" and digits; lookahead rejects "2026.5".
+_CALENDAR_YEAR_RE = re.compile(r"(?<![\$\d.])\b(?:19|20)\d{2}\b(?![\d.])")
+_CALENDAR_YEAR_MIN, _CALENDAR_YEAR_MAX = 1900.0, 2099.0
+
+
 # AI self-reference patterns (tone violations)
 _TONE_VIOLATIONS = [
     re.compile(r"\bAs an AI\b", re.IGNORECASE),
@@ -93,6 +99,16 @@ class OutputValidator:
                 continue
         return result
 
+    @staticmethod
+    def _extract_calendar_years(text: str) -> Set[float]:
+        """Return bare 4-digit calendar years appearing in ``text``."""
+        years: Set[float] = set()
+        for match in _CALENDAR_YEAR_RE.findall(text):
+            value = float(match)
+            if _CALENDAR_YEAR_MIN <= value <= _CALENDAR_YEAR_MAX:
+                years.add(value)
+        return years
+
     # ── Audit Point 1 & 2: Numeric Match & Hallucination Gate ──────────
 
     @classmethod
@@ -101,6 +117,10 @@ class OutputValidator:
         allowed: Set[float] = set()
         cls._extract_numbers_from_dict(context_data, allowed)
         allowed.update(_COMMON_CONSTANTS)
+        # Years the text actually uses as years, so "in 2026" never reads as a
+        # hallucinated figure. Derived from the text rather than hardcoded, so
+        # this does not need patching every January.
+        allowed.update(cls._extract_calendar_years(text))
 
         text_numbers = cls._extract_numbers_from_text(text)
         discrepancies = []

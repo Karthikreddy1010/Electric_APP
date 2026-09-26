@@ -2,8 +2,24 @@
 Pydantic request/response schemas for all API endpoints.
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any, get_args
 from datetime import date
+
+# Bill components that the impact engine can model. Kept as a Literal so FastAPI
+# rejects an unknown key with a 422 that names the valid options, instead of the
+# key reaching an unguarded COMPONENT_TYPES[...] lookup (a 500) or being silently
+# dropped from a what-if simulation.
+ComponentKey = Literal[
+    "customer_charge",
+    "bgs_rate",
+    "distribution_rate",
+    "transmission_rate",
+    "sbc_rate",
+    "transition_rate",
+    "nug_rate",
+    "rider_rate",
+]
+COMPONENT_KEYS: tuple[str, ...] = get_args(ComponentKey)
 
 
 # ===== /forecast =====
@@ -186,7 +202,7 @@ class HealthResponse(BaseModel):
 
 # ===== /impact/sensitivity =====
 class SensitivityRequest(BaseModel):
-    component: str = Field(..., description="Component key, e.g. 'bgs_rate'")
+    component: ComponentKey = Field(..., description="Component key, e.g. 'bgs_rate'")
     change_pct: float = Field(10.0, ge=-100, le=500, description="Percentage change to apply")
     kwh: Optional[float] = Field(None, ge=0, le=10000, description="Override usage (kWh)")
 
@@ -204,7 +220,7 @@ class SensitivityResponse(BaseModel):
 
 # ===== /impact/what-if =====
 class WhatIfRequest(BaseModel):
-    changes: dict[str, float] = Field(
+    changes: dict[ComponentKey, float] = Field(
         ...,
         description="Map of component -> change_pct, e.g. {'bgs_rate': 15, 'sbc_rate': -5}",
     )
@@ -220,7 +236,7 @@ class WhatIfResponse(BaseModel):
 
 # ===== /impact/what-if-v2 =====
 class WhatIfV2Request(BaseModel):
-    changes: dict[str, float] = Field(
+    changes: dict[ComponentKey, float] = Field(
         default_factory=dict, description="Map of component -> change_pct, e.g. {'bgs_rate': 15, 'sbc_rate': -5}"
     )
     kwh: Optional[float] = Field(None, ge=0, le=10000)

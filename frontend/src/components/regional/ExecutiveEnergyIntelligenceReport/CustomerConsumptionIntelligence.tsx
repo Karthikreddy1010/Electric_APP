@@ -28,8 +28,8 @@ export const CustomerConsumptionIntelligence: React.FC<CustomerConsumptionIntell
         <div className="analysis-box">
           <div className="analysis-header">MONTHLY USAGE</div>
           <div className="analysis-content">
-            <span className="text-xl font-bold text-[#2a4b7c] block">{monthlyUsageKwh.toLocaleString()} kWh</span>
-            <p className="text-xs text-gray-600 mt-1">Average monthly energy throughput</p>
+            <span className="text-xl font-bold text-text-secondary block">{monthlyUsageKwh.toLocaleString()} kWh</span>
+            <p className="text-xs text-text-secondary mt-1">Average monthly energy throughput</p>
           </div>
         </div>
 
@@ -37,7 +37,7 @@ export const CustomerConsumptionIntelligence: React.FC<CustomerConsumptionIntell
           <div className="analysis-header">PEAK DEMAND</div>
           <div className="analysis-content">
             <span className="text-xl font-bold text-[#d35400] block">{peakDemandKw} kW</span>
-            <p className="text-xs text-gray-600 mt-1">Coincident peak demand interval</p>
+            <p className="text-xs text-text-secondary mt-1">Coincident peak demand interval</p>
           </div>
         </div>
 
@@ -45,7 +45,7 @@ export const CustomerConsumptionIntelligence: React.FC<CustomerConsumptionIntell
           <div className="analysis-header">LOAD FACTOR</div>
           <div className="analysis-content">
             <span className="text-xl font-bold text-[#27ae60] block">{loadFactorPct}%</span>
-            <p className="text-xs text-gray-600 mt-1">Grid utilization efficiency index</p>
+            <p className="text-xs text-text-secondary mt-1">Grid utilization efficiency index</p>
           </div>
         </div>
       </div>

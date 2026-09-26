@@ -278,7 +278,7 @@ const RealDollarInflationCard = ({ totalBill, billDate }: { totalBill: number; b
         </div>
         <div className="text-right border-l border-border-hairline pl-4">
           <span className="text-[9px] text-text-secondary uppercase font-bold block font-sans">Inflation Adjustment</span>
-          <span className="text-sm font-bold text-amber-500">+${adjustedData.inflation_adjustment}</span>
+          <span className="text-sm font-bold text-warning-amber">+${adjustedData.inflation_adjustment}</span>
         </div>
       </div>
     </div>
@@ -317,7 +317,7 @@ const CustomerArchetypeAndHealthCard = ({ usageKwh, totalBill }: { usageKwh: num
             Automated Bill Audit & Health Score
           </span>
           <span className={`text-xs font-extrabold px-2.5 py-0.5 rounded border uppercase ${
-            healthData.bill_health_score >= 90 ? 'bg-savings-green/10 text-savings-green border-savings-green/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+            healthData.bill_health_score >= 90 ? 'bg-savings-green/10 text-savings-green border-savings-green/20' : 'bg-amber-500/10 text-warning-amber border-amber-500/20'
           }`}>
             Grade {healthData.health_grade} ({healthData.bill_health_score}/100)
           </span>
@@ -326,7 +326,7 @@ const CustomerArchetypeAndHealthCard = ({ usageKwh, totalBill }: { usageKwh: num
           Audit Status: <span className="font-bold text-savings-green">{healthData.audit_status}</span> · Effective Rate: <span className="font-mono-numbers font-bold">${healthData.effective_rate}/kWh</span>
         </p>
         {healthData.anomalies_detected?.length > 0 ? (
-          <ul className="space-y-1 text-[11px] text-amber-500">
+          <ul className="space-y-1 text-[11px] text-warning-amber">
             {healthData.anomalies_detected.map((a: string, i: number) => (
               <li key={i} className="flex items-start gap-1">
                 <span>⚠️</span> <span>{a}</span>
@@ -626,7 +626,7 @@ const AnalysisView = () => {
                               {comp.category}
                             </span>
                             {comp.estimated && (
-                              <span className="text-[9px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded font-semibold">
+                              <span className="text-[9px] bg-amber-500/10 text-warning-amber border border-amber-500/20 px-1.5 py-0.5 rounded font-semibold">
                                 Estimated
                               </span>
                             )}
@@ -680,7 +680,7 @@ const AnalysisView = () => {
                               <p className="text-savings-green text-[11px] font-medium leading-relaxed mt-0.5">{comp.advice}</p>
                             </div>
                             {comp.estimated && (
-                              <div className="bg-amber-500/5 border border-amber-500/10 p-2.5 rounded text-[10px] text-amber-500 font-mono-numbers">
+                              <div className="bg-amber-500/5 border border-amber-500/10 p-2.5 rounded text-[10px] text-warning-amber font-mono-numbers">
                                 <span className="font-bold">Estimation Log:</span> Charge was missing from OCR extraction. Evaluated using: <span className="font-semibold">{comp.method}</span>.
                               </div>
                             )}
@@ -712,11 +712,11 @@ const AnalysisView = () => {
                   Focusing or hovering on fields in the editor highlights their coordinates inside the document.
                 </p>
                 <div className="border border-border-hairline bg-white/50 rounded-md p-4 flex items-center justify-center relative select-none">
-                  <div className="w-[450px] h-[380px] bg-white border border-border-hairline shadow-sm rounded relative overflow-hidden text-black/70 font-mono text-[9px] p-4 scale-90 sm:scale-100 origin-center">
-                    <div className="border-b border-gray-200 pb-2 flex justify-between items-start">
+                  <div className="w-[450px] h-[380px] bg-bg-surface border border-border-hairline shadow-sm rounded relative overflow-hidden text-black/70 font-mono text-[9px] p-4 scale-90 sm:scale-100 origin-center">
+                    <div className="border-b border-border-hairline pb-2 flex justify-between items-start">
                       <div>
-                        <h4 className="font-bold text-xs uppercase text-gray-900 leading-tight">PUBLIC SERVICE ELECTRIC & GAS</h4>
-                        <span className="text-[8px] text-gray-500">PSE&G UTILITIES</span>
+                        <h4 className="font-bold text-xs uppercase text-text-primary leading-tight">PUBLIC SERVICE ELECTRIC & GAS</h4>
+                        <span className="text-[8px] text-text-secondary">PSE&G UTILITIES</span>
                       </div>
                       <span className="text-xs font-bold text-primary-blue">INVOICE</span>
                     </div>
@@ -726,8 +726,8 @@ const AnalysisView = () => {
                       <div className="flex justify-between"><span>Bill Date:</span><span className="font-semibold">{corrections.bill_date}</span></div>
                       <div className="flex justify-between"><span>Due Date:</span><span className="font-semibold">{corrections.due_date}</span></div>
                     </div>
-                    <div className="mt-12 border-t border-gray-200 pt-4 space-y-2">
-                      <div className="flex justify-between text-xs font-bold text-gray-900">
+                    <div className="mt-12 border-t border-border-hairline pt-4 space-y-2">
+                      <div className="flex justify-between text-xs font-bold text-text-primary">
                         <span>Total Usage (kWh):</span>
                         <span>{corrections.usage_kwh} kWh</span>
                       </div>
@@ -766,10 +766,10 @@ const AnalysisView = () => {
                     const confidencePct = (confidence * 100).toFixed(0);
                     
                     const badgeColor = confidence >= 0.95
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      ? 'bg-savings-green/10 text-savings-green border-savings-green/20'
                       : confidence >= 0.85
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-rose-50 text-rose-700 border-rose-200';
+                      ? 'bg-warning-amber/10 text-warning-amber border-warning-amber/20'
+                      : 'bg-alert-red/10 text-alert-red border-alert-red/20';
 
                     const isModified = corrections[fieldName] !== String((canonical.normalized_values as any)[fieldName] ?? "");
 
@@ -890,8 +890,8 @@ const AnalysisView = () => {
                         <td className="py-3 font-bold text-[11px] font-sans">{comp.period}</td>
                         <td className="py-3 text-text-secondary">{comp.old_val}</td>
                         <td className="py-3 font-semibold">{comp.new_val}</td>
-                        <td className="py-3 text-red-500 font-bold">{comp.diff}</td>
-                        <td className="py-3 text-red-500 font-bold">{comp.pct}</td>
+                        <td className="py-3 text-alert-red font-bold">{comp.diff}</td>
+                        <td className="py-3 text-alert-red font-bold">{comp.pct}</td>
                         <td className="py-3 text-text-secondary font-sans leading-relaxed text-[11px]">{comp.reason}</td>
                       </tr>
                     ))}
@@ -916,11 +916,11 @@ const AnalysisView = () => {
                 Below is the spatial layout coordinates representation of the document text grids. Bounding boxes highlight coordinates in pixels.
               </p>
               <div className="border border-border-hairline bg-white/50 rounded-md p-4 flex items-center justify-center relative select-none">
-                <div className="w-[450px] h-[380px] bg-white border border-border-hairline shadow-sm rounded relative overflow-hidden text-black/70 font-mono text-[9px] p-4 scale-90 sm:scale-100 origin-center">
-                  <div className="border-b border-gray-200 pb-2 flex justify-between items-start">
+                <div className="w-[450px] h-[380px] bg-bg-surface border border-border-hairline shadow-sm rounded relative overflow-hidden text-black/70 font-mono text-[9px] p-4 scale-90 sm:scale-100 origin-center">
+                  <div className="border-b border-border-hairline pb-2 flex justify-between items-start">
                     <div>
-                      <h4 className="font-bold text-xs uppercase text-gray-900 leading-tight">PUBLIC SERVICE ELECTRIC & GAS</h4>
-                      <span className="text-[8px] text-gray-500">PSE&G UTILITIES</span>
+                      <h4 className="font-bold text-xs uppercase text-text-primary leading-tight">PUBLIC SERVICE ELECTRIC & GAS</h4>
+                      <span className="text-[8px] text-text-secondary">PSE&G UTILITIES</span>
                     </div>
                     <span className="text-xs font-bold text-primary-blue">INVOICE</span>
                   </div>
@@ -930,8 +930,8 @@ const AnalysisView = () => {
                     <div className="flex justify-between"><span>Bill Date:</span><span className="font-semibold">2026-06-30</span></div>
                     <div className="flex justify-between"><span>Due Date:</span><span className="font-semibold">2026-07-20</span></div>
                   </div>
-                  <div className="mt-12 border-t border-gray-200 pt-4 space-y-2">
-                    <div className="flex justify-between text-xs font-bold text-gray-900">
+                  <div className="mt-12 border-t border-border-hairline pt-4 space-y-2">
+                    <div className="flex justify-between text-xs font-bold text-text-primary">
                       <span>Total Usage (kWh):</span>
                       <span>{canonical.normalized_values.usage_kwh} kWh</span>
                     </div>

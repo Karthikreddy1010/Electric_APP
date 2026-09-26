@@ -85,6 +85,9 @@ async def search_utilities_by_name(
     engine = _get_engine()
     name_param = f"%{name.strip()}%"
 
+    # Case-insensitive match via LOWER(...) LIKE LOWER(...), not ILIKE: this app
+    # runs on SQLite whenever Postgres is unreachable, and SQLite has no ILIKE.
+
     if state:
         state = state.strip().upper()
         query = text("""
@@ -94,7 +97,7 @@ async def search_utilities_by_name(
                 (SELECT COUNT(DISTINCT zip_code) FROM utility_zip_lookup WHERE eia_utility_id = m.eia_utility_id) as zip_count
             FROM utility_master m
             LEFT JOIN utility_rates r ON m.eia_utility_id = r.eia_utility_id AND m.state = r.state
-            WHERE m.utility_name ILIKE :name AND m.state = :state
+            WHERE LOWER(m.utility_name) LIKE LOWER(:name) AND m.state = :state
             ORDER BY m.utility_name
             LIMIT 50
         """)
@@ -107,7 +110,7 @@ async def search_utilities_by_name(
                 (SELECT COUNT(DISTINCT zip_code) FROM utility_zip_lookup WHERE eia_utility_id = m.eia_utility_id) as zip_count
             FROM utility_master m
             LEFT JOIN utility_rates r ON m.eia_utility_id = r.eia_utility_id AND m.state = r.state
-            WHERE m.utility_name ILIKE :name
+            WHERE LOWER(m.utility_name) LIKE LOWER(:name)
             ORDER BY m.utility_name
             LIMIT 50
         """)

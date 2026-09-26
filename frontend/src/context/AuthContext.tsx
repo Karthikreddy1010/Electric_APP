@@ -143,6 +143,23 @@ export const AuthContextProvider = ({ children }: { children: React.ReactNode })
     }
     setUser(null);
     setStatus('unauthenticated');
+
+    // Tear down the client-side session too.
+    //
+    // `is_demo_mode` is what made sign-out appear to do nothing: PublicAuthRoute
+    // treats the flag as "already signed in", so navigating to /login (or any
+    // public auth route) bounced straight back to /overview. The flag was set in
+    // three places and cleared in none.
+    //
+    // The bill keys hold the previous user's uploaded statement; leaving them
+    // behind would show that data to the next person using this browser.
+    for (const key of ['is_demo_mode', 'bill_data', 'ocr_data', 'explain_data']) {
+      try {
+        sessionStorage.removeItem(key);
+      } catch {
+        // Storage can be unavailable (private mode); sign-out still proceeds.
+      }
+    }
   }, []);
 
   const refreshSession = useCallback(async () => {
